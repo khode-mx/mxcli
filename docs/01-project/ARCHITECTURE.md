@@ -755,6 +755,29 @@ DSN resolution order:
 
 The project uses `modernc.org/sqlite` (a pure Go SQLite implementation) to eliminate the CGO dependency. This simplifies cross-compilation and deployment — no C compiler is required.
 
+### 9. Multi-Version Support
+
+Mendix projects vary along three versioning axes: **platform version** (9.x–11.x), **widget version** (each project bundles specific `.mpk` widget packages), and **extension documents** (Mendix 11+ custom document types). The BSON document structure changes across all three.
+
+**Current state**: Hand-coded parsers/writers target ~Mendix 11.6. Widget templates are static JSON files extracted from a single Mendix version.
+
+**Widget augmentation (implemented)**: At runtime, mxcli reads the project's `.mpk` widget packages and augments the static template — adding missing properties and removing stale ones — before BSON conversion. This ensures the serialized widget matches the exact version installed in the project.
+
+```mermaid
+flowchart LR
+    TMPL[Static JSON Template] --> CLONE[Deep Clone]
+    MPK[".mpk from project widgets/"] --> PARSE[Parse Widget XML]
+    CLONE --> AUG[Augment: add missing, remove stale]
+    PARSE --> AUG
+    AUG --> REMAP[Remap Placeholder IDs]
+    REMAP --> BSON[Convert to BSON]
+    BSON --> CHECK[Leak Detection]
+```
+
+Key files: `sdk/widgets/augment.go` (augmentation logic), `sdk/widgets/mpk/mpk.go` (`.mpk` parser), `sdk/widgets/loader.go` (pipeline integration).
+
+**Planned: Schema Registry** (`sdk/schema/`): A runtime registry loaded from reflection data that provides type metadata (storage names, defaults, reference kinds, list encodings) per Mendix version. This will complement the hand-coded parsers/writers by handling field completeness, validation, and version migration. See [Multi-Version Support](../11-proposals/MULTI_VERSION_SUPPORT.md) for the full architecture and implementation status.
+
 ## Future Architecture Considerations
 
 1. **48 of 52 Metamodel Domains**: Workflows, REST services, and many other domains are not yet implemented
@@ -762,3 +785,4 @@ The project uses `modernc.org/sqlite` (a pure Go SQLite implementation) to elimi
 3. **Caching Layer**: Cache parsed units for repeated access
 4. **Parallel Loading**: Load independent units concurrently
 5. **Runtime Type Reflection**: Dynamic type introspection
+6. **Schema Registry**: Version-aware BSON serialization and validation (see [Multi-Version Support](../11-proposals/MULTI_VERSION_SUPPORT.md))
