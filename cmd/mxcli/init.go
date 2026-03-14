@@ -375,7 +375,8 @@ func generateClaudeMD(projectName, mprFile string) string {
 	w("- **Never show raw MDL scripts in chat.** Instead, describe changes in plain language as a numbered list.\n")
 	w("- After the user approves, write the MDL to a script file, validate it, and execute it silently.\n")
 	w("- Only show MDL code if the user explicitly asks to see the script.\n")
-	w("- When reporting results, summarize what was created/modified in plain language.\n\n")
+	w("- When reporting results, summarize what was created/modified in plain language.\n")
+	w("- **Always quote identifiers** in MDL scripts with double quotes (" + bt + "\"Name\"" + bt + "). This prevents conflicts with MDL reserved keywords and is always safe — quotes are stripped automatically. Quote entity names, attribute names, parameter names, variable names, and association names.\n\n")
 	w("**Example — instead of showing MDL code, write this:**\n\n")
 	w("> Here's what I'll do:\n")
 	w("> 1. Create a new **Customer** entity in MyModule with:\n")
@@ -892,10 +893,9 @@ func generateClaudeMD(projectName, mprFile string) string {
 	w("\n")
 
 	// Reserved words
-	w("### Reserved Words and Quoted Identifiers\n\n")
-	w("Most MDL keywords work **unquoted** as entity/attribute names. Only structural keywords require quoting: " + bt + "Create" + bt + ", " + bt + "Delete" + bt + ", " + bt + "Begin" + bt + ", " + bt + "End" + bt + ", " + bt + "Return" + bt + ", " + bt + "Entity" + bt + ", " + bt + "Module" + bt + ".\n\n")
-	w("**Quoted identifiers** escape any reserved word (double-quotes or backticks):\n\n")
-	w(bt3 + "sql\nDESCRIBE ENTITY \"ComboBox\".\"CategoryTreeVE\";\nCREATE PERSISTENT ENTITY Module.VATRate (\"Create\": DateTime, Rate: Decimal);\n" + bt3 + "\n\n")
+	w("### Quoted Identifiers\n\n")
+	w("**Always quote all identifiers** (entity names, attribute names, parameter names) with double quotes. This eliminates all reserved keyword conflicts and is always safe — quotes are stripped automatically.\n\n")
+	w(bt3 + "sql\nCREATE PERSISTENT ENTITY Module.\"Customer\" (\n  \"Name\": String(200),\n  \"Status\": String(50),\n  \"Create\": DateTime\n);\n" + bt3 + "\n\n")
 
 	// ── MDL Script Files ────────────────────────────────────────────
 	w("## MDL Script Files\n\n")

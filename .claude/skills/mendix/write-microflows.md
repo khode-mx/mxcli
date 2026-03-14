@@ -873,27 +873,22 @@ END LOOP;
 
 ### Reserved Words as Identifiers
 
-Most common words now work **unquoted** as attribute names (`Check`, `Text`, `Format`, `Value`, `Type`, `Index`, etc.). Only structural keywords (`Create`, `Delete`, `Begin`, `End`, `Return`) need quoting:
+**Best practice: Always quote all identifiers** (attribute names, parameter names, entity names) with double quotes. This eliminates all reserved keyword conflicts and is always safe — quotes are stripped automatically by the parser.
 
 ```mdl
--- These all work unquoted now
-CREATE PERSISTENT ENTITY Module.Item (
-  Check: Boolean DEFAULT false,
-  Text: String(500),
-  Format: String(50),
-  Value: Decimal
-);
-
--- Structural keywords still need quoting
-CREATE PERSISTENT ENTITY Module.AuditLog (
-  "Create": DateTime,   -- 'Create' is a structural keyword
-  "Delete": DateTime     -- 'Delete' is a structural keyword
+CREATE PERSISTENT ENTITY Module."Item" (
+  "Check": Boolean DEFAULT false,
+  "Text": String(500),
+  "Format": String(50),
+  "Value": Decimal,
+  "Create": DateTime,
+  "Delete": DateTime
 );
 ```
 
 Quoted identifiers also work for microflow parameter names:
 ```mdl
-CREATE MICROFLOW Module.Process ("Select": String, "Type": Integer)
+CREATE MICROFLOW Module."Process" ("Select": String, "Type": Integer)
 BEGIN
   LOG INFO 'Processing';
   RETURN;

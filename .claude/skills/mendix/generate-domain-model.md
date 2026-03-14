@@ -390,17 +390,17 @@ Status: Enumeration(Module.Status) NOT NULL ERROR 'Status is required'
 
 ## Reserved Keywords
 
-Most common words now work **unquoted** as attribute and entity names: `Caption`, `Content`, `Label`, `Title`, `Text`, `Type`, `Value`, `Index`, `Status`, `Range`, `Format`, `Source`, `Check`, `Selection`, `Production`, `Version`, `Home`, `Navigation`, etc.
+**Best practice: Always quote all identifiers** (entity names, attribute names) with double quotes. This eliminates all reserved keyword conflicts and is always safe — quotes are stripped automatically by the parser.
 
-Only structural MDL keywords still need quoting: `Create`, `Delete`, `Begin`, `End`, `Return`, `Entity`, `Association`, `Module`.
-
-**Quoted identifiers** (`"Range"` or `` `Range` ``) work for any reserved word:
 ```sql
-CREATE PERSISTENT ENTITY Module.VATRate (
+CREATE PERSISTENT ENTITY Module."VATRate" (
   "Create": DateTime,
-  Rate: Decimal
+  "Rate": Decimal,
+  "Status": String(50)
 );
 ```
+
+Both `"Name"` and `` `Name` `` syntax are supported. Prefer double quotes for consistency.
 
 **Boolean attributes** auto-default to `false` when no `DEFAULT` is specified:
 ```sql
@@ -844,7 +844,7 @@ Before finalizing an MDL script:
 - [ ] All associations have descriptions
 - [ ] Position annotations on all entities
 - [ ] MARK comments for files 300+ lines (at least 3 sections)
-- [ ] No reserved keywords (run linter)
+- [ ] All identifiers quoted with double quotes
 - [ ] No duplicate names (run linter)
 - [ ] Valid OQL queries in view entities (run linter)
 - [ ] Consistent naming conventions (PascalCase)
@@ -865,8 +865,8 @@ Before finalizing an MDL script:
 
 ## Tips for AI Assistants
 
-1. **Always check reserved keywords** before generating attribute/entity names
-2. **Use descriptive prefixes** to avoid conflicts (ServiceType, CustomerOrder)
+1. **Always quote all identifiers** with double quotes to avoid reserved keyword conflicts
+2. **Use descriptive names** (ServiceType, CustomerOrder)
 3. **Run linter** on generated scripts before presenting to user
 4. **Fix all errors** reported by linter before finalizing
 5. **Follow examples** in shop-domain-model.mdl and pet-store-domain-model.mdl
