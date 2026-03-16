@@ -310,61 +310,62 @@ func (e *Executor) execGrantEntityAccess(s *ast.GrantEntityAccessStmt) error {
 		}
 	}
 
-	// Build explicit MemberAccesses when specific members are listed
+	// Build MemberAccess entries for all entity attributes and associations.
+	// Mendix requires explicit MemberAccess entries for every member — an empty
+	// MemberAccesses array triggers CE0066 "Entity access is out of date".
 	var memberAccesses []mpr.EntityMemberAccess
-	if readMembers != nil || writeMembers != nil {
-		// Build sets for quick lookup
-		writeMemberSet := make(map[string]bool)
-		for _, m := range writeMembers {
-			writeMemberSet[m] = true
-		}
-		readMemberSet := make(map[string]bool)
-		for _, m := range readMembers {
-			readMemberSet[m] = true
-		}
 
-		// Create entries for all entity attributes
-		for _, attr := range entity.Attributes {
+	// Build sets for specific member overrides (when READ (Name, Email) syntax is used)
+	writeMemberSet := make(map[string]bool)
+	for _, m := range writeMembers {
+		writeMemberSet[m] = true
+	}
+	readMemberSet := make(map[string]bool)
+	for _, m := range readMembers {
+		readMemberSet[m] = true
+	}
+
+	// Create entries for all entity attributes
+	for _, attr := range entity.Attributes {
+		rights := defaultMemberAccess
+		if writeMemberSet[attr.Name] {
+			rights = "ReadWrite"
+		} else if readMemberSet[attr.Name] {
+			rights = "ReadOnly"
+		}
+		memberAccesses = append(memberAccesses, mpr.EntityMemberAccess{
+			AttributeRef: module.Name + "." + s.Entity.Name + "." + attr.Name,
+			AccessRights: rights,
+		})
+	}
+
+	// Create entries for associations owned by this entity
+	for _, assoc := range dm.Associations {
+		if assoc.ParentID == entity.ID {
 			rights := defaultMemberAccess
-			if writeMemberSet[attr.Name] {
+			if writeMemberSet[assoc.Name] {
 				rights = "ReadWrite"
-			} else if readMemberSet[attr.Name] {
+			} else if readMemberSet[assoc.Name] {
 				rights = "ReadOnly"
 			}
 			memberAccesses = append(memberAccesses, mpr.EntityMemberAccess{
-				AttributeRef: module.Name + "." + s.Entity.Name + "." + attr.Name,
-				AccessRights: rights,
+				AssociationRef: module.Name + "." + assoc.Name,
+				AccessRights:   rights,
 			})
 		}
-
-		// Create entries for associations owned by this entity
-		for _, assoc := range dm.Associations {
-			if assoc.ParentID == entity.ID {
-				rights := defaultMemberAccess
-				if writeMemberSet[assoc.Name] {
-					rights = "ReadWrite"
-				} else if readMemberSet[assoc.Name] {
-					rights = "ReadOnly"
-				}
-				memberAccesses = append(memberAccesses, mpr.EntityMemberAccess{
-					AssociationRef: module.Name + "." + assoc.Name,
-					AccessRights:   rights,
-				})
+	}
+	for _, ca := range dm.CrossAssociations {
+		if ca.ParentID == entity.ID {
+			rights := defaultMemberAccess
+			if writeMemberSet[ca.Name] {
+				rights = "ReadWrite"
+			} else if readMemberSet[ca.Name] {
+				rights = "ReadOnly"
 			}
-		}
-		for _, ca := range dm.CrossAssociations {
-			if ca.ParentID == entity.ID {
-				rights := defaultMemberAccess
-				if writeMemberSet[ca.Name] {
-					rights = "ReadWrite"
-				} else if readMemberSet[ca.Name] {
-					rights = "ReadOnly"
-				}
-				memberAccesses = append(memberAccesses, mpr.EntityMemberAccess{
-					AssociationRef: module.Name + "." + ca.Name,
-					AccessRights:   rights,
-				})
-			}
+			memberAccesses = append(memberAccesses, mpr.EntityMemberAccess{
+				AssociationRef: module.Name + "." + ca.Name,
+				AccessRights:   rights,
+			})
 		}
 	}
 

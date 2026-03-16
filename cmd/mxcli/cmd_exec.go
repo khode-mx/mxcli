@@ -58,14 +58,12 @@ Example:
 			os.Exit(1)
 		}
 
-		for _, stmt := range prog.Statements {
-			if err := exec.Execute(stmt); err != nil {
-				if errors.Is(err, executor.ErrExit) {
-					return
-				}
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
+		if err := exec.ExecuteProgram(prog); err != nil {
+			if errors.Is(err, executor.ErrExit) {
+				return
 			}
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
 		}
 	},
 }

@@ -297,6 +297,158 @@ END;`
 	}
 }
 
+// --- CE0066 "Entity access is out of date" scenario tests ---
+//
+// These tests enumerate mutation orderings that might trigger CE0066 when
+// entity structure changes after access rules have been written.
+//
+// Scenarios to test:
+//   S1: CREATE ENTITY (with attrs) → GRANT                      (baseline)
+//   S2: CREATE ENTITY → GRANT → ALTER ADD ATTRIBUTE             (attribute added after security)
+//   S3: CREATE ENTITY → GRANT → CREATE ASSOCIATION              (association added after security)
+//   S4: CREATE ENTITY → GRANT → ALTER DROP ATTRIBUTE            (attribute removed after security)
+//   S5: CREATE ENTITY → ALTER ADD ATTRIBUTE → GRANT             (security after mutation — should always work)
+//   S6: CREATE ENTITY → GRANT(READ *) → ALTER → GRANT(READ *)  (re-grant after mutation)
+//   S7: CREATE ENTITY + GRANT in single script                  (typical user script pattern)
+//   S8: CREATE ENTITY → GRANT multiple roles → ALTER            (multiple rules + mutation)
+//   S9: CREATE ENTITY → GRANT → ALTER + CREATE ASSOC (combined) (both attrs and assocs change)
+
+// ce0066Scenario describes a single CE0066 test case.
+type ce0066Scenario struct {
+	name  string   // subtest name
+	steps []string // MDL statements to execute in order
+}
+
+func TestMxCheck_CE0066_Scenarios(t *testing.T) {
+	if !mxCheckAvailable() {
+		t.Skip("mx command not available")
+	}
+
+	mod := testModule
+	scenarios := []ce0066Scenario{
+		{
+			name: "S1_CreateEntity_Grant",
+			steps: []string{
+				`CREATE MODULE ROLE ` + mod + `.S1Admin;`,
+				`CREATE OR MODIFY PERSISTENT ENTITY ` + mod + `.S1Entity (Name: String(100), Email: String(200));`,
+				`GRANT ` + mod + `.S1Admin ON ` + mod + `.S1Entity (CREATE, DELETE, READ *, WRITE *);`,
+			},
+		},
+		{
+			name: "S2_Grant_ThenAddAttribute",
+			steps: []string{
+				`CREATE MODULE ROLE ` + mod + `.S2Admin;`,
+				`CREATE OR MODIFY PERSISTENT ENTITY ` + mod + `.S2Entity (Name: String(100));`,
+				`GRANT ` + mod + `.S2Admin ON ` + mod + `.S2Entity (CREATE, DELETE, READ *, WRITE *);`,
+				`ALTER ENTITY ` + mod + `.S2Entity ADD ATTRIBUTE Email String(200);`,
+				`ALTER ENTITY ` + mod + `.S2Entity ADD ATTRIBUTE Active Boolean DEFAULT false;`,
+			},
+		},
+		{
+			name: "S3_Grant_ThenAddAssociation",
+			steps: []string{
+				`CREATE MODULE ROLE ` + mod + `.S3Admin;`,
+				`CREATE OR MODIFY PERSISTENT ENTITY ` + mod + `.S3Parent (Name: String(100));`,
+				`CREATE OR MODIFY PERSISTENT ENTITY ` + mod + `.S3Child (Label: String(100));`,
+				`GRANT ` + mod + `.S3Admin ON ` + mod + `.S3Parent (CREATE, DELETE, READ *, WRITE *);`,
+				`CREATE ASSOCIATION ` + mod + `.S3Child_S3Parent (` + mod + `.S3Child -> ` + mod + `.S3Parent);`,
+			},
+		},
+		{
+			name: "S4_Grant_ThenDropAttribute",
+			steps: []string{
+				`CREATE MODULE ROLE ` + mod + `.S4Admin;`,
+				`CREATE OR MODIFY PERSISTENT ENTITY ` + mod + `.S4Entity (Name: String(100), Temp: String(50));`,
+				`GRANT ` + mod + `.S4Admin ON ` + mod + `.S4Entity (CREATE, DELETE, READ *, WRITE *);`,
+				`ALTER ENTITY ` + mod + `.S4Entity DROP ATTRIBUTE Temp;`,
+			},
+		},
+		{
+			name: "S5_AddAttribute_ThenGrant",
+			steps: []string{
+				`CREATE MODULE ROLE ` + mod + `.S5Admin;`,
+				`CREATE OR MODIFY PERSISTENT ENTITY ` + mod + `.S5Entity (Name: String(100));`,
+				`ALTER ENTITY ` + mod + `.S5Entity ADD ATTRIBUTE Email String(200);`,
+				`GRANT ` + mod + `.S5Admin ON ` + mod + `.S5Entity (CREATE, DELETE, READ *, WRITE *);`,
+			},
+		},
+		{
+			name: "S6_Grant_Alter_Regrant",
+			steps: []string{
+				`CREATE MODULE ROLE ` + mod + `.S6Admin;`,
+				`CREATE OR MODIFY PERSISTENT ENTITY ` + mod + `.S6Entity (Name: String(100));`,
+				`GRANT ` + mod + `.S6Admin ON ` + mod + `.S6Entity (READ *);`,
+				`ALTER ENTITY ` + mod + `.S6Entity ADD ATTRIBUTE Code String(50);`,
+				`GRANT ` + mod + `.S6Admin ON ` + mod + `.S6Entity (CREATE, DELETE, READ *, WRITE *);`,
+			},
+		},
+		{
+			name: "S7_SingleScript_CreateAndGrant",
+			steps: []string{
+				`CREATE MODULE ROLE ` + mod + `.S7Admin;`,
+				`CREATE OR MODIFY PERSISTENT ENTITY ` + mod + `.S7Entity (
+					Code: String(50) NOT NULL,
+					Description: String(500),
+					Count: Integer DEFAULT 0
+				);` + "\n" +
+					`GRANT ` + mod + `.S7Admin ON ` + mod + `.S7Entity (CREATE, DELETE, READ *, WRITE *);`,
+			},
+		},
+		{
+			name: "S8_MultipleRoles_ThenAlter",
+			steps: []string{
+				`CREATE MODULE ROLE ` + mod + `.S8Admin;`,
+				`CREATE MODULE ROLE ` + mod + `.S8Viewer;`,
+				`CREATE OR MODIFY PERSISTENT ENTITY ` + mod + `.S8Entity (Name: String(100));`,
+				`GRANT ` + mod + `.S8Admin ON ` + mod + `.S8Entity (CREATE, DELETE, READ *, WRITE *);`,
+				`GRANT ` + mod + `.S8Viewer ON ` + mod + `.S8Entity (READ *);`,
+				`ALTER ENTITY ` + mod + `.S8Entity ADD ATTRIBUTE Status String(50);`,
+			},
+		},
+		{
+			name: "S9_Grant_ThenAlterAndAssoc",
+			steps: []string{
+				`CREATE MODULE ROLE ` + mod + `.S9Admin;`,
+				`CREATE OR MODIFY PERSISTENT ENTITY ` + mod + `.S9Main (Name: String(100));`,
+				`CREATE OR MODIFY PERSISTENT ENTITY ` + mod + `.S9Related (Value: Integer);`,
+				`GRANT ` + mod + `.S9Admin ON ` + mod + `.S9Main (CREATE, DELETE, READ *, WRITE *);`,
+				`ALTER ENTITY ` + mod + `.S9Main ADD ATTRIBUTE Extra String(200);`,
+				`CREATE ASSOCIATION ` + mod + `.S9Related_S9Main (` + mod + `.S9Related -> ` + mod + `.S9Main);`,
+			},
+		},
+	}
+
+	for _, sc := range scenarios {
+		t.Run(sc.name, func(t *testing.T) {
+			env := setupTestEnv(t)
+			defer env.teardown()
+
+			for i, step := range sc.steps {
+				if err := env.executeMDL(step); err != nil {
+					if !strings.Contains(err.Error(), "already exists") {
+						t.Fatalf("Step %d failed: %v\nMDL: %s", i+1, err, step)
+					}
+				}
+			}
+
+			env.executor.Execute(&ast.DisconnectStmt{})
+
+			output, err := runMxCheck(t, env.projectPath)
+			if err != nil {
+				if strings.Contains(output, "CE0066") || strings.Contains(output, "out of date") {
+					t.Errorf("CE0066 entity access out of date:\n%s", output)
+				} else if strings.Contains(output, "error") || strings.Contains(output, "Error") {
+					t.Errorf("mx check found errors:\n%s", output)
+				} else {
+					t.Logf("mx check output (non-zero exit but no errors):\n%s", output)
+				}
+			} else {
+				t.Logf("mx check passed")
+			}
+		})
+	}
+}
+
 // TestMxCheck_MicroflowWithCallParams tests microflow with CALL unified param syntax.
 func TestMxCheck_MicroflowWithCallParams(t *testing.T) {
 	if !mxCheckAvailable() {
