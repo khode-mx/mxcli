@@ -548,6 +548,9 @@ func (e *Executor) formatMicroflowDataType(dt microflows.DataType, entityNames m
 		}
 		return "List"
 	case *microflows.EnumerationType:
+		if t.EnumerationQualifiedName != "" {
+			return "ENUM " + t.EnumerationQualifiedName
+		}
 		return "Enumeration"
 	default:
 		return dt.GetTypeName()

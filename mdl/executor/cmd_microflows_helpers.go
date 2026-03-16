@@ -53,6 +53,13 @@ func convertASTToMicroflowDataType(dt ast.DataType, entityResolver func(ast.Qual
 			}
 		}
 		return lt
+	case ast.TypeEnumeration:
+		et := &microflows.EnumerationType{}
+		if dt.EnumRef != nil {
+			// Set qualified name for BY_NAME_REFERENCE serialization
+			et.EnumerationQualifiedName = dt.EnumRef.Module + "." + dt.EnumRef.Name
+		}
+		return et
 	default:
 		return &microflows.VoidType{}
 	}

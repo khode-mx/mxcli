@@ -967,9 +967,14 @@ func parseMicroflowDataType(raw map[string]any) microflows.DataType {
 		}
 		return listType
 	case "DataTypes$EnumerationType":
-		return &microflows.EnumerationType{
-			EnumerationID: model.ID(extractBsonID(raw["Enumeration"])),
+		enumType := &microflows.EnumerationType{}
+		// Enumeration can be BY_NAME_REFERENCE (string) or binary ID (legacy)
+		if enumStr, ok := raw["Enumeration"].(string); ok {
+			enumType.EnumerationQualifiedName = enumStr
+		} else {
+			enumType.EnumerationID = model.ID(extractBsonID(raw["Enumeration"]))
 		}
+		return enumType
 	default:
 		return nil
 	}
