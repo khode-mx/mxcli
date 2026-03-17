@@ -20,6 +20,10 @@ Mendix projects are stored in binary `.mpr` files that AI agents can't read dire
 
 Mxcli is a tool that enables some of the following use cases.
 
+## A textual DSL for mendix models
+
+![Mxcli MDL](docs/images/mxcli-mdl-dsl.png)
+
 ### Command line tool to work with Mendix projects
 
 ![Mxcli](docs/images/mxcli-cli.png)
@@ -28,11 +32,15 @@ Mxcli is a tool that enables some of the following use cases.
 
 ![Mxcli repl](docs/images/mxcli-repl.png)
 
-### Skills to enable Agentic Coding tools to work with Mendix projects
+### Skills and configuration to enable Agentic Coding on Mendix projects
 
 ![Mxcli skills](docs/images/mxcli-init-claud.png)
 
-### Migration skills
+![Mxcli claude](docs/images/mxcli-claude-add-page.png)
+
+### A set of extensible skills
+
+![Mxcli skills](docs/images/mxcli-skills.png)
 
 ### Metadata Catalog 
 
@@ -49,6 +57,8 @@ Mxcli is a tool that enables some of the following use cases.
 ![mxcli vscode mendix extions](docs/images/mxcli-vscode-ext.png)
 
 ### Run and test your Mendix projects
+
+![mxcli docker portable application distribution](docs/images/mxcli-docker-run.png)
 
 ### Automated Playwright-cli testing for Mendix projects
 
