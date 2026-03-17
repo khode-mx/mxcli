@@ -140,7 +140,7 @@ BEGIN
     RESPONSE JSON AS $Resource;
 
   /** Partially update an existing resource */
-  OPERATION PatchResource
+  OPERATION "PatchResource"
     METHOD PATCH
     PATH '/patch'
     HEADER 'Accept' = 'application/json'
@@ -148,7 +148,7 @@ BEGIN
     RESPONSE JSON AS $Resource;
 
   /** Delete a resource */
-  OPERATION DeleteResource
+  OPERATION "DeleteResource"
     METHOD DELETE
     PATH '/delete'
     RESPONSE NONE;
