@@ -337,6 +337,59 @@ func TestEnumDefaultNotDoubleQualified(t *testing.T) {
 	}
 }
 
+// TestExpressionToXPath_TokenQuoting verifies that [%CurrentDateTime%] tokens
+// are quoted in XPath context but not in Mendix expression context (GitHub issue #1).
+func TestExpressionToXPath_TokenQuoting(t *testing.T) {
+	tests := []struct {
+		name     string
+		expr     ast.Expression
+		wantExpr string // expressionToString output
+		wantXP   string // expressionToXPath output
+	}{
+		{
+			name:     "Token_CurrentDateTime",
+			expr:     &ast.TokenExpr{Token: "CurrentDateTime"},
+			wantExpr: "[%CurrentDateTime%]",
+			wantXP:   "'[%CurrentDateTime%]'",
+		},
+		{
+			name:     "Token_CurrentUser",
+			expr:     &ast.TokenExpr{Token: "CurrentUser"},
+			wantExpr: "[%CurrentUser%]",
+			wantXP:   "'[%CurrentUser%]'",
+		},
+		{
+			name: "BinaryExpr_with_token",
+			expr: &ast.BinaryExpr{
+				Left:     &ast.IdentifierExpr{Name: "DueDate"},
+				Operator: "<",
+				Right:    &ast.TokenExpr{Token: "CurrentDateTime"},
+			},
+			wantExpr: "DueDate < [%CurrentDateTime%]",
+			wantXP:   "DueDate < '[%CurrentDateTime%]'",
+		},
+		{
+			name:     "Variable_unchanged",
+			expr:     &ast.VariableExpr{Name: "MyVar"},
+			wantExpr: "$MyVar",
+			wantXP:   "$MyVar",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotExpr := expressionToString(tt.expr)
+			if gotExpr != tt.wantExpr {
+				t.Errorf("expressionToString() = %q, want %q", gotExpr, tt.wantExpr)
+			}
+			gotXP := expressionToXPath(tt.expr)
+			if gotXP != tt.wantXP {
+				t.Errorf("expressionToXPath() = %q, want %q", gotXP, tt.wantXP)
+			}
+		})
+	}
+}
+
 // validateMicroflowFromMDL parses a CREATE MICROFLOW statement and runs
 // ValidateMicroflowBody, returning any validation errors.
 func validateMicroflowFromMDL(t *testing.T, input string) []string {

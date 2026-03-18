@@ -448,6 +448,52 @@ func TestMxCheck_CE0066_Scenarios(t *testing.T) {
 	}
 }
 
+// TestMxCheck_RetrieveWithDateTimeToken validates that RETRIEVE with [%CurrentDateTime%]
+// in a WHERE clause produces correctly quoted XPath (GitHub issue #1).
+// The token must be quoted as '[%CurrentDateTime%]' in XPath constraints.
+func TestMxCheck_RetrieveWithDateTimeToken(t *testing.T) {
+	if !mxCheckAvailable() {
+		t.Skip("mx command not available")
+	}
+
+	env := setupTestEnv(t)
+	defer env.teardown()
+
+	if err := env.executeMDL(`CREATE OR MODIFY PERSISTENT ENTITY RoundtripTest.MxCheckDated (
+		Name: String(100),
+		DueDate: DateTime
+	);`); err != nil {
+		t.Fatalf("Failed to create entity: %v", err)
+	}
+
+	mfName := testModule + ".MxCheck_DateTimeToken"
+	env.registerCleanup("microflow", mfName)
+
+	createMDL := `CREATE MICROFLOW ` + mfName + ` () RETURNS Boolean
+BEGIN
+  RETRIEVE $Items FROM RoundtripTest.MxCheckDated
+    WHERE DueDate < [%CurrentDateTime%];
+  RETURN true;
+END;`
+
+	if err := env.executeMDL(createMDL); err != nil {
+		t.Fatalf("Failed to create microflow: %v", err)
+	}
+
+	env.executor.Execute(&ast.DisconnectStmt{})
+
+	output, err := runMxCheck(t, env.projectPath)
+	if err != nil {
+		if strings.Contains(output, "error") || strings.Contains(output, "Error") {
+			t.Errorf("mx check found errors:\n%s", output)
+		} else {
+			t.Logf("mx check output:\n%s", output)
+		}
+	} else {
+		t.Logf("mx check passed:\n%s", output)
+	}
+}
+
 // TestMxCheck_MicroflowWithCallParams tests microflow with CALL unified param syntax.
 func TestMxCheck_MicroflowWithCallParams(t *testing.T) {
 	if !mxCheckAvailable() {

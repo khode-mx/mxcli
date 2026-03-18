@@ -312,7 +312,7 @@ func (fb *flowBuilder) addRetrieveAction(s *ast.RetrieveStmt) model.ID {
 	// Convert WHERE expression if present
 	// XPath constraints are stored with square brackets in BSON: [expression]
 	if s.Where != nil {
-		source.XPathConstraint = "[" + expressionToString(s.Where) + "]"
+		source.XPathConstraint = "[" + expressionToXPath(s.Where) + "]"
 	}
 
 	// Convert SORT BY columns if present

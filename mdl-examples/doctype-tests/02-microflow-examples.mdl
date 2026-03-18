@@ -880,6 +880,21 @@ BEGIN
 END;
 /
 
+/**
+ * Example 7.5: RETRIEVE with [%CurrentDateTime%] token in WHERE
+ *
+ * XPath tokens like [%CurrentDateTime%] must be quoted in XPath constraints.
+ * Tests fix for GitHub issue #1.
+ */
+CREATE MICROFLOW MfTest.M028_RetrieveWithDateTimeToken ()
+RETURNS List of MfTest.Order AS $OverdueOrders
+BEGIN
+  RETRIEVE $OverdueOrders FROM MfTest.Order
+    WHERE ShipDate < [%CurrentDateTime%];
+  RETURN $OverdueOrders;
+END;
+/
+
 -- MARK: Real World
 
 -- ============================================================================
