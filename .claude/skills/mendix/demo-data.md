@@ -76,15 +76,18 @@ PGPASSWORD=mendix psql -h host.docker.internal -p 5434 -U mendix -d mxcli2-dev \
 
 ## Step 3: Understand the Mendix ID System
 
-Every Mendix object has a `bigint` ID composed of two parts:
+Every Mendix object has a `bigint` ID composed of three parts:
 
 ```
-| bits 63–48  | bits 47–0          |
-|  entity ID  |  sequence number   |
-| (16 bits)   |  (48 bits)         |
+| bits 63–48  | bits 47–7            | bits 6–0       |
+|  entity ID  |  sequence number     |  random         |
+| (16 bits)   |  (41 bits)           |  (7 bits)       |
 ```
 
-**Formula:** `id = (short_id::bigint << 48) | sequence_number`
+**Formula:** `id = (short_id::bigint << 48) | (sequence_number::bigint << 7) | (random_7bits)`
+
+The 7-bit random suffix adds unpredictability to object IDs, preventing sequential ID
+enumeration attacks (e.g., IDOR). Generate it with `floor(random() * 128)` in SQL.
 
 ### Look up an entity's short_id and current sequence
 
@@ -107,9 +110,10 @@ Example result:
 
 ```sql
 SELECT id,
-       to_hex(id::bigint)              AS hex_id,
-       (id::bigint >> 48)              AS entity_short_id,
-       id::bigint & x'ffffffffffff'::bigint AS sequence_num
+       to_hex(id::bigint)                          AS hex_id,
+       (id::bigint >> 48)                           AS entity_short_id,
+       (id::bigint >> 7) & x'1ffffffffff'::bigint   AS sequence_num,
+       id::bigint & 127                              AS random_bits
 FROM "tasklist$task";
 ```
 
@@ -120,6 +124,8 @@ FROM "tasklist$task";
   does not reuse those IDs
 - IDs are entity-scoped: two entities can have the same sequence number but different
   `short_id`, giving different `id` values
+- Each ID includes a 7-bit random suffix (0–127) for security; generate a fresh
+  random value per row
 
 ---
 
@@ -152,11 +158,16 @@ tasklist$note
 
 Column naming convention: `{module}${associationname}` — all lowercase, `$` separator.
 
-To insert a note linked to a task, simply set the FK column:
+To insert a note linked to a task, simply set the FK column (note the random suffix per ID):
 
 ```sql
 INSERT INTO "tasklist$note" (id, content, author, datecreated, "tasklist$note_task", mxobjectversion)
-VALUES (16607023625928722, 'Note text', 'Alice', '2026-02-18 10:00:00', 14073748835532801, 1);
+VALUES (
+  (59::bigint << 48) | (18::bigint << 7) | floor(random() * 128)::bigint,
+  'Note text', 'Alice', '2026-02-18 10:00:00',
+  (50::bigint << 48) | (11::bigint << 7) | floor(random() * 128)::bigint,
+  1
+);
 ```
 
 #### Mode B — Junction table storage
@@ -169,15 +180,22 @@ tasklist$note_task
   tasklist$taskid  bigint  FK → tasklist$task.id
 ```
 
-Inspect with `\d "tasklist$note_task"`. Insert the entity row first, then the link:
+Inspect with `\d "tasklist$note_task"`. Insert the entity row first, then the link.
+Use a CTE or variable to capture the generated ID so both statements share it:
 
 ```sql
-INSERT INTO "tasklist$note" (id, content, author, datecreated) VALUES
-  (16607023625928722, 'Note text', 'Alice', '2026-02-18 10:00:00');
+WITH new_note AS (
+  SELECT (59::bigint << 48) | (18::bigint << 7) | floor(random() * 128)::bigint AS id
+)
+INSERT INTO "tasklist$note" (id, content, author, datecreated)
+SELECT id, 'Note text', 'Alice', '2026-02-18 10:00:00' FROM new_note;
 
+-- Then link (reuse the same id — query it back or generate in application code)
 INSERT INTO "tasklist$note_task" ("tasklist$noteid", "tasklist$taskid") VALUES
-  (16607023625928722, 14073748835532801);
+  (<the_generated_note_id>, <task_id>);
 ```
+
+In practice, pre-generate IDs in application code or use `RETURNING id` to capture them.
 
 ### Optimistic locking — `mxobjectversion`
 
@@ -206,11 +224,16 @@ WHERE table_name = 'tasklist$task' AND column_name = 'mxobjectversion';
 ```sql
 BEGIN;
 
--- Insert notes with inline FK and version column
+-- short_id=59 for Note, short_id=50 for Task
+-- sequence 18 and 19 for the two new notes; task id uses sequence 11
 INSERT INTO "tasklist$note" (id, content, author, datecreated, "tasklist$note_task", mxobjectversion)
 VALUES
-  (16607023625928722, 'First note content',  'Bob',   '2026-02-18 10:00:00', 14073748835532801, 1),
-  (16607023625928723, 'Second note content', 'Alice', '2026-02-18 11:00:00', 14073748835532801, 1);
+  ((59::bigint << 48) | (18::bigint << 7) | floor(random() * 128)::bigint,
+   'First note content',  'Bob',   '2026-02-18 10:00:00',
+   (50::bigint << 48) | (11::bigint << 7) | floor(random() * 128)::bigint, 1),
+  ((59::bigint << 48) | (19::bigint << 7) | floor(random() * 128)::bigint,
+   'Second note content', 'Alice', '2026-02-18 11:00:00',
+   (50::bigint << 48) | (11::bigint << 7) | floor(random() * 128)::bigint, 1);
 
 -- Advance Note sequence (was 18, inserted 2, now 20)
 UPDATE mendixsystem$entityidentifier ei
@@ -223,16 +246,26 @@ COMMIT;
 
 ### Template — entity with junction-table association (no optimistic locking)
 
+For junction-table associations, IDs must be reused across two INSERT statements.
+Pre-generate them in a CTE or use `RETURNING`:
+
 ```sql
 BEGIN;
 
-INSERT INTO "tasklist$note" (id, content, author, datecreated) VALUES
-  (16607023625928722, 'First note content',  'Bob',   '2026-02-18 10:00:00'),
-  (16607023625928723, 'Second note content', 'Alice', '2026-02-18 11:00:00');
+-- Pre-generate IDs for the new notes (short_id=59, sequences 18 and 19)
+WITH new_ids AS (
+  SELECT (59::bigint << 48) | (18::bigint << 7) | floor(random() * 128)::bigint AS id1,
+         (59::bigint << 48) | (19::bigint << 7) | floor(random() * 128)::bigint AS id2
+)
+INSERT INTO "tasklist$note" (id, content, author, datecreated)
+SELECT id1, 'First note content',  'Bob',   '2026-02-18 10:00:00' FROM new_ids
+UNION ALL
+SELECT id2, 'Second note content', 'Alice', '2026-02-18 11:00:00' FROM new_ids;
 
-INSERT INTO "tasklist$note_task" ("tasklist$noteid", "tasklist$taskid") VALUES
-  (16607023625928722, 14073748835532801),
-  (16607023625928723, 14073748835532801);
+-- Link notes to task (use the same generated IDs — query them back)
+INSERT INTO "tasklist$note_task" ("tasklist$noteid", "tasklist$taskid")
+SELECT id, <task_id> FROM "tasklist$note"
+WHERE content IN ('First note content', 'Second note content');
 
 UPDATE mendixsystem$entityidentifier ei
 SET object_sequence = 20
@@ -242,15 +275,19 @@ WHERE e.id = ei.id AND e.entity_name = 'TaskList.Note';
 COMMIT;
 ```
 
+**Tip:** In application code, generate the random suffix in Go/Python and use literal
+IDs to avoid the need for CTEs.
+
 ### Template — standalone entity (no association)
 
 ```sql
 BEGIN;
 
--- short_id=50, object_sequence=11 → id_base=14073748835532800
+-- short_id=50, object_sequence=11, random suffix appended
 INSERT INTO "tasklist$task" (id, title, taskstatus, priority, assignedto, duedate, iscompleted, estimatedhours, mxobjectversion)
 VALUES
-  (14073748835532811, 'My demo task', 'ToDo', 'Medium', 'Alice', '2026-03-01 09:00:00', false, 4.0, 1);
+  ((50::bigint << 48) | (11::bigint << 7) | floor(random() * 128)::bigint,
+   'My demo task', 'ToDo', 'Medium', 'Alice', '2026-03-01 09:00:00', false, 4.0, 1);
 
 -- Advance sequence (was 11, inserted 1 row)
 UPDATE mendixsystem$entityidentifier ei
@@ -263,17 +300,22 @@ COMMIT;
 
 ### Helper query — compute next N IDs for an entity
 
+The random suffix means you cannot pre-compute exact IDs, but you can compute the
+deterministic portion (short_id + sequence) and see the available sequence range:
+
 ```sql
 SELECT
   entity_name,
   short_id,
-  object_sequence                             AS next_seq,
-  (short_id::bigint << 48) + object_sequence AS first_new_id,
-  (short_id::bigint << 48) + object_sequence + 9 AS last_new_id_if_10_rows
+  object_sequence                                          AS next_seq,
+  (short_id::bigint << 48) | (object_sequence::bigint << 7) AS first_new_id_base,
+  (short_id::bigint << 48) | ((object_sequence + 9)::bigint << 7) AS last_id_base_if_10_rows
 FROM mendixsystem$entityidentifier ei
 JOIN mendixsystem$entity e ON e.id = ei.id
 WHERE e.entity_name = 'TaskList.Note';
 ```
+
+Each actual ID = `id_base | floor(random() * 128)` — the random part is added at insert time.
 
 ---
 
@@ -333,7 +375,7 @@ JOIN mendixsystem$entity e ON e.id = ei.id
 WHERE e.entity_name = 'Module.Entity';
 
 # ID formula
-id = (short_id::bigint << 48) | sequence_number
+id = (short_id::bigint << 48) | (sequence_number::bigint << 7) | floor(random() * 128)
 
 # Check association storage mode
 SELECT association_name, table_name, child_column_name
@@ -355,7 +397,7 @@ WHERE e.id = ei.id AND e.entity_name = 'Module.Entity';
 
 | Column | Required | Value |
 |--------|----------|-------|
-| `id` | Always | `(short_id::bigint << 48) \| sequence` |
+| `id` | Always | `(short_id::bigint << 48) \| (sequence::bigint << 7) \| random_0_127` |
 | `mxobjectversion` | If column exists | `1` |
 | `module$assocname` | If column-storage association | FK id of related object |
 | Custom attributes | As needed | Your data |
