@@ -410,6 +410,16 @@ func TestMxCheck_CE0066_Scenarios(t *testing.T) {
 				`CREATE ASSOCIATION ` + mod + `.S9Related_S9Main FROM ` + mod + `.S9Related TO ` + mod + `.S9Main;`,
 			},
 		},
+		{
+			name: "S10_DropIndexedAttribute",
+			steps: []string{
+				`CREATE MODULE ROLE ` + mod + `.S10Admin;`,
+				`CREATE OR MODIFY PERSISTENT ENTITY ` + mod + `.S10Entity (Name: String(100), Code: String(50));`,
+				`ALTER ENTITY ` + mod + `.S10Entity ADD INDEX (Code);`,
+				`GRANT ` + mod + `.S10Admin ON ` + mod + `.S10Entity (CREATE, DELETE, READ *, WRITE *);`,
+				`ALTER ENTITY ` + mod + `.S10Entity DROP ATTRIBUTE Code;`,
+			},
+		},
 	}
 
 	for _, sc := range scenarios {

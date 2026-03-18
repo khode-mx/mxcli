@@ -512,8 +512,10 @@ func (e *Executor) execAlterEntity(s *ast.AlterEntityStmt) error {
 		if idx < 0 {
 			return fmt.Errorf("attribute '%s' not found on entity %s", s.AttributeName, s.Name)
 		}
-		// Remove validation rules that reference this attribute
+		// Clean up all references to the dropped attribute
 		droppedID := entity.Attributes[idx].ID
+
+		// Remove validation rules that reference this attribute
 		var keepRules []*domainmodel.ValidationRule
 		for _, vr := range entity.ValidationRules {
 			if vr.AttributeID != droppedID {
@@ -521,6 +523,46 @@ func (e *Executor) execAlterEntity(s *ast.AlterEntityStmt) error {
 			}
 		}
 		entity.ValidationRules = keepRules
+
+		// Remove MemberAccess entries from access rules that reference this attribute
+		for _, rule := range entity.AccessRules {
+			var keepMembers []*domainmodel.MemberAccess
+			for _, ma := range rule.MemberAccesses {
+				if ma.AttributeID != droppedID {
+					keepMembers = append(keepMembers, ma)
+				}
+			}
+			rule.MemberAccesses = keepMembers
+		}
+
+		// Remove index attributes that reference this attribute, and drop empty indexes
+		var keepIndexes []*domainmodel.Index
+		for _, idx := range entity.Indexes {
+			// Filter IndexAttribute entries
+			var keepAttrs []*domainmodel.IndexAttribute
+			for _, ia := range idx.Attributes {
+				if ia.AttributeID != droppedID {
+					keepAttrs = append(keepAttrs, ia)
+				}
+			}
+			idx.Attributes = keepAttrs
+
+			// Filter AttributeIDs list
+			var keepIDs []model.ID
+			for _, id := range idx.AttributeIDs {
+				if id != droppedID {
+					keepIDs = append(keepIDs, id)
+				}
+			}
+			idx.AttributeIDs = keepIDs
+
+			// Keep the index only if it still has attributes
+			if len(idx.Attributes) > 0 || len(idx.AttributeIDs) > 0 {
+				keepIndexes = append(keepIndexes, idx)
+			}
+		}
+		entity.Indexes = keepIndexes
+
 		// Remove the attribute
 		entity.Attributes = append(entity.Attributes[:idx], entity.Attributes[idx+1:]...)
 		if err := e.writer.UpdateEntity(dm.ID, entity); err != nil {
