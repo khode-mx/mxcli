@@ -80,6 +80,41 @@ func TestContainsVariable(t *testing.T) {
 	}
 }
 
+func TestResolveEntityRefFromBSON(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  map[string]any
+		want string
+	}{
+		{
+			"with EntityRef map",
+			map[string]any{
+				"EntityRef": map[string]any{"QualifiedName": "Module.Entity"},
+			},
+			"Module.Entity",
+		},
+		{
+			"no EntityRef",
+			map[string]any{"Name": "test"},
+			"",
+		},
+		{
+			"empty EntityRef",
+			map[string]any{"EntityRef": map[string]any{}},
+			"",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveEntityRefFromBSON(tt.raw)
+			if got != tt.want {
+				t.Errorf("resolveEntityRefFromBSON() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestXpathID(t *testing.T) {
 	// Deterministic: same input -> same output
 	id1 := xpathID("doc1", "comp1", "[Active = true]")

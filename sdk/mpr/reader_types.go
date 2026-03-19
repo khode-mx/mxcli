@@ -268,6 +268,39 @@ type UnitInfo struct {
 	Type            string
 }
 
+// RawUnit holds raw unit data with BSON contents.
+type RawUnit struct {
+	ID          model.ID
+	ContainerID model.ID
+	Type        string
+	Contents    []byte
+}
+
+// ListRawUnitsByType returns all raw units matching the given type prefix,
+// including their BSON contents. This is useful for scanning BSON directly
+// without full parsing.
+func (r *Reader) ListRawUnitsByType(typePrefix string) ([]*RawUnit, error) {
+	units, err := r.listUnitsByType(typePrefix)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []*RawUnit
+	for _, u := range units {
+		contents, err := r.resolveContents(u.ID, u.Contents)
+		if err != nil {
+			continue
+		}
+		result = append(result, &RawUnit{
+			ID:          model.ID(u.ID),
+			ContainerID: model.ID(u.ContainerID),
+			Type:        u.Type,
+			Contents:    contents,
+		})
+	}
+	return result, nil
+}
+
 // ListUnits returns all units with their IDs and types.
 func (r *Reader) ListUnits() ([]*UnitInfo, error) {
 	units, err := r.listUnitsByType("")

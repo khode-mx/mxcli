@@ -8,8 +8,9 @@ import (
 	"fmt"
 	"strings"
 
+	"go.mongodb.org/mongo-driver/bson"
+
 	"github.com/mendixlabs/mxcli/sdk/microflows"
-	"github.com/mendixlabs/mxcli/sdk/pages"
 )
 
 // XPath usage types
@@ -101,22 +102,34 @@ func (b *Builder) buildXPathExpressions() error {
 		}
 	}
 
-	// 3. Extract from page/widget data sources
-	pageList, err := b.cachedPages()
-	if err == nil {
-		for _, pg := range pageList {
-			moduleID := b.hierarchy.findModuleID(pg.ContainerID)
+	// 3. Extract from page/snippet data sources by scanning raw BSON
+	// The page parser only reads metadata, not the widget tree, so we scan the
+	// raw BSON documents for XPathConstraint fields at any nesting depth.
+	for _, typePrefix := range []string{"Forms$Page", "Pages$Page", "Forms$Snippet", "Pages$Snippet"} {
+		rawPages, err := b.reader.ListRawUnitsByType(typePrefix)
+		if err != nil {
+			continue
+		}
+		for _, ru := range rawPages {
+			moduleID := b.hierarchy.findModuleID(ru.ContainerID)
 			moduleName := b.hierarchy.getModuleName(moduleID)
-			sourceQN := moduleName + "." + pg.Name
 
-			if pg.LayoutCall != nil {
-				for _, arg := range pg.LayoutCall.Arguments {
-					if arg.Widget != nil {
-						count += b.extractWidgetXPath(stmt, arg.Widget, "PAGE", string(pg.ID), sourceQN, moduleName,
-							projectID, projectName, snapshotID, snapshotDate, snapshotSource, sourceID, sourceBranch, sourceRevision)
-					}
-				}
+			// Parse just the Name field from the BSON
+			var raw map[string]any
+			if err := bson.Unmarshal(ru.Contents, &raw); err != nil {
+				continue
 			}
+			name, _ := raw["Name"].(string)
+			sourceQN := moduleName + "." + name
+
+			docType := "PAGE"
+			if strings.Contains(typePrefix, "Snippet") {
+				docType = "SNIPPET"
+			}
+
+			// Scan the full BSON tree for XPathConstraint fields
+			count += scanBSONForXPath(stmt, raw, docType, string(ru.ID), sourceQN, moduleName,
+				projectID, projectName, snapshotID, snapshotDate, snapshotSource, sourceID, sourceBranch, sourceRevision)
 		}
 	}
 
@@ -175,152 +188,134 @@ func (b *Builder) extractMicroflowXPath(stmt *sql.Stmt,
 	return count
 }
 
-// extractWidgetXPath recursively extracts XPath constraints from page widgets.
-func (b *Builder) extractWidgetXPath(stmt *sql.Stmt,
-	w pages.Widget, docType, docID, docQN, moduleName,
+// scanBSONForXPath recursively scans a BSON map for XPathConstraint fields
+// and inserts records into the xpath_expressions table.
+// This works on raw BSON data, avoiding the need for a full widget tree parser.
+func scanBSONForXPath(stmt *sql.Stmt, raw map[string]any,
+	docType, docID, docQN, moduleName,
 	projectID, projectName, snapshotID, snapshotDate, snapshotSource, sourceID, sourceBranch, sourceRevision string) int {
-
-	if w == nil {
-		return 0
-	}
 
 	count := 0
 
-	// Helper to recurse into children
-	recurse := func(widgets []pages.Widget) int {
-		n := 0
-		for _, child := range widgets {
-			n += b.extractWidgetXPath(stmt, child, docType, docID, docQN, moduleName,
-				projectID, projectName, snapshotID, snapshotDate, snapshotSource, sourceID, sourceBranch, sourceRevision)
-		}
-		return n
+	// Check if this node has an XPathConstraint
+	xpath := extractString(raw["XPathConstraint"])
+	if xpath == "" {
+		xpath = extractString(raw["XpathConstraint"])
 	}
+	if xpath != "" {
+		bsonType, _ := raw["$Type"].(string)
+		bsonID := extractBsonIDString(raw["$ID"])
+		entityQN := resolveEntityRefFromBSON(raw)
 
-	// Extract XPath from DatabaseSource
-	extractFromDS := func(ds pages.DataSource, widgetName string) {
-		if ds == nil {
-			return
-		}
-		dbSrc, ok := ds.(*pages.DatabaseSource)
-		if !ok || dbSrc.XPathConstraint == "" {
-			return
-		}
-
-		entityQN := dbSrc.EntityName
-		if entityQN == "" && dbSrc.EntityID != "" {
-			entityQN = b.resolveEntityID(dbSrc.EntityID)
+		componentType := "WIDGET"
+		if strings.Contains(bsonType, "AccessRule") {
+			componentType = "ACCESS_RULE"
 		}
 
-		id := xpathID(docID, string(dbSrc.ID), dbSrc.XPathConstraint)
-		isParam := boolToInt(containsVariable(dbSrc.XPathConstraint))
-		refs := extractReferencedEntities(dbSrc.XPathConstraint)
+		id := xpathID(docID, bsonID, xpath)
+		isParam := boolToInt(containsVariable(xpath))
+		refs := extractReferencedEntities(xpath)
 
 		stmt.Exec(id, docType, docID, docQN,
-			"WIDGET", string(dbSrc.ID), widgetName,
-			dbSrc.XPathConstraint, entityQN, refs,
+			componentType, bsonID, bsonType,
+			xpath, entityQN, refs,
 			isParam, XPathUsageDatasource, moduleName,
 			projectID, projectName, snapshotID, snapshotDate,
 			snapshotSource, sourceID, sourceBranch, sourceRevision)
 		count++
 	}
 
-	switch widget := w.(type) {
-	case *pages.DataView:
-		extractFromDS(widget.DataSource, widget.Name)
-		count += recurse(widget.Widgets)
-		count += recurse(widget.FooterWidgets)
-
-	case *pages.ListView:
-		extractFromDS(widget.DataSource, widget.Name)
-		count += recurse(widget.Widgets)
-
-	case *pages.DataGrid:
-		extractFromDS(widget.DataSource, widget.Name)
-		count += recurse(widget.ControlBarWidgets)
-
-	case *pages.TemplateGrid:
-		extractFromDS(widget.DataSource, widget.Name)
-		count += recurse(widget.Widgets)
-		count += recurse(widget.ControlBarWidgets)
-
-	case *pages.Gallery:
-		extractFromDS(widget.DataSource, widget.Name)
-		if widget.ContentWidget != nil {
-			count += b.extractWidgetXPath(stmt, widget.ContentWidget, docType, docID, docQN, moduleName,
+	// Recurse into all nested maps and arrays
+	for _, v := range raw {
+		switch val := v.(type) {
+		case map[string]any:
+			count += scanBSONForXPath(stmt, val, docType, docID, docQN, moduleName,
 				projectID, projectName, snapshotID, snapshotDate, snapshotSource, sourceID, sourceBranch, sourceRevision)
-		}
-		count += recurse(widget.FilterWidgets)
-
-	case *pages.Container:
-		count += recurse(widget.Widgets)
-
-	case *pages.LayoutGrid:
-		for _, row := range widget.Rows {
-			for _, col := range row.Columns {
-				count += recurse(col.Widgets)
+		case bson.D:
+			m := make(map[string]any)
+			for _, elem := range val {
+				m[elem.Key] = elem.Value
 			}
-		}
-
-	case *pages.CustomWidget:
-		if widget.WidgetObject != nil {
-			count += b.extractWidgetObjectXPath(stmt, widget.WidgetObject, docType, docID, docQN, moduleName,
+			count += scanBSONForXPath(stmt, m, docType, docID, docQN, moduleName,
 				projectID, projectName, snapshotID, snapshotDate, snapshotSource, sourceID, sourceBranch, sourceRevision)
+		default:
+			scanBSONArray(v, func(child map[string]any) {
+				count += scanBSONForXPath(stmt, child, docType, docID, docQN, moduleName,
+					projectID, projectName, snapshotID, snapshotDate, snapshotSource, sourceID, sourceBranch, sourceRevision)
+			})
 		}
 	}
 
 	return count
 }
 
-// extractWidgetObjectXPath extracts XPath from pluggable widget property objects.
-func (b *Builder) extractWidgetObjectXPath(stmt *sql.Stmt,
-	obj *pages.WidgetObject, docType, docID, docQN, moduleName,
-	projectID, projectName, snapshotID, snapshotDate, snapshotSource, sourceID, sourceBranch, sourceRevision string) int {
-
-	if obj == nil {
-		return 0
-	}
-
-	count := 0
-	for _, prop := range obj.Properties {
-		if prop.Value == nil {
-			continue
-		}
-		val := prop.Value
-
-		// Check datasource-typed properties
-		if val.DataSource != nil {
-			dbSrc, ok := val.DataSource.(*pages.DatabaseSource)
-			if ok && dbSrc.XPathConstraint != "" {
-				entityQN := dbSrc.EntityName
-				if entityQN == "" && dbSrc.EntityID != "" {
-					entityQN = b.resolveEntityID(dbSrc.EntityID)
+// scanBSONArray iterates array values, calling fn for each map element.
+func scanBSONArray(v any, fn func(map[string]any)) {
+	switch arr := v.(type) {
+	case bson.A:
+		for _, item := range arr {
+			switch m := item.(type) {
+			case map[string]any:
+				fn(m)
+			case bson.D:
+				mapped := make(map[string]any)
+				for _, elem := range m {
+					mapped[elem.Key] = elem.Value
 				}
-
-				id := xpathID(docID, string(dbSrc.ID), dbSrc.XPathConstraint)
-				isParam := boolToInt(containsVariable(dbSrc.XPathConstraint))
-				refs := extractReferencedEntities(dbSrc.XPathConstraint)
-
-				stmt.Exec(id, docType, docID, docQN,
-					"WIDGET", string(dbSrc.ID), "",
-					dbSrc.XPathConstraint, entityQN, refs,
-					isParam, XPathUsageDatasource, moduleName,
-					projectID, projectName, snapshotID, snapshotDate,
-					snapshotSource, sourceID, sourceBranch, sourceRevision)
-				count++
+				fn(mapped)
 			}
 		}
-
-		// Recurse into nested widget objects
-		for _, child := range val.Objects {
-			count += b.extractWidgetObjectXPath(stmt, child, docType, docID, docQN, moduleName,
-				projectID, projectName, snapshotID, snapshotDate, snapshotSource, sourceID, sourceBranch, sourceRevision)
-		}
-		for _, child := range val.Widgets {
-			count += b.extractWidgetXPath(stmt, child, docType, docID, docQN, moduleName,
-				projectID, projectName, snapshotID, snapshotDate, snapshotSource, sourceID, sourceBranch, sourceRevision)
+	case []any:
+		for _, item := range arr {
+			switch m := item.(type) {
+			case map[string]any:
+				fn(m)
+			case bson.D:
+				mapped := make(map[string]any)
+				for _, elem := range m {
+					mapped[elem.Key] = elem.Value
+				}
+				fn(mapped)
+			}
 		}
 	}
-	return count
+}
+
+// resolveEntityRefFromBSON extracts a qualified entity name from a BSON node
+// that has an EntityRef field (common in data source nodes).
+func resolveEntityRefFromBSON(raw map[string]any) string {
+	// Try EntityRef (used by most data sources)
+	if entityRef, ok := raw["EntityRef"].(map[string]any); ok {
+		if name, ok := entityRef["QualifiedName"].(string); ok {
+			return name
+		}
+	}
+	// Try bson.D format
+	if entityRef, ok := raw["EntityRef"].(bson.D); ok {
+		for _, elem := range entityRef {
+			if elem.Key == "QualifiedName" {
+				if name, ok := elem.Value.(string); ok {
+					return name
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// extractBsonIDString extracts a BSON ID as a string from various formats.
+func extractBsonIDString(v any) string {
+	if v == nil {
+		return ""
+	}
+	switch id := v.(type) {
+	case string:
+		return id
+	case []byte:
+		return fmt.Sprintf("%x", id)
+	default:
+		return fmt.Sprintf("%v", id)
+	}
 }
 
 // xpathID generates a deterministic ID from the document, component, and expression.
