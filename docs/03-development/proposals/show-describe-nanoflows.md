@@ -37,9 +37,10 @@ Output format (same as DESCRIBE MICROFLOW but with NANOFLOW keyword):
 /**
  * Validates the customer form before saving
  */
-NANOFLOW MyModule.ValidateCustomerForm
-  PARAMETER $Customer: MyModule.Customer
-  RETURNS Boolean
+CREATE NANOFLOW MyModule.ValidateCustomerForm (
+  $Customer: MyModule.Customer
+)
+RETURNS Boolean
 BEGIN
   IF $Customer/Name = '' THEN
     VALIDATION FEEDBACK $Customer ATTRIBUTE Name MESSAGE 'Name is required';
@@ -49,6 +50,8 @@ BEGIN
 END;
 /
 ```
+
+This matches the existing microflow DESCRIBE format exactly — parameters are inline in parentheses with `$` prefix, comma-separated, one per line.
 
 ### DROP NANOFLOW (optional, lower priority)
 
