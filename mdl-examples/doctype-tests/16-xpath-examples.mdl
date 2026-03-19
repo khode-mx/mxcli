@@ -24,7 +24,7 @@ CREATE PERSISTENT ENTITY XpathTest.Customer (
   Name: String(200),
   Email: String(200),
   IsActive: Boolean,
-  CreatedDate: DateTime,
+  RegistrationDate: DateTime,
   Country: String(100)
 );
 
@@ -48,17 +48,20 @@ CREATE PERSISTENT ENTITY XpathTest.Category (
   IsVisible: Boolean
 );
 
-CREATE ASSOCIATION XpathTest.Order_Customer (
-  XpathTest.Order * -- XpathTest.Customer 1
-);
+CREATE ASSOCIATION XpathTest.Order_Customer
+  FROM XpathTest.Order TO XpathTest.Customer
+  TYPE Reference
+  OWNER Default;
 
-CREATE ASSOCIATION XpathTest.OrderLine_Order (
-  XpathTest.OrderLine * -- XpathTest.Order 1
-);
+CREATE ASSOCIATION XpathTest.OrderLine_Order
+  FROM XpathTest.OrderLine TO XpathTest.Order
+  TYPE Reference
+  OWNER Default;
 
-CREATE ASSOCIATION XpathTest.Order_Category (
-  XpathTest.Order * -- XpathTest.Category 1
-);
+CREATE ASSOCIATION XpathTest.Order_Category
+  FROM XpathTest.Order TO XpathTest.Category
+  TYPE Reference
+  OWNER Default;
 
 -- ============================================================================
 -- MARK: Simple Attribute Comparisons
@@ -481,8 +484,8 @@ CREATE PAGE XpathTest.ActiveCustomerPage (
  * Entity access with XPath constraint (row-level security)
  */
 GRANT XpathTest.User ON XpathTest.Order (
-  READ ALL,
-  WRITE ALL
+  READ *,
+  WRITE *
 ) WHERE '[System.owner = ''[%CurrentUser%]'']';
 
 -- ============================================================================

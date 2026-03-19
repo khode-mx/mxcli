@@ -183,8 +183,8 @@ For security rules, XPath is passed as a **string literal** (not parsed):
 
 ```mdl
 GRANT Module.Role ON Module.Entity (
-  READ ALL,
-  WRITE ALL
+  READ *,
+  WRITE *
 ) WHERE '[System.owner = ''[%CurrentUser%]'']';
 ```
 
