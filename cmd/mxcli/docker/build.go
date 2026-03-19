@@ -73,6 +73,11 @@ func Build(opts BuildOptions) error {
 	}
 	fmt.Fprintf(w, "  MxBuild: %s\n", mxbuildPath)
 
+	// Step 2b: Ensure PAD runtime files are linked
+	if err := ensurePADFiles(pv.ProductVersion, w); err != nil {
+		fmt.Fprintf(w, "  Warning: %v\n", err)
+	}
+
 	// Step 3: Resolve JDK 21
 	fmt.Fprintln(w, "Resolving JDK 21...")
 	javaHome, err := resolveJDK21()
@@ -271,6 +276,21 @@ func Run(opts RunOptions) error {
 	_, err = DownloadRuntime(pv.ProductVersion, w)
 	if err != nil {
 		return fmt.Errorf("setting up runtime: %w", err)
+	}
+
+	// Step 3b: Link PAD runtime files into mxbuild directory
+	// MxBuild's PAD builder expects template files at mxbuild/{ver}/runtime/pad/,
+	// but they live in the separately downloaded runtime at runtime/{ver}/runtime/pad/.
+	if err := ensurePADFiles(pv.ProductVersion, w); err != nil {
+		return fmt.Errorf("linking PAD files: %w", err)
+	}
+
+	// Step 3c: Ensure demo users exist
+	// Blank projects created by mx create-project have no demo users, which means
+	// the app starts but login fails. Create a default admin if none exist.
+	if err := ensureDemoUsers(opts.ProjectPath, w); err != nil {
+		// Non-fatal: warn but continue — the app will start, just login won't work.
+		fmt.Fprintf(w, "  Warning: could not ensure demo users: %v\n", err)
 	}
 
 	// Step 4: Initialize Docker stack (idempotent)
@@ -579,6 +599,112 @@ func extractZip(zipPath, targetDir string) error {
 		rc.Close()
 	}
 
+	return nil
+}
+
+// ensurePADFiles ensures that PAD runtime template files are available in the mxbuild
+// directory. MxBuild's PAD builder expects files at ~/.mxcli/mxbuild/{ver}/runtime/pad/
+// but the runtime is downloaded separately to ~/.mxcli/runtime/{ver}/runtime/pad/.
+// This creates a symlink from the mxbuild location to the runtime location.
+func ensurePADFiles(productVersion string, w io.Writer) error {
+	mxbuildDir, err := MxBuildCacheDir(productVersion)
+	if err != nil {
+		return err
+	}
+	runtimeDir, err := RuntimeCacheDir(productVersion)
+	if err != nil {
+		return err
+	}
+
+	mxbuildPAD := filepath.Join(mxbuildDir, "runtime", "pad")
+	runtimePAD := filepath.Join(runtimeDir, "runtime", "pad")
+
+	// Already exists (previous run, or bundled with mxbuild)
+	if _, err := os.Stat(mxbuildPAD); err == nil {
+		fmt.Fprintln(w, "  PAD runtime files already present.")
+		return nil
+	}
+
+	// Check that the runtime PAD source exists
+	if _, err := os.Stat(runtimePAD); err != nil {
+		return fmt.Errorf("runtime PAD files not found at %s", runtimePAD)
+	}
+
+	// Create parent directory if needed
+	if err := os.MkdirAll(filepath.Dir(mxbuildPAD), 0755); err != nil {
+		return fmt.Errorf("creating runtime directory in mxbuild: %w", err)
+	}
+
+	// Symlink runtime/pad into mxbuild
+	if err := os.Symlink(runtimePAD, mxbuildPAD); err != nil {
+		return fmt.Errorf("symlinking PAD files: %w", err)
+	}
+	fmt.Fprintf(w, "  Linked PAD runtime files: %s -> %s\n", mxbuildPAD, runtimePAD)
+	return nil
+}
+
+// ensureDemoUsers checks whether the project has demo users configured.
+// If not, it enables demo users and creates a default admin user so the
+// application is accessible after startup.
+func ensureDemoUsers(projectPath string, w io.Writer) error {
+	fmt.Fprintln(w, "Checking demo users...")
+
+	reader, err := mpr.Open(projectPath)
+	if err != nil {
+		return fmt.Errorf("opening project: %w", err)
+	}
+
+	ps, err := reader.GetProjectSecurity()
+	reader.Close()
+	if err != nil {
+		return fmt.Errorf("reading project security: %w", err)
+	}
+
+	// If demo users already exist, nothing to do
+	if len(ps.DemoUsers) > 0 {
+		fmt.Fprintf(w, "  Found %d demo user(s), skipping.\n", len(ps.DemoUsers))
+		return nil
+	}
+
+	fmt.Fprintln(w, "  No demo users found, creating default admin...")
+
+	writer, err := mpr.NewWriter(projectPath)
+	if err != nil {
+		return fmt.Errorf("opening project for writing: %w", err)
+	}
+	defer writer.Close()
+
+	// Re-read security through writer's reader
+	ps, err = writer.Reader().GetProjectSecurity()
+	if err != nil {
+		return fmt.Errorf("reading project security: %w", err)
+	}
+
+	// Enable demo users if not already enabled
+	if !ps.EnableDemoUsers {
+		if err := writer.SetProjectDemoUsersEnabled(ps.ID, true); err != nil {
+			return fmt.Errorf("enabling demo users: %w", err)
+		}
+		fmt.Fprintln(w, "  Enabled demo users.")
+	}
+
+	// Pick the first user role that looks like an admin, or fall back to the first role
+	roleName := "Administrator"
+	if len(ps.UserRoles) > 0 {
+		roleName = ps.UserRoles[0].Name
+		for _, ur := range ps.UserRoles {
+			if ur.Name == "Administrator" || ur.Name == "Admin" {
+				roleName = ur.Name
+				break
+			}
+		}
+	}
+
+	if err := writer.AddDemoUser(ps.ID, "admin", "Admin123!", []string{roleName}); err != nil {
+		return fmt.Errorf("creating demo user: %w", err)
+	}
+
+	fmt.Fprintf(w, "  Created demo user: admin / Admin123! (role: %s)\n", roleName)
 	return nil
 }
 
