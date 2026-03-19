@@ -22,6 +22,16 @@ func unquoteIdentifier(s string) string {
 	return s
 }
 
+// unquoteQualifiedName strips quotes from each segment of a dotted qualified name.
+// e.g. MaisonElegance."FormSubmissionStatus".StatusNew -> MaisonElegance.FormSubmissionStatus.StatusNew
+func unquoteQualifiedName(s string) string {
+	parts := strings.Split(s, ".")
+	for i, p := range parts {
+		parts[i] = unquoteIdentifier(p)
+	}
+	return strings.Join(parts, ".")
+}
+
 // attributeNameText extracts the clean name from an AttributeNameContext,
 // stripping quotes from QUOTED_IDENTIFIER tokens.
 func attributeNameText(ctx parser.IAttributeNameContext) string {
@@ -196,7 +206,7 @@ func buildAttributes(ctx parser.IAttributeDefinitionListContext, b *Builder) []a
 				if lit := c.Literal(); lit != nil {
 					attr.DefaultValue = extractLiteralValue(lit)
 				} else if expr := c.Expression(); expr != nil {
-					attr.DefaultValue = expr.GetText()
+					attr.DefaultValue = unquoteQualifiedName(expr.GetText())
 				}
 			}
 			if c.REQUIRED() != nil {
@@ -248,7 +258,7 @@ func buildSingleAttribute(a *parser.AttributeDefinitionContext) *ast.Attribute {
 			if lit := c.Literal(); lit != nil {
 				attr.DefaultValue = extractLiteralValue(lit)
 			} else if expr := c.Expression(); expr != nil {
-				attr.DefaultValue = expr.GetText()
+				attr.DefaultValue = unquoteQualifiedName(expr.GetText())
 			}
 		}
 		if c.REQUIRED() != nil {

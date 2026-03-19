@@ -3,6 +3,7 @@
 package visitor
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -1107,6 +1108,75 @@ END;`
 		for _, err := range errs {
 			t.Errorf("  %v", err)
 		}
+	}
+}
+
+// TestEnumDefaultQuotedIdentifier verifies that quoted identifiers in enum
+// DEFAULT values are unquoted correctly (issue #11 / BUG-004).
+// e.g. DEFAULT MaisonElegance."FormSubmissionStatus".StatusNew should store
+// MaisonElegance.FormSubmissionStatus.StatusNew (quotes stripped).
+func TestEnumDefaultQuotedIdentifier(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		wantDflt string
+	}{
+		{
+			name: "quoted enum name in DEFAULT",
+			input: `CREATE PERSISTENT ENTITY MaisonElegance.FormSubmission (
+				SubmissionStatus: Enumeration(MaisonElegance."FormSubmissionStatus") DEFAULT MaisonElegance."FormSubmissionStatus".StatusNew
+			);`,
+			wantDflt: "MaisonElegance.FormSubmissionStatus.StatusNew",
+		},
+		{
+			name: "unquoted enum name in DEFAULT (unchanged)",
+			input: `CREATE PERSISTENT ENTITY MaisonElegance.FormSubmission (
+				SubmissionStatus: Enumeration(MaisonElegance.FormSubmissionStatus) DEFAULT MaisonElegance.FormSubmissionStatus.StatusNew
+			);`,
+			wantDflt: "MaisonElegance.FormSubmissionStatus.StatusNew",
+		},
+		{
+			name: "backtick-quoted enum name in DEFAULT",
+			input: "CREATE PERSISTENT ENTITY Test.MyEntity (\n" +
+				"\tStatus: Enumeration(Test.`MyEnum`) DEFAULT Test.`MyEnum`.Active\n" +
+				");",
+			wantDflt: "Test.MyEnum.Active",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			prog, errs := Build(tt.input)
+			if len(errs) > 0 {
+				for _, err := range errs {
+					t.Errorf("Parse error: %v", err)
+				}
+				return
+			}
+
+			if len(prog.Statements) != 1 {
+				t.Fatalf("Expected 1 statement, got %d", len(prog.Statements))
+			}
+
+			stmt, ok := prog.Statements[0].(*ast.CreateEntityStmt)
+			if !ok {
+				t.Fatalf("Expected CreateEntityStmt, got %T", prog.Statements[0])
+			}
+
+			if len(stmt.Attributes) != 1 {
+				t.Fatalf("Expected 1 attribute, got %d", len(stmt.Attributes))
+			}
+
+			attr := stmt.Attributes[0]
+			if !attr.HasDefault {
+				t.Fatal("Expected HasDefault to be true")
+			}
+
+			got := fmt.Sprintf("%v", attr.DefaultValue)
+			if got != tt.wantDflt {
+				t.Errorf("DefaultValue = %q, want %q", got, tt.wantDflt)
+			}
+		})
 	}
 }
 
