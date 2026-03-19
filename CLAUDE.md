@@ -286,6 +286,7 @@ Regenerate after modifying `MDLLexer.g4` or `MDLParser.g4`: `make grammar`. See 
 - `.claude/skills/manage-security.md` - Security roles, access control, GRANT/REVOKE patterns
 - `.claude/skills/manage-navigation.md` - Navigation profiles, home pages, menus, login pages
 - `.claude/skills/demo-data.md` - **READ for any database/import work** - Mendix ID system, association storage, demo data insertion
+- `.claude/skills/xpath-constraints.md` - XPath syntax in WHERE clauses, association paths, nested predicates, functions
 - `.claude/skills/database-connections.md` - External database connections from microflows
 - `.claude/skills/test-microflows.md` - **READ for testing work** - Test annotations, file formats, Docker setup requirement
 
