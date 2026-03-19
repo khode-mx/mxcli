@@ -346,6 +346,11 @@ func (b *Builder) Build(progress ProgressFunc) error {
 		return fmt.Errorf("failed to build permissions: %w", err)
 	}
 
+	// Build XPath expressions table (full mode only)
+	if err := b.buildXPathExpressions(); err != nil {
+		return fmt.Errorf("failed to build xpath expressions: %w", err)
+	}
+
 	// Build strings FTS table (full mode only)
 	if err := b.buildStrings(); err != nil {
 		return fmt.Errorf("failed to build strings: %w", err)

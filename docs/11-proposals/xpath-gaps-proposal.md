@@ -2,7 +2,7 @@
 
 **Date:** 2026-03-19
 **Branch:** xpath
-**Status:** Phase 1-2 Implemented
+**Status:** Phase 1-2, 4 Implemented (Phase 3 pending)
 
 ## 1. Background
 
