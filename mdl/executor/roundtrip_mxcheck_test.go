@@ -830,15 +830,12 @@ END;`
 	if err != nil {
 		if strings.Contains(output, "no longer exists") {
 			t.Errorf("mx check reports attribute no longer exists (association not resolved correctly):\n%s", output)
+		} else if strings.Contains(output, "CE0642") {
+			t.Errorf("mx check reports Entity property missing on ComboBox (association EntityRef not set):\n%s", output)
+		} else if strings.Contains(output, "CE8812") {
+			t.Errorf("mx check reports association path missing on ComboBox:\n%s", output)
 		} else if strings.Contains(output, "error") || strings.Contains(output, "Error") {
-			// CE0642 "Property 'Entity' is required" on the DataView is a known
-			// limitation of microflow-sourced dataviews — not related to the
-			// ComboBox association fix under test.
-			if strings.Contains(output, "CE0642") && !strings.Contains(output, "no longer exists") {
-				t.Logf("mx check has unrelated DataView error (CE0642), ComboBox association resolved correctly:\n%s", output)
-			} else {
-				t.Errorf("mx check found errors:\n%s", output)
-			}
+			t.Errorf("mx check found errors:\n%s", output)
 		} else {
 			t.Logf("mx check output:\n%s", output)
 		}

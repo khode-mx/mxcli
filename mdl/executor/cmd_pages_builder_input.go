@@ -172,14 +172,39 @@ func setDataSource(val bson.D, ds pages.DataSource) bson.D {
 	return result
 }
 
-// setAssociationRef sets the AttributeRef field in a WidgetValue for an association binding.
-// Uses DomainModels$AttributeRef with Attribute field — the WidgetValue.AttributeRef property
-// in C# is statically typed as AttributeRef (not polymorphic MemberRef), so we cannot use
-// DomainModels$AssociationRef. The association is stored as a 3-part member path
-// Module.Entity.AssociationName (same format as attributes), and Mendix resolves it as a
-// member of the entity.
-func setAssociationRef(val bson.D, assocPath string) bson.D {
-	return setAttributeRef(val, assocPath)
+// setAssociationRef sets the AttributeRef and EntityRef fields in a WidgetValue for an
+// association binding on a pluggable widget.
+// - assocPath: qualified association name (Module.AssociationName)
+// - entityName: target entity qualified name (Module.EntityName)
+// MxBuild requires both: AttributeRef with the association path (CE8812) and
+// EntityRef with the target entity (CE0642).
+// setAssociationRef sets the EntityRef field in a WidgetValue for an association binding
+// on a pluggable widget. Uses DomainModels$IndirectEntityRef which resolves through an
+// association path. MxBuild requires both the entity reference and association path (CE0642, CE8812).
+// The assocPath is the qualified association name (Module.AssociationName).
+// The entityName is the target entity qualified name (Module.EntityName).
+func setAssociationRef(val bson.D, assocPath string, entityName string) bson.D {
+	result := make(bson.D, 0, len(val))
+	for _, elem := range val {
+		if elem.Key == "EntityRef" && entityName != "" {
+			result = append(result, bson.E{Key: "EntityRef", Value: bson.D{
+				{Key: "$ID", Value: mpr.IDToBsonBinary(mpr.GenerateID())},
+				{Key: "$Type", Value: "DomainModels$IndirectEntityRef"},
+				{Key: "Steps", Value: bson.A{
+					int32(2), // version marker
+					bson.D{
+						{Key: "$ID", Value: mpr.IDToBsonBinary(mpr.GenerateID())},
+						{Key: "$Type", Value: "DomainModels$IndirectEntityRefStep"},
+						{Key: "Association", Value: assocPath},
+						{Key: "DestinationEntity", Value: entityName},
+					},
+				}},
+			}})
+		} else {
+			result = append(result, elem)
+		}
+	}
+	return result
 }
 
 // setAttributeRef sets the AttributeRef field in a WidgetValue.
