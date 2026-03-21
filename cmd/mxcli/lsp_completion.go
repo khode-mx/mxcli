@@ -153,6 +153,7 @@ var mdlStatementSnippets = []protocol.CompletionItem{
 	snippet("IF ... END IF", "IF ${1:condition} THEN\n\t$0\nEND IF;", "If-then block"),
 	snippet("IF ... ELSE ... END IF", "IF ${1:condition} THEN\n\t${2}\nELSE\n\t$0\nEND IF;", "If-then-else block"),
 	snippet("LOOP ... END LOOP", "LOOP $$${1:Item} IN $$${2:List}\nBEGIN\n\t$0\nEND LOOP;", "Loop over a list"),
+	snippet("WHILE ... END WHILE", "WHILE ${1:condition}\nBEGIN\n\t$0\nEND WHILE;", "While loop with condition"),
 	snippet("DECLARE variable", "DECLARE $$${1:Var} ${2:String} = ${3:''};", "Declare a variable"),
 	snippet("RETRIEVE ... FROM", "RETRIEVE $$${1:Var} FROM ${2:Module.Entity} WHERE ${3:condition};", "Retrieve from database"),
 	snippet("DATAVIEW", "DATAVIEW ${1:dvName} (DataSource: $$${2:Var}) {\n\t$0\n}", "Data view widget"),

@@ -752,6 +752,59 @@ BEGIN
 END;
 /
 
+/**
+ * Example 6.6: WHILE loop - condition-based iteration
+ *
+ * WHILE loops repeat while a condition is true.
+ * Unlike LOOP (which iterates over a list), WHILE uses an expression condition.
+ * Internally, both use LoopedActivity but with different LoopSource types.
+ */
+CREATE MICROFLOW MfTest.M024_3_WhileLoop (
+  $N: Integer
+)
+RETURNS Integer AS $Sum
+BEGIN
+  DECLARE $Counter Integer = 0;
+  DECLARE $Sum Integer = 0;
+
+  WHILE $Counter < $N
+  BEGIN
+    SET $Counter = $Counter + 1;
+    SET $Sum = $Sum + $Counter;
+  END WHILE;
+
+  RETURN $Sum;
+END;
+/
+
+/**
+ * Example 6.7: WHILE loop with nested IF
+ *
+ * Demonstrates WHILE with conditional logic inside the loop body.
+ */
+CREATE MICROFLOW MfTest.M024_4_WhileWithCondition (
+  $Number: Integer
+)
+RETURNS Boolean AS $IsPrime
+BEGIN
+  IF $Number <= 1 THEN
+    RETURN false;
+  END IF;
+
+  DECLARE $Divisor Integer = 2;
+
+  WHILE $Divisor * $Divisor <= $Number
+  BEGIN
+    IF $Number mod $Divisor = 0 THEN
+      RETURN false;
+    END IF;
+    SET $Divisor = $Divisor + 1;
+  END WHILE;
+
+  RETURN true;
+END;
+/
+
 -- ============================================================================
 -- LEVEL 7: RETRIEVE (Database Queries)
 -- ============================================================================
@@ -2522,7 +2575,7 @@ END;
 --
 -- ✅ Variables: DECLARE, SET (for primitive variables only)
 -- ✅ Control Flow: IF/THEN/ELSE/END IF with nesting
--- ✅ Loops: LOOP...IN with BEGIN/END LOOP
+-- ✅ Loops: LOOP...IN (FOR EACH) and WHILE...BEGIN/END WHILE
 -- ✅ Logging: LOG INFO/WARNING/ERROR with optional NODE and WITH template params
 --            (unified syntax with pages - see STRING_TEMPLATE_SYNTAX.md)
 -- ✅ Objects: CREATE, CHANGE, COMMIT (with/without EVENTS)

@@ -827,12 +827,13 @@ RETRIEVE $ProductList FROM Module.Product WHERE IsActive = true;
 ### WHILE Loop
 
 ```mdl
--- WRONG: WHILE loop not supported
-WHILE $Counter < 10 DO
+-- WHILE loops iterate while a condition is true
+WHILE $Counter < 10
+BEGIN
   SET $Counter = $Counter + 1;
 END WHILE;
 
--- CORRECT: Use LOOP with a list
+-- FOR EACH loops iterate over a list
 LOOP $Item IN $ItemList
 BEGIN
   -- Process each item

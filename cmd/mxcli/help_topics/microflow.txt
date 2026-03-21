@@ -50,6 +50,7 @@ Control flow:
   END IF;
 
   LOOP $Item IN $List BEGIN ... END LOOP;  - Iterate list
+  WHILE condition BEGIN ... END WHILE;    - Condition loop
 
 Calls:
   $Result = CALL MICROFLOW Module.Name     - Call microflow

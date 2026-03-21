@@ -154,7 +154,8 @@ AUTHENTICATION Basic, Session
 | Color | `@color Green` | Background color (before activity) |
 | Annotation | `@annotation 'text'` | Visual note attached to next activity |
 | IF | `IF condition THEN ... [ELSE ...] END IF;` | |
-| LOOP | `LOOP $Item IN $List BEGIN ... END LOOP;` | |
+| LOOP | `LOOP $Item IN $List BEGIN ... END LOOP;` | FOR EACH over list |
+| WHILE | `WHILE condition BEGIN ... END WHILE;` | Condition-based loop |
 | Return | `RETURN $value;` | Required at end of every flow path |
 | Execute DB query | `$Result = EXECUTE DATABASE QUERY Module.Conn.Query;` | 3-part name; supports DYNAMIC, params, CONNECTION override |
 | Error handling | `... ON ERROR CONTINUE\|ROLLBACK\|{ handler };` | Not supported on EXECUTE DATABASE QUERY |
@@ -163,10 +164,8 @@ AUTHENTICATION Basic, Session
 
 | Unsupported | Use Instead | Notes |
 |-------------|-------------|-------|
-| `WHILE ... END WHILE` | `LOOP $Item IN $List` | Use list iteration instead |
 | `CASE ... WHEN ... END CASE` | Nested `IF ... ELSE ... END IF` | Switch not implemented |
 | `TRY ... CATCH ... END TRY` | `ON ERROR { ... }` blocks | Use error handlers on specific activities |
-| `BREAK` / `CONTINUE` | Conditional logic in loop | Loop control not implemented |
 
 **Notes:**
 - `RETRIEVE ... LIMIT n` IS supported. `LIMIT 1` returns a single entity, otherwise returns a list.
