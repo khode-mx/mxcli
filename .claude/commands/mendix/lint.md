@@ -28,13 +28,13 @@ mxcli lint -p app.mpr --exclude System --exclude Administration
 
 | Rule | Category | Description |
 |------|----------|-------------|
-| MDL001 | naming | NamingConvention - PascalCase with 21 microflow prefixes (ACT_, SUB_, DS_, VAL_, SCH_, IVK_, BCO_, ACO_, etc.) |
-| MDL002 | quality | EmptyMicroflow - Microflows should have at least one activity |
-| MDL003 | design | DomainModelSize - Max persistent entities per domain model |
-| MDL004 | quality | ValidationFeedback - Validation feedback with empty message |
-| MDL005 | quality | ImageSource - IMAGE widgets with no source configured |
-| MDL006 | quality | EmptyContainer - Empty layout containers |
-| MDL007 | security | PageNavigationSecurity - Navigation pages need allowed roles (CE0557) |
+| MPR001 | naming | NamingConvention - PascalCase with 21 microflow prefixes (ACT_, SUB_, DS_, VAL_, SCH_, IVK_, BCO_, ACO_, etc.) |
+| MPR002 | quality | EmptyMicroflow - Microflows should have at least one activity |
+| MPR003 | design | DomainModelSize - Max persistent entities per domain model |
+| MPR004 | quality | ValidationFeedback - Validation feedback with empty message |
+| MPR005 | quality | ImageSource - IMAGE widgets with no source configured |
+| MPR006 | quality | EmptyContainer - Empty layout containers |
+| MPR007 | security | PageNavigationSecurity - Navigation pages need allowed roles (CE0557) |
 | SEC001 | security | NoEntityAccessRules - Persistent entities need access rules |
 | SEC002 | security | WeakPasswordPolicy - Password minimum length should be 8+ |
 | SEC003 | security | DemoUsersActive - Demo users should be off at Production security |
@@ -109,11 +109,11 @@ Place `.star` files in `.claude/lint-rules/` to add project-specific rules. They
 ```
 Sales
 -----
-  ⚠ Entity name 'customer_info' should use PascalCase [MDL001]
+  ⚠ Entity name 'customer_info' should use PascalCase [MPR001]
       at Sales.customer_info
       → CustomerInfo
 
-  ⚠ Microflow 'test' has no activities [MDL002]
+  ⚠ Microflow 'test' has no activities [MPR002]
       at Sales.test
       → Add activities or remove unused microflow
 

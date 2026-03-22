@@ -7,30 +7,40 @@ import (
 	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	"github.com/mendixlabs/mxcli/mdl/linter"
 )
 
 // ValidateMicroflow checks a microflow for common issues that don't require a project connection.
-// Returns a list of warning messages.
-func ValidateMicroflow(stmt *ast.CreateMicroflowStmt) []string {
+// Returns a list of structured violations with rule IDs.
+func ValidateMicroflow(stmt *ast.CreateMicroflowStmt) []linter.Violation {
 	v := &microflowValidator{
 		mfName:     stmt.Name.String(),
 		returnType: stmt.ReturnType,
 	}
 	v.validate(stmt.Body)
-	return v.warnings
+	return v.violations
 }
 
 // microflowValidator holds state for validating a single microflow.
 type microflowValidator struct {
 	mfName        string
 	returnType    *ast.MicroflowReturnType // nil = void
-	warnings      []string
+	violations    []linter.Violation
 	loopDepth     int            // Track nesting depth inside loops
 	emptyListVars map[string]bool // List variables declared empty and never populated
 }
 
-func (v *microflowValidator) warn(msg string) {
-	v.warnings = append(v.warnings, msg)
+func (v *microflowValidator) addViolation(ruleID string, severity linter.Severity, message, suggestion string) {
+	v.violations = append(v.violations, linter.Violation{
+		RuleID:   ruleID,
+		Severity: severity,
+		Message:  message,
+		Location: linter.Location{
+			DocumentType: "microflow",
+			DocumentName: v.mfName,
+		},
+		Suggestion: suggestion,
+	})
 }
 
 // validate runs all checks on the microflow body.
@@ -42,8 +52,10 @@ func (v *microflowValidator) validate(body []ast.MicroflowStatement) {
 	// Check 5: missing RETURN on non-void microflow paths
 	if v.returnType != nil && v.returnType.Type.Kind != ast.TypeVoid {
 		if !bodyReturns(body) {
-			v.warn(fmt.Sprintf("microflow returns %s but not all code paths have a RETURN statement",
-				returnTypeString(v.returnType)))
+			v.addViolation("MDL003", linter.SeverityError,
+				fmt.Sprintf("microflow returns %s but not all code paths have a RETURN statement",
+					returnTypeString(v.returnType)),
+				"Add RETURN statements to all code paths")
 		}
 	}
 
@@ -57,8 +69,10 @@ func (v *microflowValidator) walkBody(body []ast.MicroflowStatement) {
 		switch stmt := s.(type) {
 		case *ast.ValidationFeedbackStmt:
 			if isEmptyMessage(stmt.Message) {
-				v.warn("VALIDATION FEEDBACK has empty message template. " +
-					"Mendix requires a non-empty feedback message (CE0091).")
+				v.addViolation("MDL007", linter.SeverityWarning,
+					"VALIDATION FEEDBACK has empty message template. "+
+						"Mendix requires a non-empty feedback message (CE0091).",
+					"Add a message template to the VALIDATION FEEDBACK action")
 			}
 		case *ast.ReturnStmt:
 			v.checkReturn(stmt)
@@ -78,14 +92,18 @@ func (v *microflowValidator) walkBody(body []ast.MicroflowStatement) {
 		case *ast.LoopStmt:
 			// Check: nested loop anti-pattern
 			if v.loopDepth > 0 {
-				v.warn("nested LOOP detected (loop inside a loop). " +
-					"Use RETRIEVE $Match FROM $List WHERE ... LIMIT 1 for list matching instead of nested loops (O(N^2) performance).")
+				v.addViolation("MDL001", linter.SeverityWarning,
+					"nested LOOP detected (loop inside a loop). "+
+						"Use RETRIEVE $Match FROM $List WHERE ... LIMIT 1 for list matching instead of nested loops (O(N^2) performance).",
+					"Replace nested loop with RETRIEVE ... WHERE ... LIMIT 1 for O(N) lookup")
 			}
 			// Check: loop over empty declared list
 			if v.emptyListVars[stmt.ListVariable] {
-				v.warn(fmt.Sprintf("LOOP iterates over '$%s' which was declared as an empty list and never populated. "+
-					"Pass the list as a microflow parameter instead of creating an empty variable.",
-					stmt.ListVariable))
+				v.addViolation("MDL002", linter.SeverityWarning,
+					fmt.Sprintf("LOOP iterates over '$%s' which was declared as an empty list and never populated. "+
+						"Pass the list as a microflow parameter instead of creating an empty variable.",
+						stmt.ListVariable),
+					"Pass the list as a microflow parameter instead of creating an empty variable")
 			}
 			v.loopDepth++
 			v.walkBody(stmt.Body)
@@ -112,10 +130,11 @@ func (v *microflowValidator) checkErrorHandlingInLoop(stmt ast.MicroflowStatemen
 	// Only Rollback is allowed inside loops
 	if eh.Type != ast.ErrorHandlingRollback && eh.Type != "" {
 		activityName := stmtActivityName(stmt)
-		v.warn(fmt.Sprintf("%s has error handling type '%s' inside a loop. "+
-			"Mendix requires error handling to be 'Rollback' inside looped activities (CE0644). "+
-			"Workaround: Extract the activity with custom error handling into a submicroflow.",
-			activityName, eh.Type))
+		v.addViolation("MDL006", linter.SeverityWarning,
+			fmt.Sprintf("%s has error handling type '%s' inside a loop. "+
+				"Mendix requires error handling to be 'Rollback' inside looped activities (CE0644).",
+				activityName, eh.Type),
+			"Extract the activity with custom error handling into a submicroflow")
 	}
 }
 
@@ -148,8 +167,10 @@ func (v *microflowValidator) checkReturn(stmt *ast.ReturnStmt) {
 
 	// Check 1: RETURN with no value when microflow has a return type
 	if !isVoid && !hasValue {
-		v.warn(fmt.Sprintf("RETURN requires a value because microflow returns %s",
-			returnTypeString(v.returnType)))
+		v.addViolation("MDL004", linter.SeverityError,
+			fmt.Sprintf("RETURN requires a value because microflow returns %s",
+				returnTypeString(v.returnType)),
+			fmt.Sprintf("Add a return value of type %s", returnTypeString(v.returnType)))
 		return
 	}
 
@@ -161,7 +182,9 @@ func (v *microflowValidator) checkReturn(stmt *ast.ReturnStmt) {
 				return
 			}
 		}
-		v.warn("RETURN has a value but microflow does not declare a return type")
+		v.addViolation("MDL004", linter.SeverityError,
+			"RETURN has a value but microflow does not declare a return type",
+			"Remove the return value or add a return type to the microflow")
 		return
 	}
 
@@ -170,8 +193,10 @@ func (v *microflowValidator) checkReturn(stmt *ast.ReturnStmt) {
 		retKind := v.returnType.Type.Kind
 		if retKind == ast.TypeEntity || retKind == ast.TypeListOf {
 			if isScalarLiteral(stmt.Value) {
-				v.warn(fmt.Sprintf("RETURN has a %s literal but microflow returns %s",
-					literalKindName(stmt.Value), returnTypeString(v.returnType)))
+				v.addViolation("MDL004", linter.SeverityError,
+					fmt.Sprintf("RETURN has a %s literal but microflow returns %s",
+						literalKindName(stmt.Value), returnTypeString(v.returnType)),
+					fmt.Sprintf("Return an object of type %s instead of a scalar literal", returnTypeString(v.returnType)))
 			}
 		}
 	}
@@ -285,8 +310,10 @@ func (v *microflowValidator) checkBranchScoping(body []ast.MicroflowStatement) {
 			for _, subsequent := range body[i+1:] {
 				for _, refVar := range referencedVars(subsequent) {
 					if scope, ok := branchVars[refVar]; ok {
-						v.warn(fmt.Sprintf("variable '$%s' is declared inside %s but used outside",
-							refVar, scope))
+						v.addViolation("MDL005", linter.SeverityWarning,
+							fmt.Sprintf("variable '$%s' is declared inside %s but used outside",
+								refVar, scope),
+							fmt.Sprintf("Declare '$%s' before the IF/ELSE block", refVar))
 						// Remove to avoid duplicate warnings
 						delete(branchVars, refVar)
 					}

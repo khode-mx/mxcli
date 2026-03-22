@@ -9,6 +9,7 @@ import (
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
 	"github.com/mendixlabs/mxcli/mdl/executor"
+	"github.com/mendixlabs/mxcli/mdl/linter"
 	"github.com/mendixlabs/mxcli/mdl/visitor"
 	"github.com/spf13/cobra"
 )
@@ -26,18 +27,25 @@ that are created within the script itself. For example, if your script creates
 a module "MyModule" and then creates entities in it, no error will be reported
 for the module reference.
 
+Output includes structured rule IDs (MDL prefix) for each validation issue.
+
 Examples:
   # Check syntax only (no project needed)
   mxcli check script.mdl
 
   # Check syntax and validate references against a project
   mxcli check script.mdl -p app.mpr --references
+
+  # Output as JSON or SARIF
+  mxcli check script.mdl --format json
+  mxcli check script.mdl --format sarif
 `,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		filePath := args[0]
 		projectPath, _ := cmd.Flags().GetString("project")
 		checkRefs, _ := cmd.Flags().GetBool("references")
+		format, _ := cmd.Flags().GetString("format")
 
 		// Read the file
 		content, err := os.ReadFile(filePath)
@@ -67,54 +75,41 @@ Examples:
 		fmt.Printf("✓ Syntax OK (%d statements)\n", len(prog.Statements))
 
 		// Validate statements (doesn't require project connection)
-		var oqlErrors []string
-		for i, stmt := range prog.Statements {
+		var violations []linter.Violation
+		for _, stmt := range prog.Statements {
 			// Check enumeration values for reserved words
 			if enumStmt, ok := stmt.(*ast.CreateEnumerationStmt); ok {
-				if errs := executor.ValidateEnumeration(enumStmt); len(errs) > 0 {
-					for _, e := range errs {
-						oqlErrors = append(oqlErrors, fmt.Sprintf("statement %d (%s): %s", i+1, enumStmt.Name.String(), e))
-					}
-				}
+				violations = append(violations, executor.ValidateEnumeration(enumStmt)...)
 			}
 			// Check entity attributes for reserved system names
 			if entityStmt, ok := stmt.(*ast.CreateEntityStmt); ok {
-				if errs := executor.ValidateEntity(entityStmt); len(errs) > 0 {
-					for _, e := range errs {
-						oqlErrors = append(oqlErrors, fmt.Sprintf("statement %d (%s): %s", i+1, entityStmt.Name.String(), e))
-					}
-				}
+				violations = append(violations, executor.ValidateEntity(entityStmt)...)
 			}
 			// Check microflow body for common issues
 			if mfStmt, ok := stmt.(*ast.CreateMicroflowStmt); ok {
-				if warns := executor.ValidateMicroflow(mfStmt); len(warns) > 0 {
-					for _, w := range warns {
-						oqlErrors = append(oqlErrors, fmt.Sprintf("statement %d (%s): %s", i+1, mfStmt.Name.String(), w))
-					}
-				}
+				violations = append(violations, executor.ValidateMicroflow(mfStmt)...)
 			}
 			// Check view entity OQL
 			if viewStmt, ok := stmt.(*ast.CreateViewEntityStmt); ok {
 				if viewStmt.Query.RawQuery != "" {
-					if errs := executor.ValidateOQLSyntax(viewStmt.Query.RawQuery); len(errs) > 0 {
-						for _, e := range errs {
-							oqlErrors = append(oqlErrors, fmt.Sprintf("statement %d (%s): %s", i+1, viewStmt.Name.String(), e))
-						}
-					}
-					if errs := executor.ValidateOQLTypes(viewStmt.Query.RawQuery, viewStmt.Attributes); len(errs) > 0 {
-						for _, e := range errs {
-							oqlErrors = append(oqlErrors, fmt.Sprintf("statement %d (%s): %s", i+1, viewStmt.Name.String(), e))
-						}
-					}
+					violations = append(violations, executor.ValidateOQLSyntax(viewStmt.Query.RawQuery)...)
+					violations = append(violations, executor.ValidateOQLTypes(viewStmt.Query.RawQuery, viewStmt.Attributes)...)
 				}
 			}
 		}
-		if len(oqlErrors) > 0 {
-			fmt.Fprintf(os.Stderr, "\nValidation errors found:\n")
-			for _, e := range oqlErrors {
-				fmt.Fprintf(os.Stderr, "  - %s\n", e)
+
+		if len(violations) > 0 {
+			// Use structured output
+			outputFormat := linter.OutputFormat(format)
+			formatter := linter.GetFormatter(outputFormat, format == "" || format == "text")
+			fmt.Fprintln(os.Stderr)
+			formatter.Format(violations, os.Stderr)
+
+			// Exit with error if there are any error-severity violations
+			summary := linter.Summarize(violations)
+			if summary.Errors > 0 {
+				os.Exit(1)
 			}
-			os.Exit(1)
 		}
 
 		// If reference checking requested

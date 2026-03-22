@@ -16,7 +16,7 @@ func NewEmptyMicroflowRule() *EmptyMicroflowRule {
 	return &EmptyMicroflowRule{}
 }
 
-func (r *EmptyMicroflowRule) ID() string                       { return "MDL002" }
+func (r *EmptyMicroflowRule) ID() string                       { return "MPR002" }
 func (r *EmptyMicroflowRule) Name() string                     { return "EmptyMicroflow" }
 func (r *EmptyMicroflowRule) Category() string                 { return "quality" }
 func (r *EmptyMicroflowRule) DefaultSeverity() linter.Severity { return linter.SeverityWarning }

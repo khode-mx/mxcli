@@ -50,7 +50,7 @@ func NewNamingConventionRule() *NamingConventionRule {
 	}
 }
 
-func (r *NamingConventionRule) ID() string                       { return "MDL001" }
+func (r *NamingConventionRule) ID() string                       { return "MPR001" }
 func (r *NamingConventionRule) Name() string                     { return "NamingConvention" }
 func (r *NamingConventionRule) Category() string                 { return "style" }
 func (r *NamingConventionRule) DefaultSeverity() linter.Severity { return linter.SeverityWarning }

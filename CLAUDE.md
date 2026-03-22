@@ -89,7 +89,7 @@ ModelSDKGo/
 │   ├── executor/            # Executes AST against modelsdk-go
 │   ├── catalog/             # SQLite-based catalog for querying project metadata
 │   ├── linter/              # Extensible linting framework
-│   │   └── rules/           # Built-in lint rules (MDL001, MDL002, etc.)
+│   │   └── rules/           # Built-in lint rules (MPR001, MPR002, etc.)
 │   └── repl/                # Interactive REPL interface
 │
 ├── sql/                     # External database connectivity (PostgreSQL, Oracle, SQL Server)

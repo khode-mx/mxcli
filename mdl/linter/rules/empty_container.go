@@ -18,7 +18,7 @@ func NewEmptyContainerRule() *EmptyContainerRule {
 	return &EmptyContainerRule{}
 }
 
-func (r *EmptyContainerRule) ID() string                       { return "MDL006" }
+func (r *EmptyContainerRule) ID() string                       { return "MPR006" }
 func (r *EmptyContainerRule) Name() string                     { return "EmptyContainer" }
 func (r *EmptyContainerRule) Category() string                 { return "correctness" }
 func (r *EmptyContainerRule) DefaultSeverity() linter.Severity { return linter.SeverityWarning }

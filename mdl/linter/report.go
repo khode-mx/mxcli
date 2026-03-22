@@ -31,7 +31,7 @@ type CategoryScore struct {
 // categoryMapping maps rule IDs to category names.
 var categoryMapping = map[string]string{
 	// Naming
-	"MDL001":  "Naming",
+	"MPR001":  "Naming",
 	"CONV001": "Naming",
 	"CONV002": "Naming",
 	"CONV003": "Naming",
@@ -53,11 +53,11 @@ var categoryMapping = map[string]string{
 	"CONV008": "Security",
 
 	// Quality
-	"MDL002":  "Quality",
-	"MDL003":  "Quality",
-	"MDL004":  "Quality",
-	"MDL005":  "Quality",
-	"MDL006":  "Quality",
+	"MPR002":  "Quality",
+	"MPR003":  "Quality",
+	"MPR004":  "Quality",
+	"MPR005":  "Quality",
+	"MPR006":  "Quality",
 	"QUAL001": "Quality",
 	"QUAL002": "Quality",
 	"QUAL003": "Quality",
@@ -80,7 +80,7 @@ var categoryMapping = map[string]string{
 
 	// Design
 	"DESIGN001": "Design",
-	"MDL007":    "Design",
+	"MPR007":    "Design",
 	"CONV013":   "Design",
 }
 

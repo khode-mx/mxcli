@@ -23,7 +23,7 @@ func NewDomainModelSizeRule() *DomainModelSizeRule {
 	}
 }
 
-func (r *DomainModelSizeRule) ID() string                       { return "MDL003" }
+func (r *DomainModelSizeRule) ID() string                       { return "MPR003" }
 func (r *DomainModelSizeRule) Name() string                     { return "DomainModelSize" }
 func (r *DomainModelSizeRule) Category() string                 { return "design" }
 func (r *DomainModelSizeRule) DefaultSeverity() linter.Severity { return linter.SeverityWarning }

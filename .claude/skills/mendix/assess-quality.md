@@ -65,7 +65,7 @@ After reviewing automated results, assess the following areas manually. The guid
 
 ### A. Naming Conventions
 
-**Enforced by rules:** MDL001, CONV001, CONV003, CONV004, CONV005
+**Enforced by rules:** MPR001, CONV001, CONV003, CONV004, CONV005
 
 | Element | Convention | Example |
 |---------|-----------|---------|
@@ -119,7 +119,7 @@ After reviewing automated results, assess the following areas manually. The guid
 
 ### C. Security
 
-**Enforced by rules:** SEC001-SEC009, CONV006, CONV007, CONV008, MDL007
+**Enforced by rules:** SEC001-SEC009, CONV006, CONV007, CONV008, MPR007
 
 #### C.1 Entity Access
 
@@ -137,7 +137,7 @@ After reviewing automated results, assess the following areas manually. The guid
 | Guideline | Rule | Priority |
 |-----------|------|----------|
 | 1:1 mapping between module roles and user roles | CONV008 | High |
-| Pages in navigation must have allowed roles | MDL007 | High |
+| Pages in navigation must have allowed roles | MPR007 | High |
 | No guest/anonymous access to sensitive data | SEC004 | Critical |
 | Strict security mode enabled | SEC005 | High |
 | No demo users in production | SEC003 | Critical |
@@ -165,7 +165,7 @@ The Dutch Institute for Vulnerability Disclosure (DIVD) found widespread authori
 
 ### D. Maintainability
 
-**Enforced by rules:** QUAL001-QUAL004, CONV009, CONV012, CONV014, MDL002, MDL004, MDL006
+**Enforced by rules:** QUAL001-QUAL004, CONV009, CONV012, CONV014, MPR002, MPR004, MPR006
 
 | Guideline | Rule/Check | Threshold |
 |-----------|-----------|-----------|
@@ -173,7 +173,7 @@ The Dutch Institute for Vulnerability Disclosure (DIVD) found widespread authori
 | Microflow size | CONV009 | Max 15 activities |
 | Documentation on public microflows | QUAL002 | All ACT_, DS_, IVK_ should be documented |
 | No orphaned/unused elements | QUAL004 | Remove unused microflows, pages, entities |
-| No empty microflows | MDL002 | Every microflow should have at least one activity |
+| No empty microflows | MPR002 | Every microflow should have at least one activity |
 | Caption on exclusive splits | CONV012 | All decision points must have captions |
 | No "Continue" error handling | CONV014 | Never swallow errors silently |
 | ACT_ microflows: thin controllers | CONV010 | Only page activities + submicroflow calls |
@@ -211,14 +211,14 @@ The Dutch Institute for Vulnerability Disclosure (DIVD) found widespread authori
 
 ### F. Architecture
 
-**Enforced by rules:** ARCH001-ARCH003, CONV010, MDL003
+**Enforced by rules:** ARCH001-ARCH003, CONV010, MPR003
 
 | Guideline | Rule/Check | Details |
 |-----------|-----------|---------|
 | No cross-module direct data access | ARCH001 | Access data through microflows, not direct entity references |
 | Data changes through microflows only | ARCH002 | Don't change entities from pages directly |
 | Business key on entities | ARCH003 | Persistent entities should have a business key attribute |
-| Domain model size | MDL003 | Max 15 persistent entities per module |
+| Domain model size | MPR003 | Max 15 persistent entities per module |
 | Entity attribute count | DESIGN001 | Max 10 attributes per entity (consider splitting) |
 
 **Manual checks:**
@@ -404,7 +404,7 @@ Overall Score: [X]/100 (from `mxcli report`)
 This skill incorporates guidelines from:
 - **Conventions.pdf** — Squad Apps internal best practices (14 categories, 80+ guidelines)
 - **CONV001-CONV017 lint rules** — Automated checks derived from Conventions.pdf
-- **MDL001-MDL007, SEC001-SEC009** — Built-in linter rules
+- **MPR001-MPR007, SEC001-SEC009** — Built-in linter rules
 - **ARCH, DESIGN, QUAL series** — Starlark architecture/quality rules
 - **Mendix Performance Best Practices** — Official Mendix documentation on performance optimization
 - **Mendix Security Best Practices** — Official Mendix documentation on security configuration

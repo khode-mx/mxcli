@@ -18,7 +18,7 @@ func NewValidationFeedbackRule() *ValidationFeedbackRule {
 	return &ValidationFeedbackRule{}
 }
 
-func (r *ValidationFeedbackRule) ID() string                       { return "MDL004" }
+func (r *ValidationFeedbackRule) ID() string                       { return "MPR004" }
 func (r *ValidationFeedbackRule) Name() string                     { return "EmptyValidationFeedback" }
 func (r *ValidationFeedbackRule) Category() string                 { return "correctness" }
 func (r *ValidationFeedbackRule) DefaultSeverity() linter.Severity { return linter.SeverityWarning }

@@ -119,16 +119,16 @@ func TestValidateEntityReservedAttributeName(t *testing.T) {
 		t.Fatalf("Expected CreateEntityStmt, got %T", prog.Statements[0])
 	}
 
-	errors := ValidateEntity(stmt)
+	violations := ValidateEntity(stmt)
 	found := false
-	for _, e := range errors {
-		if strings.Contains(e, "CreatedDate") && strings.Contains(e, "system attribute") {
+	for _, v := range violations {
+		if strings.Contains(v.Message, "CreatedDate") && strings.Contains(v.Message, "system attribute") {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Errorf("Expected reserved attribute error for CreatedDate, got: %v", errors)
+		t.Errorf("Expected reserved attribute error for CreatedDate, got: %v", violations)
 	}
 }
 
@@ -150,9 +150,9 @@ func TestValidateEntityNonPersistentAllowed(t *testing.T) {
 		t.Fatalf("Expected CreateEntityStmt, got %T", prog.Statements[0])
 	}
 
-	errors := ValidateEntity(stmt)
-	if len(errors) > 0 {
-		t.Errorf("Non-persistent entity should allow system attribute names, got: %v", errors)
+	violations := ValidateEntity(stmt)
+	if len(violations) > 0 {
+		t.Errorf("Non-persistent entity should allow system attribute names, got: %v", violations)
 	}
 }
 
@@ -176,9 +176,9 @@ func TestValidateEntityNormalAttributesPass(t *testing.T) {
 		t.Fatalf("Expected CreateEntityStmt, got %T", prog.Statements[0])
 	}
 
-	errors := ValidateEntity(stmt)
-	if len(errors) > 0 {
-		t.Errorf("Normal attributes should not trigger errors, got: %v", errors)
+	violations := ValidateEntity(stmt)
+	if len(violations) > 0 {
+		t.Errorf("Normal attributes should not trigger errors, got: %v", violations)
 	}
 }
 

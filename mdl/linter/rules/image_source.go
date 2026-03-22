@@ -19,7 +19,7 @@ func NewImageSourceRule() *ImageSourceRule {
 	return &ImageSourceRule{}
 }
 
-func (r *ImageSourceRule) ID() string                       { return "MDL005" }
+func (r *ImageSourceRule) ID() string                       { return "MPR005" }
 func (r *ImageSourceRule) Name() string                     { return "UnconfiguredImage" }
 func (r *ImageSourceRule) Category() string                 { return "correctness" }
 func (r *ImageSourceRule) DefaultSeverity() linter.Severity { return linter.SeverityWarning }

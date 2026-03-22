@@ -191,6 +191,7 @@ func init() {
 
 	// Check command flags
 	checkCmd.Flags().BoolP("references", "r", false, "Validate references against the project")
+	checkCmd.Flags().String("format", "text", "Output format: text, json, sarif")
 
 	// Diff command flags
 	diffCmd.Flags().StringP("format", "f", "unified", "Output format: unified, side, struct")

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	"github.com/mendixlabs/mxcli/mdl/linter"
 	"github.com/mendixlabs/mxcli/model"
 )
 
@@ -19,9 +20,13 @@ func (e *Executor) execCreateEnumeration(s *ast.CreateEnumerationStmt) error {
 	}
 
 	// Validate enumeration values for reserved words
-	if errs := ValidateEnumeration(s); len(errs) > 0 {
+	if violations := ValidateEnumeration(s); len(violations) > 0 {
+		var msgs []string
+		for _, v := range violations {
+			msgs = append(msgs, v.Message)
+		}
 		return fmt.Errorf("invalid enumeration '%s':\n  - %s",
-			s.Name.String(), strings.Join(errs, "\n  - "))
+			s.Name.String(), strings.Join(msgs, "\n  - "))
 	}
 
 	// Find module
@@ -273,19 +278,27 @@ var mendixReservedWords = map[string]bool{
 }
 
 // ValidateEnumeration checks enumeration value names for reserved words.
-// Returns a list of error messages (CE7247 equivalent).
+// Returns a list of structured violations with rule IDs (CE7247 equivalent).
 // This function does not require a project connection.
-func ValidateEnumeration(stmt *ast.CreateEnumerationStmt) []string {
-	var errors []string
+func ValidateEnumeration(stmt *ast.CreateEnumerationStmt) []linter.Violation {
+	var violations []linter.Violation
 	for _, v := range stmt.Values {
 		if mendixReservedWords[strings.ToLower(v.Name)] {
-			errors = append(errors, fmt.Sprintf(
-				"enumeration value '%s' is a reserved word (CE7247). "+
-					"Rename to a non-reserved name (e.g., '%s_' or 'Is%s')",
-				v.Name, v.Name, v.Name))
+			violations = append(violations, linter.Violation{
+				RuleID:   "MDL010",
+				Severity: linter.SeverityError,
+				Message: fmt.Sprintf(
+					"enumeration value '%s' is a reserved word (CE7247)",
+					v.Name),
+				Location: linter.Location{
+					DocumentType: "enumeration",
+					DocumentName: stmt.Name.String(),
+				},
+				Suggestion: fmt.Sprintf("Rename to a non-reserved name (e.g., '%s_' or 'Is%s')", v.Name, v.Name),
+			})
 		}
 	}
-	return errors
+	return violations
 }
 
 // mendixSystemAttributeNames are attribute names reserved by the Mendix runtime.
@@ -299,20 +312,29 @@ var mendixSystemAttributeNames = map[string]bool{
 }
 
 // ValidateEntity checks entity attribute names for reserved system names.
-// Returns a list of error messages. This function does not require a project connection.
-func ValidateEntity(stmt *ast.CreateEntityStmt) []string {
-	var errors []string
+// Returns a list of structured violations with rule IDs. This function does not require a project connection.
+func ValidateEntity(stmt *ast.CreateEntityStmt) []linter.Violation {
+	var violations []linter.Violation
 	// Only persistent entities have system attributes
 	if stmt.Kind != ast.EntityPersistent {
-		return errors
+		return violations
 	}
 	for _, attr := range stmt.Attributes {
 		if mendixSystemAttributeNames[strings.ToLower(attr.Name)] {
-			errors = append(errors, fmt.Sprintf(
-				"attribute '%s' conflicts with a Mendix system attribute name. "+
-					"Mendix automatically manages '%s' on persistent entities — rename to avoid conflicts (e.g., 'Custom%s')",
-				attr.Name, attr.Name, attr.Name))
+			violations = append(violations, linter.Violation{
+				RuleID:   "MDL020",
+				Severity: linter.SeverityError,
+				Message: fmt.Sprintf(
+					"attribute '%s' conflicts with a Mendix system attribute name. "+
+						"Mendix automatically manages '%s' on persistent entities",
+					attr.Name, attr.Name),
+				Location: linter.Location{
+					DocumentType: "entity",
+					DocumentName: stmt.Name.String(),
+				},
+				Suggestion: fmt.Sprintf("Rename to avoid conflicts (e.g., 'Custom%s')", attr.Name),
+			})
 		}
 	}
-	return errors
+	return violations
 }

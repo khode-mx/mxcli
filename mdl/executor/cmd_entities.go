@@ -222,9 +222,13 @@ func (e *Executor) execCreateViewEntity(s *ast.CreateViewEntityStmt) error {
 	// Validate OQL syntax before creating the view entity
 	// This prevents creating view entities that will crash Studio Pro
 	if s.Query.RawQuery != "" {
-		if oqlErrors := ValidateOQLSyntax(s.Query.RawQuery); len(oqlErrors) > 0 {
+		if oqlViolations := ValidateOQLSyntax(s.Query.RawQuery); len(oqlViolations) > 0 {
+			var msgs []string
+			for _, v := range oqlViolations {
+				msgs = append(msgs, v.Message)
+			}
 			return fmt.Errorf("invalid OQL in view entity '%s':\n  - %s",
-				s.Name.String(), strings.Join(oqlErrors, "\n  - "))
+				s.Name.String(), strings.Join(msgs, "\n  - "))
 		}
 	}
 

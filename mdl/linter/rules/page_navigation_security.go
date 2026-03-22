@@ -19,7 +19,7 @@ func NewPageNavigationSecurityRule() *PageNavigationSecurityRule {
 	return &PageNavigationSecurityRule{}
 }
 
-func (r *PageNavigationSecurityRule) ID() string                       { return "MDL007" }
+func (r *PageNavigationSecurityRule) ID() string                       { return "MPR007" }
 func (r *PageNavigationSecurityRule) Name() string                     { return "PageNavigationSecurity" }
 func (r *PageNavigationSecurityRule) Category() string                 { return "security" }
 func (r *PageNavigationSecurityRule) DefaultSeverity() linter.Severity { return linter.SeverityWarning }

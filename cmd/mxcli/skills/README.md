@@ -125,12 +125,59 @@ mdl> help crud         # Load patterns-crud.md
 ### Check Command
 ```bash
 mxcli check script.mdl -p app.mpr --references
+mxcli check script.mdl --format json
+mxcli check script.mdl --format sarif
 ```
 
 ### Linter
 ```bash
-mxcli lint script.mdl
+mxcli lint -p app.mpr
+mxcli lint -p app.mpr --format json
 ```
+
+---
+
+## Rule ID Naming Convention
+
+Rule ID prefixes reflect the **input** needed to run the rule:
+
+| Prefix | Meaning | Input | Tool |
+|--------|---------|-------|------|
+| `MDL` | MDL source file checks | `.mdl` file (no project) | `mxcli check` |
+| `MPR` | Project model checks | `.mpr` project | `mxcli lint` (built-in Go) |
+| `SEC` | Security | `.mpr` project | `mxcli lint` (built-in + Starlark) |
+| `CONV` | Mendix conventions | `.mpr` project | `mxcli lint` (Starlark) |
+| `QUAL` | Code quality | `.mpr` project | `mxcli lint` (Starlark) |
+| `ARCH` | Architecture | `.mpr` project | `mxcli lint` (Starlark) |
+| `DESIGN` | Design patterns | `.mpr` project | `mxcli lint` (Starlark) |
+
+### MDL Rules (mxcli check)
+
+| Rule | Check | Severity |
+|------|-------|----------|
+| MDL001 | Nested LOOP (O(N^2) anti-pattern) | Warning |
+| MDL002 | Empty list variable used as loop source | Warning |
+| MDL003 | Missing RETURN on non-void path | Error |
+| MDL004 | RETURN value/type mismatch | Error |
+| MDL005 | Variable declared in branch, used outside | Warning |
+| MDL006 | Error handling type invalid inside loop | Warning |
+| MDL007 | Empty VALIDATION FEEDBACK message | Warning |
+| MDL010 | Enumeration value is reserved word | Error |
+| MDL020 | Entity attribute conflicts with system name | Error |
+| MDL030 | OQL syntax issues (paths, aliases, ORDER BY) | Error |
+| MDL031 | OQL type mismatch vs declared attributes | Error |
+
+### MPR Rules (mxcli lint)
+
+| Rule | Check | Severity |
+|------|-------|----------|
+| MPR001 | PascalCase naming conventions | Warning |
+| MPR002 | Empty microflows (no activities) | Warning |
+| MPR003 | Domain model size (>15 persistent entities) | Warning |
+| MPR004 | Empty validation feedback message (CE0091) | Warning |
+| MPR005 | Unconfigured image widget source | Warning |
+| MPR006 | Empty containers (runtime crash) | Warning |
+| MPR007 | Navigation page without allowed role (CE0557) | Warning |
 
 ---
 

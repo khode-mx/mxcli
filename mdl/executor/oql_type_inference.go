@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	"github.com/mendixlabs/mxcli/mdl/linter"
 	"github.com/mendixlabs/mxcli/sdk/domainmodel"
 )
 
@@ -93,12 +94,12 @@ func extractAliasMap(oql string) map[string]string {
 // declared view entity attributes. Does not require a project connection — it only
 // checks types that can be inferred from the OQL syntax itself (aggregate functions,
 // CASE expressions, literals, datepart, etc.).
-func ValidateOQLTypes(oql string, attrs []ast.ViewAttribute) []string {
-	var errors []string
+func ValidateOQLTypes(oql string, attrs []ast.ViewAttribute) []linter.Violation {
+	var violations []linter.Violation
 
 	selectClause := extractSelectClause(oql)
 	if selectClause == "" {
-		return errors
+		return violations
 	}
 
 	columnExprs := parseSelectColumns(selectClause)
@@ -123,17 +124,23 @@ func ValidateOQLTypes(oql string, attrs []ast.ViewAttribute) []string {
 		// Use strict type matching: no implicit widening (e.g., count() returns Integer,
 		// declaring as Decimal is wrong even though Decimal can hold integers).
 		if !typesStrictlyCompatible(declared, inferred) {
-			errors = append(errors, fmt.Sprintf(
-				"attribute '%s': declared as %s but OQL expression returns %s. Fix: change to '%s: %s'",
-				attrs[i].Name,
-				formatDataTypeForError(declared),
-				formatDataTypeForError(inferred),
-				attrs[i].Name,
-				formatDataTypeForMDL(inferred)))
+			violations = append(violations, linter.Violation{
+				RuleID:   "MDL031",
+				Severity: linter.SeverityError,
+				Message: fmt.Sprintf(
+					"attribute '%s': declared as %s but OQL expression returns %s",
+					attrs[i].Name,
+					formatDataTypeForError(declared),
+					formatDataTypeForError(inferred)),
+				Location: linter.Location{
+					DocumentType: "viewentity",
+				},
+				Suggestion: fmt.Sprintf("Fix: change to '%s: %s'", attrs[i].Name, formatDataTypeForMDL(inferred)),
+			})
 		}
 	}
 
-	return errors
+	return violations
 }
 
 // inferTypeStatic infers an OQL expression's type purely from syntax (no project needed).
@@ -259,12 +266,16 @@ func (e *Executor) ValidateViewEntityTypes(stmt *ast.CreateViewEntityStmt) []str
 	var errors []string
 
 	// First validate OQL syntax for common mistakes
-	syntaxErrors := ValidateOQLSyntax(stmt.Query.RawQuery)
-	errors = append(errors, syntaxErrors...)
+	syntaxViolations := ValidateOQLSyntax(stmt.Query.RawQuery)
+	for _, v := range syntaxViolations {
+		errors = append(errors, v.Message)
+	}
 
 	// Static type checks (no project needed)
-	staticTypeErrors := ValidateOQLTypes(stmt.Query.RawQuery, stmt.Attributes)
-	errors = append(errors, staticTypeErrors...)
+	typeViolations := ValidateOQLTypes(stmt.Query.RawQuery, stmt.Attributes)
+	for _, v := range typeViolations {
+		errors = append(errors, v.Message)
+	}
 
 	columns, warnings := e.InferOQLTypes(stmt.Query.RawQuery, stmt.Attributes)
 	errors = append(errors, warnings...)
@@ -811,17 +822,12 @@ func extractFunctionArg(expr string) string {
 }
 
 // ValidateOQLSyntax checks for common OQL syntax mistakes.
-// Returns a list of error messages for any issues found.
+// Returns a list of structured violations with rule IDs.
 // This function can be called without an Executor instance.
-func ValidateOQLSyntax(oql string) []string {
-	var errors []string
+func ValidateOQLSyntax(oql string) []linter.Violation {
+	var violations []linter.Violation
 
 	// Check for association paths using '.' instead of '/'
-	// Pattern: alias.Module.AssociationName (e.g., l.Library.Loan_Member)
-	// Should be: alias/Module.AssociationName (e.g., l/Library.Loan_Member)
-	//
-	// This pattern detects: alias.Module.Name where Name contains underscore (typical association naming)
-	// or where the pattern appears in a WHERE/SELECT context referencing an association
 	assocDotPattern := regexp.MustCompile(`\b([a-zA-Z_][a-zA-Z0-9_]*)\.([A-Z][a-zA-Z0-9_]*)\.([A-Z][a-zA-Z0-9_]*_[A-Z][a-zA-Z0-9_]*)\b`)
 	matches := assocDotPattern.FindAllStringSubmatch(oql, -1)
 	for _, match := range matches {
@@ -831,14 +837,19 @@ func ValidateOQLSyntax(oql string) []string {
 			module := match[2]
 			assocName := match[3]
 			correctPath := fmt.Sprintf("%s/%s.%s", alias, module, assocName)
-			errors = append(errors, fmt.Sprintf(
-				"invalid association path '%s': association references must use '/' not '.'. "+
-					"Use '%s' instead", wrongPath, correctPath))
+			violations = append(violations, linter.Violation{
+				RuleID:   "MDL030",
+				Severity: linter.SeverityError,
+				Message: fmt.Sprintf(
+					"invalid association path '%s': association references must use '/' not '.'",
+					wrongPath),
+				Location: linter.Location{DocumentType: "viewentity"},
+				Suggestion: fmt.Sprintf("Use '%s' instead", correctPath),
+			})
 		}
 	}
 
 	// Check that all top-level SELECT columns have explicit AS aliases
-	// Mendix OQL view entities require every SELECT expression to have an alias
 	selectClause := extractSelectClause(oql)
 	if selectClause != "" {
 		columns := parseSelectColumns(selectClause)
@@ -849,44 +860,50 @@ func ValidateOQLSyntax(oql string) []string {
 				continue
 			}
 			if !aliasPattern.MatchString(col) {
-				// Truncate long expressions (e.g., subqueries) for readable error messages
 				display := col
 				if len(display) > 60 {
 					display = strings.TrimSpace(display[:57]) + "..."
 				}
-				errors = append(errors, fmt.Sprintf(
-					"SELECT column %d has no AS alias: '%s'. "+
-						"All SELECT columns in a view entity must have an explicit alias (e.g., '... AS MyAlias')",
-					i+1, display))
+				violations = append(violations, linter.Violation{
+					RuleID:   "MDL030",
+					Severity: linter.SeverityError,
+					Message: fmt.Sprintf(
+						"SELECT column %d has no AS alias: '%s'",
+						i+1, display),
+					Location:   linter.Location{DocumentType: "viewentity"},
+					Suggestion: "All SELECT columns in a view entity must have an explicit alias (e.g., '... AS MyAlias')",
+				})
 			}
 		}
 	}
 
 	// Check that top-level ORDER BY is accompanied by LIMIT
-	// In Mendix, ORDER BY without LIMIT is not allowed in view entity OQL
-	// Note: We check for "ORDER BY" phrase to avoid false positives from entity names like "Orders.Order"
 	if hasTopLevelPhrase(oql, "ORDER BY") && !hasTopLevelKeyword(oql, "LIMIT") {
-		errors = append(errors, "ORDER BY without LIMIT: view entity OQL queries that use ORDER BY must also specify a LIMIT clause")
+		violations = append(violations, linter.Violation{
+			RuleID:     "MDL030",
+			Severity:   linter.SeverityError,
+			Message:    "ORDER BY without LIMIT: view entity OQL queries that use ORDER BY must also specify a LIMIT clause",
+			Location:   linter.Location{DocumentType: "viewentity"},
+			Suggestion: "Add a LIMIT clause after ORDER BY",
+		})
 	}
 
 	// Check for '/' used as division instead of ':'
-	// In OQL, '/' is the association traversal operator (e.g., l/Library.Loan_Book).
-	// Division uses ':' (e.g., count(x) : count(y)).
-	// Detect patterns like: expr / expr where the right side is NOT a qualified name (Module.Name).
-	// Association traversal: alias/Module.Name (identifier / UpperIdent.UpperIdent)
-	// Division mistake:      expr) / expr, number / expr, alias.attr / expr
 	divisionPattern := regexp.MustCompile(`(\)|[0-9]|[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z_][a-zA-Z0-9_]*)\s*/\s*([a-z_(0-9])`)
 	divMatches := divisionPattern.FindAllStringSubmatch(oql, -1)
 	for _, match := range divMatches {
-		errors = append(errors, fmt.Sprintf(
-			"'/' is the association traversal operator in OQL, not division. "+
-				"Use ':' for division (e.g., 'expr1 : expr2'). Found: '...%s / %s...'",
-			match[1], match[2]))
+		violations = append(violations, linter.Violation{
+			RuleID:   "MDL030",
+			Severity: linter.SeverityError,
+			Message: fmt.Sprintf(
+				"'/' is the association traversal operator in OQL, not division. Found: '...%s / %s...'",
+				match[1], match[2]),
+			Location:   linter.Location{DocumentType: "viewentity"},
+			Suggestion: "Use ':' for division (e.g., 'expr1 : expr2')",
+		})
 	}
 
-	// Check for correlated subquery pattern: alias/Module.Association = other_alias
-	// Invalid: pr/Shop.Price_Product = p  (bare alias - doesn't resolve)
-	// Valid:   pr/Shop.Price_Product = p.ID  (comparing to entity ID)
+	// Check for correlated subquery pattern
 	correlatedPattern := regexp.MustCompile(`([a-zA-Z_][a-zA-Z0-9_]*)/([A-Z][a-zA-Z0-9_]*\.[A-Z][a-zA-Z0-9_]*_[A-Z][a-zA-Z0-9_]*)\s*=\s*([a-zA-Z_][a-zA-Z0-9_]*)(?:\s|$|AND|OR|\))`)
 	correlatedMatches := correlatedPattern.FindAllStringSubmatch(oql, -1)
 	for _, match := range correlatedMatches {
@@ -894,14 +911,17 @@ func ValidateOQLSyntax(oql string) []string {
 			alias := match[1]
 			assocPath := match[2]
 			targetAlias := match[3]
-			// Only flag bare alias (not alias.ID or alias.Something)
-			errors = append(errors, fmt.Sprintf(
-				"invalid association comparison '%s/%s = %s': cannot compare association to a bare entity alias. "+
-					"Use '%s/%s = %s.ID' to compare against the entity's ID",
-				alias, assocPath, targetAlias,
-				alias, assocPath, targetAlias))
+			violations = append(violations, linter.Violation{
+				RuleID:   "MDL030",
+				Severity: linter.SeverityError,
+				Message: fmt.Sprintf(
+					"invalid association comparison '%s/%s = %s': cannot compare association to a bare entity alias",
+					alias, assocPath, targetAlias),
+				Location:   linter.Location{DocumentType: "viewentity"},
+				Suggestion: fmt.Sprintf("Use '%s/%s = %s.ID' to compare against the entity's ID", alias, assocPath, targetAlias),
+			})
 		}
 	}
 
-	return errors
+	return violations
 }

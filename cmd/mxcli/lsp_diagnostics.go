@@ -8,6 +8,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mendixlabs/mxcli/mdl/ast"
+	"github.com/mendixlabs/mxcli/mdl/executor"
+	"github.com/mendixlabs/mxcli/mdl/linter"
 	"github.com/mendixlabs/mxcli/mdl/visitor"
 	"go.lsp.dev/protocol"
 	"go.lsp.dev/uri"
@@ -71,6 +74,10 @@ func (s *mdlServer) publishDiagnostics(ctx context.Context, docURI uri.URI, text
 	}
 
 	diags := parseMDLDiagnostics(text)
+	// If no parse errors, run semantic validation inline
+	if len(diags) == 0 {
+		diags = append(diags, runSemanticValidation(text)...)
+	}
 	if diags == nil {
 		diags = []protocol.Diagnostic{} // send empty array to clear diagnostics
 	}
@@ -257,4 +264,74 @@ func mapStatementLines(text string) []uint32 {
 		}
 	}
 	return stmtLines
+}
+
+// runSemanticValidation runs the same validators as cmd_check.go directly on parsed text,
+// returning LSP diagnostics with structured rule IDs.
+func runSemanticValidation(text string) []protocol.Diagnostic {
+	prog, errs := visitor.Build(text)
+	if len(errs) > 0 || prog == nil {
+		return nil
+	}
+
+	stmtLines := mapStatementLines(text)
+
+	var diags []protocol.Diagnostic
+	for i, stmt := range prog.Statements {
+		var violations []linter.Violation
+		if enumStmt, ok := stmt.(*ast.CreateEnumerationStmt); ok {
+			violations = append(violations, executor.ValidateEnumeration(enumStmt)...)
+		}
+		if entityStmt, ok := stmt.(*ast.CreateEntityStmt); ok {
+			violations = append(violations, executor.ValidateEntity(entityStmt)...)
+		}
+		if mfStmt, ok := stmt.(*ast.CreateMicroflowStmt); ok {
+			violations = append(violations, executor.ValidateMicroflow(mfStmt)...)
+		}
+		if viewStmt, ok := stmt.(*ast.CreateViewEntityStmt); ok {
+			if viewStmt.Query.RawQuery != "" {
+				violations = append(violations, executor.ValidateOQLSyntax(viewStmt.Query.RawQuery)...)
+				violations = append(violations, executor.ValidateOQLTypes(viewStmt.Query.RawQuery, viewStmt.Attributes)...)
+			}
+		}
+
+		lineNum := uint32(0)
+		if i < len(stmtLines) {
+			lineNum = stmtLines[i]
+		}
+
+		for _, v := range violations {
+			msg := v.Message
+			if v.Suggestion != "" {
+				msg += " → " + v.Suggestion
+			}
+			diags = append(diags, protocol.Diagnostic{
+				Range: protocol.Range{
+					Start: protocol.Position{Line: lineNum, Character: 0},
+					End:   protocol.Position{Line: lineNum, Character: 0},
+				},
+				Severity: violationToLSPSeverity(v.Severity),
+				Source:   "mdl-check",
+				Code:    v.RuleID,
+				Message:  msg,
+			})
+		}
+	}
+	return diags
+}
+
+// violationToLSPSeverity maps linter.Severity to protocol.DiagnosticSeverity.
+func violationToLSPSeverity(s linter.Severity) protocol.DiagnosticSeverity {
+	switch s {
+	case linter.SeverityError:
+		return protocol.DiagnosticSeverityError
+	case linter.SeverityWarning:
+		return protocol.DiagnosticSeverityWarning
+	case linter.SeverityInfo:
+		return protocol.DiagnosticSeverityInformation
+	case linter.SeverityHint:
+		return protocol.DiagnosticSeverityHint
+	default:
+		return protocol.DiagnosticSeverityWarning
+	}
 }

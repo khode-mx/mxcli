@@ -20,13 +20,13 @@ var lintCmd = &cobra.Command{
 	Long: `Run linting rules against a Mendix project to find potential issues.
 
 Built-in rules check for:
-  - Naming conventions (MDL001) - entities, microflows, pages, enumerations
-  - Empty microflows (MDL002) - microflows with no activities
-  - Domain model size (MDL003) - max persistent entities per domain model
-  - Empty validation feedback (MDL004) - validation feedback with empty message
-  - Unconfigured images (MDL005) - IMAGE widgets with no source configured
-  - Empty containers (MDL006) - layout containers with no children
-  - Navigation page security (MDL007) - pages in navigation need allowed roles
+  - Naming conventions (MPR001) - entities, microflows, pages, enumerations
+  - Empty microflows (MPR002) - microflows with no activities
+  - Domain model size (MPR003) - max persistent entities per domain model
+  - Empty validation feedback (MPR004) - validation feedback with empty message
+  - Unconfigured images (MPR005) - IMAGE widgets with no source configured
+  - Empty containers (MPR006) - layout containers with no children
+  - Navigation page security (MPR007) - pages in navigation need allowed roles
   - Entity access rules (SEC001) - persistent entities need access rules
   - Password policy (SEC002) - password minimum length should be 8+
   - Demo users (SEC003) - demo users should be off at Production security
@@ -123,7 +123,7 @@ Examples:
 		ctx := linter.NewLintContext(cat)
 		ctx.SetExcludedModules(excludeModules)
 
-		// Set reader so rules that inspect raw BSON (MDL004, MDL005) work
+		// Set reader so rules that inspect raw BSON (MPR004, MPR005) work
 		if reader := exec.Reader(); reader != nil {
 			ctx.SetReader(reader)
 		}
