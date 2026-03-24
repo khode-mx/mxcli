@@ -26,9 +26,6 @@ type DiffOpenMsg struct {
 	Title    string
 }
 
-// DiffCloseMsg signals the diff view should close.
-type DiffCloseMsg struct{}
-
 // DiffView is a Bubble Tea component for interactive diff viewing.
 type DiffView struct {
 	// Input
@@ -121,9 +118,6 @@ func (dv *DiffView) SetSize(w, h int) {
 	dv.height = h
 }
 
-// IsVisible returns true (always visible when DiffView exists).
-func (dv DiffView) IsVisible() bool { return true }
-
 func (dv DiffView) totalLines() int {
 	switch dv.viewMode {
 	case DiffViewSideBySide:
@@ -149,7 +143,7 @@ func (dv DiffView) maxOffset() int {
 
 // --- Update ---
 
-func (dv DiffView) Update(msg tea.Msg) (DiffView, tea.Cmd) {
+func (dv DiffView) updateInternal(msg tea.Msg) (DiffView, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		if dv.searching {
@@ -202,7 +196,7 @@ func (dv DiffView) updateSearch(msg tea.KeyMsg) (DiffView, tea.Cmd) {
 func (dv DiffView) updateNormal(msg tea.KeyMsg) (DiffView, tea.Cmd) {
 	switch msg.String() {
 	case "q", "esc":
-		return dv, func() tea.Msg { return DiffCloseMsg{} }
+		return dv, func() tea.Msg { return PopViewMsg{} }
 
 	// Vertical scroll
 	case "j", "down":
@@ -663,4 +657,64 @@ func (dv DiffView) scrollPercent() int {
 		return 100
 	}
 	return int(float64(dv.yOffset) / float64(m) * 100)
+}
+
+// --- View interface ---
+
+// Update satisfies the View interface.
+func (dv DiffView) Update(msg tea.Msg) (View, tea.Cmd) {
+	updated, cmd := dv.updateInternal(msg)
+	return updated, cmd
+}
+
+// Render satisfies the View interface, with an LLM anchor prefix.
+func (dv DiffView) Render(width, height int) string {
+	dv.width = width
+	dv.height = height
+	rendered := dv.View()
+
+	// Embed LLM anchor as muted prefix on the first line
+	info := dv.StatusInfo()
+	anchor := fmt.Sprintf("[mxcli:diff] %s  %s", info.Mode, info.Extra)
+	anchorStr := lipgloss.NewStyle().Foreground(MutedColor).Faint(true).Render(anchor)
+
+	if idx := strings.IndexByte(rendered, '\n'); idx >= 0 {
+		rendered = anchorStr + rendered[idx:]
+	} else {
+		rendered = anchorStr
+	}
+	return rendered
+}
+
+// Hints satisfies the View interface.
+func (dv DiffView) Hints() []Hint {
+	return DiffViewHints
+}
+
+// StatusInfo satisfies the View interface.
+func (dv DiffView) StatusInfo() StatusInfo {
+	var modeLabel string
+	switch dv.viewMode {
+	case DiffViewUnified:
+		modeLabel = "Unified"
+	case DiffViewSideBySide:
+		modeLabel = "Side-by-Side"
+	case DiffViewPlainDiff:
+		modeLabel = "Plain Diff"
+	}
+	extra := ""
+	if dv.result != nil {
+		extra = fmt.Sprintf("+%d -%d", dv.result.Stats.Additions, dv.result.Stats.Deletions)
+	}
+	return StatusInfo{
+		Breadcrumb: []string{dv.title},
+		Position:   fmt.Sprintf("%d%%", dv.scrollPercent()),
+		Mode:       modeLabel,
+		Extra:      extra,
+	}
+}
+
+// Mode satisfies the View interface.
+func (dv DiffView) Mode() ViewMode {
+	return ModeDiff
 }

@@ -47,9 +47,6 @@ func (o *Overlay) Show(title, content string, w, h int) {
 	o.content.SetContent(content)
 }
 
-func (o *Overlay) Hide()          { o.visible = false }
-func (o Overlay) IsVisible() bool { return o.visible }
-
 func (o Overlay) Update(msg tea.Msg) (Overlay, tea.Cmd) {
 	if !o.visible {
 		return o, nil

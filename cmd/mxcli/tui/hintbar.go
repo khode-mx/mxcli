@@ -32,6 +32,7 @@ var (
 	ListBrowsingHints = []Hint{
 		{Key: "h", Label: "back"},
 		{Key: "l", Label: "open"},
+		{Key: "Space", Label: "jump"},
 		{Key: "/", Label: "filter"},
 		{Key: "Tab", Label: "mdl/ndsl"},
 		{Key: "y", Label: "copy"},
@@ -88,7 +89,7 @@ func (h *HintBar) View(width int) string {
 	}
 	items := make([]rendered, len(h.hints))
 	for i, hint := range h.hints {
-		text := HintKeyStyle.Render(hint.Key) + ":" + HintLabelStyle.Render(hint.Label)
+		text := HintKeyStyle.Render(hint.Key) + " " + HintLabelStyle.Render(hint.Label)
 		items[i] = rendered{text: text, width: lipgloss.Width(text)}
 	}
 

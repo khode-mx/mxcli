@@ -91,13 +91,12 @@ type CompareView struct {
 	pickerOffset  int
 	pickerSide    CompareFocus
 
+	// Self-contained operation (for View interface)
+	mxcliPath   string
+	projectPath string
+
 	width  int
 	height int
-}
-
-type pickerMatch struct {
-	item  PickerItem
-	score int
 }
 
 const pickerMaxShow = 12
@@ -135,8 +134,6 @@ func (c CompareView) paneDimensions() (int, int) {
 	return pw, ph
 }
 
-func (c *CompareView) Hide()              { c.visible = false; c.picker = false }
-func (c CompareView) IsVisible() bool     { return c.visible }
 func (c *CompareView) SetItems(items []PickerItem) { c.pickerItems = items }
 
 func (c *CompareView) SetContent(side CompareFocus, title, nodeType, content string) {
@@ -244,7 +241,7 @@ func (c CompareView) pickerSelected() PickerItem {
 
 // --- Update ---
 
-func (c CompareView) Update(msg tea.Msg) (CompareView, tea.Cmd) {
+func (c CompareView) updateInternal(msg tea.Msg) (CompareView, tea.Cmd) {
 	if !c.visible {
 		return c, nil
 	}
@@ -311,7 +308,7 @@ func (c CompareView) updateNormal(msg tea.KeyMsg) (CompareView, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q":
 		c.visible = false
-		return c, nil
+		return c, func() tea.Msg { return PopViewMsg{} }
 
 	// Focus switching — lazygit style: Tab only
 	case "tab":
@@ -589,46 +586,127 @@ func (c CompareView) renderPicker() string {
 		Render(sb.String())
 }
 
-// --- Utilities ---
+// --- View interface ---
 
-// fuzzyScore checks if query chars appear in order within target (fzf-style).
-func fuzzyScore(target, query string) (bool, int) {
-	tLower := strings.ToLower(target)
-	qLower := strings.ToLower(query)
-	if len(qLower) == 0 {
-		return true, 0
-	}
-	if len(qLower) > len(tLower) {
-		return false, 0
-	}
-	score := 0
-	qi := 0
-	prevMatched := false
-	for ti := range len(tLower) {
-		if qi >= len(qLower) {
-			break
-		}
-		if tLower[ti] == qLower[qi] {
-			qi++
-			if ti == 0 {
-				score += 7
-			} else if target[ti-1] == '.' || target[ti-1] == '_' {
-				score += 5
-			} else if target[ti] >= 'A' && target[ti] <= 'Z' {
-				score += 5
-			}
-			if prevMatched {
-				score += 3
-			}
-			prevMatched = true
-		} else {
-			prevMatched = false
-		}
-	}
-	if qi < len(qLower) {
-		return false, 0
-	}
-	score += max(0, 50-len(tLower))
-	return true, score
+// Update satisfies the View interface.
+func (c CompareView) Update(msg tea.Msg) (View, tea.Cmd) {
+	updated, cmd := c.updateInternal(msg)
+	return updated, cmd
 }
+
+// Render satisfies the View interface, with an LLM anchor prefix.
+func (c CompareView) Render(width, height int) string {
+	c.width = width
+	c.height = height
+	pw, ph := c.paneDimensions()
+	c.left.content.SetSize(pw, ph)
+	c.right.content.SetSize(pw, ph)
+	rendered := c.View()
+
+	// Embed LLM anchor as muted prefix on the first line
+	info := c.StatusInfo()
+	leftTitle := c.left.title
+	if leftTitle == "" {
+		leftTitle = "—"
+	}
+	rightTitle := c.right.title
+	if rightTitle == "" {
+		rightTitle = "—"
+	}
+	anchor := fmt.Sprintf("[mxcli:compare] Left: %s  Right: %s  %s", leftTitle, rightTitle, info.Mode)
+	anchorSt := lipgloss.NewStyle().Foreground(MutedColor).Faint(true)
+	anchorStr := anchorSt.Render(anchor)
+
+	if idx := strings.IndexByte(rendered, '\n'); idx >= 0 {
+		rendered = anchorStr + rendered[idx:]
+	} else {
+		rendered = anchorStr
+	}
+	return rendered
+}
+
+// Hints satisfies the View interface.
+func (c CompareView) Hints() []Hint {
+	return CompareHints
+}
+
+// StatusInfo satisfies the View interface.
+func (c CompareView) StatusInfo() StatusInfo {
+	kindNames := []string{"NDSL|NDSL", "NDSL|MDL", "MDL|MDL"}
+	modeLabel := "Compare"
+	if int(c.kind) < len(kindNames) {
+		modeLabel = kindNames[c.kind]
+	}
+	leftTitle := c.left.title
+	if leftTitle == "" {
+		leftTitle = "—"
+	}
+	rightTitle := c.right.title
+	if rightTitle == "" {
+		rightTitle = "—"
+	}
+	return StatusInfo{
+		Breadcrumb: []string{leftTitle, rightTitle},
+		Position:   fmt.Sprintf("%d%%", c.focusedPane().scrollPercent()),
+		Mode:       modeLabel,
+	}
+}
+
+// Mode satisfies the View interface.
+func (c CompareView) Mode() ViewMode {
+	return ModeCompare
+}
+
+// loadBsonNDSL loads BSON NDSL content for a compare pane.
+func (c CompareView) loadBsonNDSL(qname, nodeType string, side CompareFocus) tea.Cmd {
+	mxcliPath := c.mxcliPath
+	projectPath := c.projectPath
+	return func() tea.Msg {
+		bsonType := inferBsonType(nodeType)
+		if bsonType == "" {
+			return CompareLoadMsg{Side: side, Title: qname, NodeType: nodeType,
+				Content: fmt.Sprintf("Error: type %q not supported for BSON dump", nodeType),
+				Err:     fmt.Errorf("unsupported type")}
+		}
+		args := []string{"bson", "dump", "-p", projectPath, "--format", "ndsl",
+			"--type", bsonType, "--object", qname}
+		out, err := runMxcli(mxcliPath, args...)
+		out = StripBanner(out)
+		if err != nil {
+			return CompareLoadMsg{Side: side, Title: qname, NodeType: nodeType, Content: "Error: " + out, Err: err}
+		}
+		return CompareLoadMsg{Side: side, Title: qname, NodeType: nodeType, Content: HighlightNDSL(out)}
+	}
+}
+
+// loadMDL loads MDL content for a compare pane.
+func (c CompareView) loadMDL(qname, nodeType string, side CompareFocus) tea.Cmd {
+	mxcliPath := c.mxcliPath
+	projectPath := c.projectPath
+	return func() tea.Msg {
+		out, err := runMxcli(mxcliPath, "-p", projectPath, "-c", buildDescribeCmd(nodeType, qname))
+		out = StripBanner(out)
+		if err != nil {
+			return CompareLoadMsg{Side: side, Title: qname, NodeType: nodeType, Content: "Error: " + out, Err: err}
+		}
+		return CompareLoadMsg{Side: side, Title: qname, NodeType: nodeType, Content: DetectAndHighlight(out)}
+	}
+}
+
+// loadForCompare dispatches to the appropriate loader based on compare kind.
+func (c CompareView) loadForCompare(qname, nodeType string, side CompareFocus, kind CompareKind) tea.Cmd {
+	switch kind {
+	case CompareNDSL:
+		return c.loadBsonNDSL(qname, nodeType, side)
+	case CompareNDSLMDL:
+		if side == CompareFocusLeft {
+			return c.loadBsonNDSL(qname, nodeType, side)
+		}
+		return c.loadMDL(qname, nodeType, side)
+	case CompareMDL:
+		return c.loadMDL(qname, nodeType, side)
+	}
+	return nil
+}
+
 

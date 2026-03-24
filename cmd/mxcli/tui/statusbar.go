@@ -6,11 +6,21 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// breadcrumbZone tracks the X range for a clickable breadcrumb segment.
+type breadcrumbZone struct {
+	startX int
+	endX   int
+	depth  int // navigation depth this segment corresponds to
+}
+
 // StatusBar renders a bottom status line with breadcrumb and position info.
 type StatusBar struct {
 	breadcrumb []string
 	position   string // e.g. "3/4"
 	mode       string // e.g. "MDL" or "NDSL"
+	viewDepth  int
+	viewModes  []string
+	zones      []breadcrumbZone // clickable breadcrumb zones
 }
 
 // NewStatusBar creates a status bar.
@@ -33,16 +43,60 @@ func (s *StatusBar) SetMode(mode string) {
 	s.mode = mode
 }
 
-// View renders the status bar to fit the given width.
+// SetViewDepth sets the view stack depth and mode names for breadcrumb display.
+func (s *StatusBar) SetViewDepth(depth int, modes []string) {
+	s.viewDepth = depth
+	s.viewModes = modes
+}
+
+// View renders the status bar to fit the given width, tracking breadcrumb click zones.
 func (s *StatusBar) View(width int) string {
+	s.zones = nil
+
 	// Build breadcrumb: all segments dim except last one normal.
+	// Track X positions for click zones.
+	sep := BreadcrumbDimStyle.Render(" › ")
+	sepWidth := lipgloss.Width(sep)
+
+	xPos := 1 // leading space
+
 	var crumbParts []string
-	sep := BreadcrumbDimStyle.Render(" > ")
+
+	// Prepend view depth breadcrumb if deeper than 1
+	if s.viewDepth > 1 && len(s.viewModes) > 0 {
+		var modeParts []string
+		for _, m := range s.viewModes {
+			modeParts = append(modeParts, m)
+		}
+		depthLabel := strings.Join(modeParts, " › ")
+		rendered := BreadcrumbDimStyle.Render("[" + depthLabel + "]")
+		crumbParts = append(crumbParts, rendered)
+		xPos += lipgloss.Width(rendered)
+		if len(s.breadcrumb) > 0 {
+			xPos += sepWidth
+		}
+	}
+
 	for i, seg := range s.breadcrumb {
+		var rendered string
 		if i == len(s.breadcrumb)-1 {
-			crumbParts = append(crumbParts, BreadcrumbCurrentStyle.Render(seg))
+			rendered = BreadcrumbCurrentStyle.Render(seg)
 		} else {
-			crumbParts = append(crumbParts, BreadcrumbDimStyle.Render(seg))
+			rendered = BreadcrumbDimStyle.Render(seg)
+		}
+
+		segWidth := lipgloss.Width(rendered)
+		// Record clickable zone: depth = i (how many levels deep from root)
+		s.zones = append(s.zones, breadcrumbZone{
+			startX: xPos,
+			endX:   xPos + segWidth,
+			depth:  i,
+		})
+
+		crumbParts = append(crumbParts, rendered)
+		xPos += segWidth
+		if i < len(s.breadcrumb)-1 {
+			xPos += sepWidth
 		}
 	}
 	left := " " + strings.Join(crumbParts, sep)
@@ -53,7 +107,7 @@ func (s *StatusBar) View(width int) string {
 		rightParts = append(rightParts, PositionStyle.Render(s.position))
 	}
 	if s.mode != "" {
-		rightParts = append(rightParts, PreviewModeStyle.Render(s.mode))
+		rightParts = append(rightParts, BreadcrumbDimStyle.Render("⎸")+PreviewModeStyle.Render(s.mode))
 	}
 	right := strings.Join(rightParts, "  ") + " "
 
@@ -63,4 +117,15 @@ func (s *StatusBar) View(width int) string {
 	gap := max(width-leftWidth-rightWidth, 0)
 
 	return left + strings.Repeat(" ", gap) + right
+}
+
+// HitTest checks if x falls within a clickable breadcrumb zone.
+// Returns the navigation depth and true if a zone was hit.
+func (s *StatusBar) HitTest(x int) (int, bool) {
+	for _, z := range s.zones {
+		if x >= z.startX && x < z.endX {
+			return z.depth, true
+		}
+	}
+	return 0, false
 }

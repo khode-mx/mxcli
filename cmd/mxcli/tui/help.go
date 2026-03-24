@@ -6,30 +6,47 @@ const helpText = `
   mxcli tui — Keyboard Reference
 
   NAVIGATION
-    j / ↓         move down / scroll
-    k / ↑         move up / scroll
+    j / ↓          move down / scroll
+    k / ↑          move up / scroll
     l / → / Enter  drill in / expand
-    h / ←         go back
-    Tab           cycle panel focus
-    /             filter in list
-    Esc           back / close
+    h / ←          go back
+    Space          fuzzy jump to object
+    /              filter in list
+    Esc            back / close
 
   ACTIONS
-    b    BSON dump (overlay)
-    c    compare view (side-by-side)
-    d    diagram in browser
-    r    refresh project tree
-    z    zen mode (zoom panel)
-    Enter  full detail (in preview)
+    b     BSON dump (overlay)
+    c     compare view (side-by-side)
+    d     diagram in browser
+    y     copy to clipboard
+    r     refresh project tree
+    z     zen mode (zoom panel)
+    Tab   switch MDL / NDSL preview
+    t     new tab (same project)
+    T     new tab (pick project)
+    1-9   switch tab
 
-  OVERLAY / COMPARE VIEW
-    y     copy content to clipboard
-    Tab   switch left/right pane (compare)
-    /     fuzzy pick object (compare)
-    1/2/3 NDSL|NDSL / NDSL|MDL / MDL|MDL
-    s     toggle sync scroll
+  OVERLAY
     j/k   scroll content
-    Esc   close
+    /     search in content
+    y     copy to clipboard
+    Tab   switch MDL / NDSL
+    q     close
+
+  COMPARE VIEW
+    h/l   navigate panes
+    /     search in content
+    s     toggle sync scroll
+    1/2/3 NDSL|NDSL / NDSL|MDL / MDL|MDL
+    d     open diff view
+    q     close
+
+  DIFF VIEW
+    j/k     scroll
+    Tab     cycle mode (unified/side-by-side/plain)
+    ]c/[c   next/prev hunk
+    /       search
+    q       close
 
   OTHER
     ?    show/hide this help
