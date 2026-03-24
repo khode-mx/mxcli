@@ -97,6 +97,7 @@ createStatement
       | createWorkflowStatement
       | createUserRoleStatement
       | createDemoUserStatement
+      | createImageCollectionStatement
       )
     ;
 
@@ -238,6 +239,7 @@ dropStatement
     | DROP ODATA SERVICE qualifiedName
     | DROP BUSINESS EVENT SERVICE qualifiedName
     | DROP WORKFLOW qualifiedName
+    | DROP IMAGE COLLECTION qualifiedName
     ;
 
 renameStatement
@@ -755,6 +757,23 @@ enumerationOptions
 
 enumerationOption
     : COMMENT STRING_LITERAL
+    ;
+
+// =============================================================================
+// IMAGE COLLECTION CREATION
+// =============================================================================
+
+createImageCollectionStatement
+    : IMAGE COLLECTION qualifiedName imageCollectionOptions?
+    ;
+
+imageCollectionOptions
+    : imageCollectionOption+
+    ;
+
+imageCollectionOption
+    : EXPORT LEVEL STRING_LITERAL   // e.g. EXPORT LEVEL 'Public'
+    | COMMENT STRING_LITERAL
     ;
 
 // =============================================================================
@@ -3114,4 +3133,5 @@ keyword
     | WIDGETTYPE                                                 // Catalog column keyword
     | URL | POSITION | SORT                                      // Common attribute names
     | GENERATE | CONNECTOR | EXEC | TABLES | VIEWS              // SQL generate keywords
+    | COLLECTION                                               // Image collection keyword
     ;
