@@ -614,4 +614,15 @@ SHOW ACCESS ON PAGE SecTest.Customer_Overview;
 SHOW ACCESS ON PAGE SecTest.Order_Overview;
 /
 
+-- ############################################################################
+-- PART 10: CLEANUP
+-- ############################################################################
+-- Revoke entity access to avoid CE0066 "entity access out of date".
+-- When a module has partial access rules (not all entities covered by all
+-- roles), MxBuild reports CE0066 regardless of security level.
+REVOKE SecTest.Administrator ON SecTest.Customer;
+REVOKE SecTest.User ON SecTest.Customer;
+REVOKE SecTest.User ON SecTest.Order;
+REVOKE SecTest.Manager ON SecTest.Customer;
+
 
