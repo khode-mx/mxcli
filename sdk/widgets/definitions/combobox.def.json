@@ -1,0 +1,24 @@
+{
+  "widgetId": "com.mendix.widget.web.combobox.Combobox",
+  "mdlName": "COMBOBOX",
+  "templateFile": "combobox.json",
+  "defaultEditable": "Always",
+  "modes": {
+    "default": {
+      "description": "Enumeration mode",
+      "propertyMappings": [
+        {"propertyKey": "attributeEnumeration", "source": "Attribute", "operation": "attribute"}
+      ]
+    },
+    "association": {
+      "condition": "hasDataSource",
+      "description": "Association mode",
+      "propertyMappings": [
+        {"propertyKey": "optionsSourceType", "value": "association", "operation": "primitive"},
+        {"propertyKey": "attributeAssociation", "source": "Attribute", "operation": "association"},
+        {"propertyKey": "optionsSourceAssociationDataSource", "source": "DataSource", "operation": "datasource"},
+        {"propertyKey": "optionsSourceAssociationCaptionAttribute", "source": "CaptionAttribute", "operation": "attribute"}
+      ]
+    }
+  }
+}

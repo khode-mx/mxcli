@@ -1,0 +1,15 @@
+{
+  "widgetId": "com.mendix.widget.web.gallery.Gallery",
+  "mdlName": "GALLERY",
+  "templateFile": "gallery.json",
+  "defaultEditable": "Always",
+  "defaultSelection": "Single",
+  "propertyMappings": [
+    {"propertyKey": "datasource", "source": "DataSource", "operation": "datasource"},
+    {"propertyKey": "itemSelection", "source": "Selection", "operation": "primitive", "default": "Single"}
+  ],
+  "childSlots": [
+    {"propertyKey": "content", "mdlContainer": "TEMPLATE", "operation": "widgets"},
+    {"propertyKey": "filtersPlaceholder", "mdlContainer": "FILTER", "operation": "widgets"}
+  ]
+}
