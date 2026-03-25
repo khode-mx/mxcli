@@ -1,0 +1,117 @@
+-- ============================================================================
+-- Image Collection Examples
+-- ============================================================================
+--
+-- This file demonstrates the MDL syntax for managing image collections.
+-- Image collections are Mendix's way of bundling images (icons, logos)
+-- within a module.
+--
+-- Features demonstrated:
+--   - CREATE IMAGE COLLECTION (empty)
+--   - CREATE IMAGE COLLECTION with EXPORT LEVEL and COMMENT
+--   - SHOW IMAGE COLLECTION [IN Module]
+--   - DESCRIBE IMAGE COLLECTION
+--   - DROP IMAGE COLLECTION
+--
+-- ============================================================================
+
+CREATE MODULE ImgTest;
+
+-- MARK: Create
+
+-- ============================================================================
+-- LEVEL 1: Basic Image Collection
+-- ============================================================================
+
+/**
+ * Level 1.1: Create an empty image collection
+ *
+ * The simplest image collection — just a name.
+ * Images can be added later via Studio Pro.
+ */
+CREATE IMAGE COLLECTION ImgTest.AppIcons;
+/
+
+/**
+ * Level 1.2: Create with export level
+ *
+ * EXPORT LEVEL controls visibility:
+ *   'Hidden' (default) - internal to the module
+ *   'Public'           - accessible from other modules
+ */
+CREATE IMAGE COLLECTION ImgTest.SharedIcons EXPORT LEVEL 'Public';
+/
+
+/**
+ * Level 1.3: Create with comment
+ *
+ * COMMENT documents the purpose of the collection.
+ */
+CREATE IMAGE COLLECTION ImgTest.StatusIcons COMMENT 'Icons for order and task status indicators';
+/
+
+/**
+ * Level 1.4: Create with both export level and comment
+ */
+CREATE IMAGE COLLECTION ImgTest.BrandAssets
+  EXPORT LEVEL 'Public'
+  COMMENT 'Company branding assets: logos, favicons, and splash screens';
+/
+
+-- MARK: Show
+
+-- ============================================================================
+-- LEVEL 2: List Image Collections
+-- ============================================================================
+
+-- Show all image collections across all modules
+SHOW IMAGE COLLECTION;
+/
+
+-- Show image collections in a specific module
+SHOW IMAGE COLLECTION IN ImgTest;
+/
+
+-- MARK: Describe
+
+-- ============================================================================
+-- LEVEL 3: Describe Image Collection
+-- ============================================================================
+
+-- Describe shows the full MDL definition including any embedded images
+DESCRIBE IMAGE COLLECTION ImgTest.AppIcons;
+DESCRIBE IMAGE COLLECTION ImgTest.SharedIcons;
+DESCRIBE IMAGE COLLECTION ImgTest.BrandAssets;
+
+-- MARK: Drop
+
+-- ============================================================================
+-- LEVEL 4: Drop Image Collection
+-- ============================================================================
+
+/**
+ * Level 4.1: Drop an image collection
+ *
+ * Removes the collection and all its embedded images.
+ */
+DROP IMAGE COLLECTION ImgTest.StatusIcons;
+/
+
+-- Verify it's gone
+SHOW IMAGE COLLECTION IN ImgTest;
+/
+
+-- ============================================================================
+-- Summary
+-- ============================================================================
+--
+-- This file demonstrates:
+--
+-- ✅ CREATE IMAGE COLLECTION Module.Name
+-- ✅ CREATE IMAGE COLLECTION with EXPORT LEVEL 'Public'|'Hidden'
+-- ✅ CREATE IMAGE COLLECTION with COMMENT 'description'
+-- ✅ SHOW IMAGE COLLECTION [IN Module] — list all collections
+-- ✅ DESCRIBE IMAGE COLLECTION Module.Name — show full definition
+-- ✅ DROP IMAGE COLLECTION Module.Name — remove collection
+--
+-- ============================================================================

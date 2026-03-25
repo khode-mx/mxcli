@@ -74,6 +74,7 @@ const (
 	ShowSettings              // SHOW SETTINGS
 	ShowFragments             // SHOW FRAGMENTS
 	ShowDatabaseConnections   // SHOW DATABASE CONNECTIONS [IN module]
+	ShowImageCollections      // SHOW IMAGE COLLECTIONS [IN module]
 )
 
 // String returns the human-readable name of the show object type.
@@ -169,6 +170,8 @@ func (t ShowObjectType) String() string {
 		return "FRAGMENTS"
 	case ShowDatabaseConnections:
 		return "DATABASE CONNECTIONS"
+	case ShowImageCollections:
+		return "IMAGE COLLECTIONS"
 	default:
 		return "UNKNOWN"
 	}

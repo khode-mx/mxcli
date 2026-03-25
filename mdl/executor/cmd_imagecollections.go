@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
 	"github.com/mendixlabs/mxcli/sdk/mpr"
@@ -152,6 +153,42 @@ func imageFormatToExt(format string) string {
 	default:
 		return ".png"
 	}
+}
+
+// showImageCollections handles SHOW IMAGE COLLECTION [IN module].
+func (e *Executor) showImageCollections(moduleName string) error {
+	collections, err := e.reader.ListImageCollections()
+	if err != nil {
+		return fmt.Errorf("failed to list image collections: %w", err)
+	}
+
+	h, err := e.getHierarchy()
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(e.output, "| %-40s | %-12s | %-6s |\n", "Image Collection", "Export Level", "Images")
+	fmt.Fprintf(e.output, "|%-42s|%-14s|%-8s|\n", strings.Repeat("-", 42), strings.Repeat("-", 14), strings.Repeat("-", 8))
+
+	count := 0
+	for _, ic := range collections {
+		modID := h.FindModuleID(ic.ContainerID)
+		modName := h.GetModuleName(modID)
+		if moduleName != "" && modName != moduleName {
+			continue
+		}
+
+		qualifiedName := fmt.Sprintf("%s.%s", modName, ic.Name)
+		exportLevel := ic.ExportLevel
+		if exportLevel == "" {
+			exportLevel = "Hidden"
+		}
+		fmt.Fprintf(e.output, "| %-40s | %-12s | %6d |\n", qualifiedName, exportLevel, len(ic.Images))
+		count++
+	}
+
+	fmt.Fprintf(e.output, "\n(%d image collection(s))\n", count)
+	return nil
 }
 
 // findImageCollection finds an image collection by module and name.

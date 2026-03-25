@@ -393,6 +393,17 @@ func (b *Builder) ExitShowStatement(ctx *parser.ShowStatementContext) {
 			}
 		}
 		b.statements = append(b.statements, stmt)
+	} else if ctx.IMAGE() != nil && ctx.COLLECTION() != nil {
+		// SHOW IMAGE COLLECTION [IN module]
+		stmt := &ast.ShowStmt{ObjectType: ast.ShowImageCollections}
+		if ctx.IN() != nil {
+			if qn := ctx.QualifiedName(); qn != nil {
+				stmt.InModule = getQualifiedNameText(qn)
+			} else if id := ctx.IDENTIFIER(); id != nil {
+				stmt.InModule = id.GetText()
+			}
+		}
+		b.statements = append(b.statements, stmt)
 	} else if ctx.WIDGETS() != nil {
 		// SHOW WIDGETS [WHERE ...] [IN module]
 		stmt := &ast.ShowWidgetsStmt{

@@ -2408,6 +2408,7 @@ showStatement
     | SHOW LAYOUTS (IN (qualifiedName | IDENTIFIER))?
     | SHOW NOTEBOOKS (IN (qualifiedName | IDENTIFIER))?
     | SHOW JAVA ACTIONS (IN (qualifiedName | IDENTIFIER))?
+    | SHOW IMAGE COLLECTION (IN (qualifiedName | IDENTIFIER))?   // SHOW IMAGE COLLECTION [IN Module]
     | SHOW ENTITY qualifiedName
     | SHOW ASSOCIATION qualifiedName
     | SHOW PAGE qualifiedName

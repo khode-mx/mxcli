@@ -752,6 +752,8 @@ func (e *Executor) execShow(s *ast.ShowStmt) error {
 		return e.showFragments()
 	case ast.ShowDatabaseConnections:
 		return e.showDatabaseConnections(s.InModule)
+	case ast.ShowImageCollections:
+		return e.showImageCollections(s.InModule)
 	default:
 		return fmt.Errorf("unknown show object type")
 	}
