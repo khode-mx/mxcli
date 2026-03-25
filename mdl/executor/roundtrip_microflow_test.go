@@ -583,6 +583,32 @@ END;`
 	)
 }
 
+// TestRoundtripMicroflow_SystemEntityParameter tests that microflows with
+// System.* built-in entity parameter types can be created (issue #29).
+// System entities (System.Workflow, System.User, etc.) are not stored in the
+// MPR domain models — they are serialized by qualified name at runtime.
+func TestRoundtripMicroflow_SystemEntityParameter(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.teardown()
+
+	mfName := testModule + ".RT_SystemEntityParam"
+	env.registerCleanup("microflow", mfName)
+
+	createMDL := `CREATE MICROFLOW ` + mfName + ` (
+  $Workflow: System.Workflow,
+  $Count: Integer
+) RETURNS List of System.User
+BEGIN
+  RETURN empty;
+END;`
+
+	assertMicroflowContains(t, env, mfName, createMDL,
+		// "empty" is a reserved keyword — must round-trip as "RETURN empty", not "$empty"
+		[]string{"System.Workflow", "System.User", "RETURN empty"},
+		[]string{"RETURN $empty"},
+	)
+}
+
 // TestRoundtripMicroflow_Position tests @position is emitted in DESCRIBE output.
 func TestRoundtripMicroflow_Position(t *testing.T) {
 	env := setupTestEnv(t)

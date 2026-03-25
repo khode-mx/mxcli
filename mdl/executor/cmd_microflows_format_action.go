@@ -23,8 +23,8 @@ func (e *Executor) formatActivity(
 
 	case *microflows.EndEvent:
 		if activity.ReturnValue != "" {
-			returnVal := activity.ReturnValue
-			if !strings.HasPrefix(returnVal, "$") {
+			returnVal := strings.TrimSuffix(activity.ReturnValue, "\n")
+			if !strings.HasPrefix(returnVal, "$") && !isMendixKeyword(returnVal) {
 				returnVal = "$" + returnVal
 			}
 			return fmt.Sprintf("RETURN %s;", returnVal)
@@ -845,4 +845,14 @@ func (e *Executor) formatExecuteDatabaseQueryAction(a *microflows.ExecuteDatabas
 
 	sb.WriteString(";")
 	return sb.String()
+}
+
+// isMendixKeyword returns true for Mendix expression keywords that must not be
+// prefixed with "$" when serialized as a RETURN value.
+func isMendixKeyword(s string) bool {
+	switch s {
+	case "empty", "true", "false", "null":
+		return true
+	}
+	return false
 }

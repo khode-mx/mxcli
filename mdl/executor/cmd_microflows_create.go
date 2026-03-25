@@ -13,6 +13,14 @@ import (
 	"github.com/mendixlabs/mxcli/sdk/mpr"
 )
 
+// isBuiltinModuleEntity returns true for modules whose entities are defined
+// internally by the Mendix runtime and are therefore not present in the MPR's
+// domain models. These types are serialized using the qualified name reference
+// ("System.Workflow", "System.User", etc.) and resolved at runtime.
+func isBuiltinModuleEntity(moduleName string) bool {
+	return moduleName == "System"
+}
+
 // execCreateMicroflow handles CREATE MICROFLOW statements.
 func (e *Executor) execCreateMicroflow(s *ast.CreateMicroflowStmt) error {
 	if e.writer == nil {
@@ -105,8 +113,10 @@ func (e *Executor) execCreateMicroflow(s *ast.CreateMicroflowStmt) error {
 
 	// Validate and add parameters
 	for _, p := range s.Parameters {
-		// Validate entity references for List and Entity types
-		if p.Type.EntityRef != nil {
+		// Validate entity references for List and Entity types.
+		// Built-in modules (e.g. System) are not stored in the MPR domain models;
+		// their types are serialized by qualified name and resolved at runtime.
+		if p.Type.EntityRef != nil && !isBuiltinModuleEntity(p.Type.EntityRef.Module) {
 			entityID := entityResolver(*p.Type.EntityRef)
 			if entityID == "" {
 				return fmt.Errorf("entity '%s.%s' not found for parameter '%s'",
@@ -133,8 +143,10 @@ func (e *Executor) execCreateMicroflow(s *ast.CreateMicroflowStmt) error {
 
 	// Validate and set return type
 	if s.ReturnType != nil {
-		// Validate entity references for return type
-		if s.ReturnType.Type.EntityRef != nil {
+		// Validate entity references for return type.
+		// Built-in modules (e.g. System) are not stored in the MPR domain models;
+		// their types are serialized by qualified name and resolved at runtime.
+		if s.ReturnType.Type.EntityRef != nil && !isBuiltinModuleEntity(s.ReturnType.Type.EntityRef.Module) {
 			entityID := entityResolver(*s.ReturnType.Type.EntityRef)
 			if entityID == "" {
 				return fmt.Errorf("entity '%s.%s' not found for return type",
