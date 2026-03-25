@@ -306,10 +306,7 @@ func (c CompareView) updateNormal(msg tea.KeyMsg) (CompareView, tea.Cmd) {
 	case "y":
 		_ = writeClipboard(c.focusedPane().content.PlainText())
 		c.copiedFlash = true
-		return c, func() tea.Msg {
-			time.Sleep(time.Second)
-			return compareFlashClearMsg{}
-		}
+		return c, tea.Tick(time.Second, func(_ time.Time) tea.Msg { return compareFlashClearMsg{} })
 
 	// Scroll — forward j/k/arrows/pgup/pgdn/g/G to focused viewport
 	default:

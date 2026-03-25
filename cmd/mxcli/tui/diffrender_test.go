@@ -50,8 +50,8 @@ func TestRenderUnifiedDiff_EqualLinesHaveBothLineNumbers(t *testing.T) {
 	}
 	// Prefix should contain "1" twice (old and new line number)
 	prefix := rendered[0].Prefix
-	if strings.Count(stripANSI(prefix), "1") < 2 {
-		t.Errorf("equal line prefix should contain line number 1 twice, got prefix: %q", stripANSI(prefix))
+	if strings.Count(stripAnsi(prefix), "1") < 2 {
+		t.Errorf("equal line prefix should contain line number 1 twice, got prefix: %q", stripAnsi(prefix))
 	}
 }
 

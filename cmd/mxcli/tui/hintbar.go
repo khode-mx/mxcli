@@ -68,6 +68,7 @@ var (
 		{Key: "Tab", Label: "mode"},
 		{Key: "]c/[c", Label: "hunk"},
 		{Key: "/", Label: "search"},
+		{Key: "y", Label: "yank"},
 		{Key: "q", Label: "close"},
 	}
 )

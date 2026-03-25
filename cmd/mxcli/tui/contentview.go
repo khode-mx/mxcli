@@ -53,7 +53,7 @@ func (v ContentView) PlainText() string {
 		if i > 0 {
 			sb.WriteByte('\n')
 		}
-		sb.WriteString(stripANSI(line))
+		sb.WriteString(stripAnsi(line))
 	}
 	return sb.String()
 }
@@ -123,7 +123,7 @@ func (v *ContentView) buildMatchLines() {
 	q := strings.ToLower(v.searchQuery)
 	for i, line := range v.lines {
 		// Strip ANSI for matching
-		if strings.Contains(strings.ToLower(stripANSI(line)), q) {
+		if strings.Contains(strings.ToLower(stripAnsi(line)), q) {
 			v.matchLines = append(v.matchLines, i)
 		}
 	}
@@ -155,27 +155,6 @@ func (v *ContentView) scrollToMatch() {
 	target := v.matchLines[v.matchIdx]
 	// Center the match in the viewport
 	v.yOffset = clamp(target-v.height/2, 0, v.maxOffset())
-}
-
-// stripANSI removes ANSI escape sequences from a string for plain-text matching.
-func stripANSI(s string) string {
-	var sb strings.Builder
-	sb.Grow(len(s))
-	inEsc := false
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\x1b' {
-			inEsc = true
-			continue
-		}
-		if inEsc {
-			if (s[i] >= 'A' && s[i] <= 'Z') || (s[i] >= 'a' && s[i] <= 'z') {
-				inEsc = false
-			}
-			continue
-		}
-		sb.WriteByte(s[i])
-	}
-	return sb.String()
 }
 
 // --- Update ---
@@ -379,7 +358,7 @@ func (v ContentView) View() string {
 // highlightMatches highlights all occurrences of query in the line (case-insensitive).
 // Works with ANSI-colored text by matching on stripped text and applying style around matches.
 func highlightMatches(line, query string, style lipgloss.Style) string {
-	plain := stripANSI(line)
+	plain := stripAnsi(line)
 	lowerPlain := strings.ToLower(plain)
 	lowerQuery := strings.ToLower(query)
 

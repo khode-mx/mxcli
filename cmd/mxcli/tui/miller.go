@@ -885,7 +885,7 @@ func findImagePathAtClick(contentLines, imagePaths []string, clickedVLine, scrol
 			if srcIdx < 0 || srcIdx >= len(contentLines) {
 				continue
 			}
-			plain := stripANSI(contentLines[srcIdx])
+			plain := stripAnsi(contentLines[srcIdx])
 			i := strings.Index(plain, "FROM FILE '")
 			if i == -1 {
 				continue

@@ -7,20 +7,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Diff color palette.
-var (
-	diffAddedFg        = lipgloss.Color("#00D787")
-	diffAddedChangedFg = lipgloss.Color("#FFFFFF")
-	diffAddedChangedBg = lipgloss.Color("#005F00")
-
-	diffRemovedFg        = lipgloss.Color("#FF5F87")
-	diffRemovedChangedFg = lipgloss.Color("#FFFFFF")
-	diffRemovedChangedBg = lipgloss.Color("#5F0000")
-
-	diffEqualGutter     = lipgloss.Color("#626262")
-	diffGutterAddedFg   = lipgloss.Color("#00D787")
-	diffGutterRemovedFg = lipgloss.Color("#FF5F87")
-)
 
 // RenderPlainUnifiedDiff generates a standard unified diff string (no ANSI colors).
 // This format is directly understood by LLMs and tools like patch/git.
@@ -158,20 +144,20 @@ func RenderUnifiedDiff(result *DiffResult, lang string) []DiffRenderedLine {
 
 		switch dl.Type {
 		case DiffEqual:
-			gutter = gutterCharSt.Foreground(diffEqualGutter).Render("│")
+			gutter = gutterCharSt.Foreground(DiffEqualGutter).Render("│")
 			oldNo = lineNoSt.Render(fmt.Sprintf("%*d", lineNoW, dl.OldLineNo))
 			newNo = lineNoSt.Render(fmt.Sprintf("%*d", lineNoW, dl.NewLineNo))
 			content = highlightLine(dl.Content, lang)
 
 		case DiffInsert:
-			gutter = gutterCharSt.Foreground(diffGutterAddedFg).Render("+")
+			gutter = gutterCharSt.Foreground(DiffGutterAddedFg).Render("+")
 			oldNo = lineNoSt.Render(strings.Repeat(" ", lineNoW))
-			newNo = lipgloss.NewStyle().Foreground(diffGutterAddedFg).Render(fmt.Sprintf("%*d", lineNoW, dl.NewLineNo))
+			newNo = lipgloss.NewStyle().Foreground(DiffGutterAddedFg).Render(fmt.Sprintf("%*d", lineNoW, dl.NewLineNo))
 			content = renderSegments(dl.Segments, DiffInsert)
 
 		case DiffDelete:
-			gutter = gutterCharSt.Foreground(diffGutterRemovedFg).Render("-")
-			oldNo = lipgloss.NewStyle().Foreground(diffGutterRemovedFg).Render(fmt.Sprintf("%*d", lineNoW, dl.OldLineNo))
+			gutter = gutterCharSt.Foreground(DiffGutterRemovedFg).Render("-")
+			oldNo = lipgloss.NewStyle().Foreground(DiffGutterRemovedFg).Render(fmt.Sprintf("%*d", lineNoW, dl.OldLineNo))
 			newNo = lineNoSt.Render(strings.Repeat(" ", lineNoW))
 			content = renderSegments(dl.Segments, DiffDelete)
 		}
@@ -220,13 +206,13 @@ func RenderSideBySideDiff(result *DiffResult, lang string) (left, right []SideBy
 
 		case DiffDelete:
 			content := renderSegments(dl.Segments, DiffDelete)
-			oldNo := lipgloss.NewStyle().Foreground(diffGutterRemovedFg).Render(fmt.Sprintf("%*d", lineNoW, dl.OldLineNo)) + " "
+			oldNo := lipgloss.NewStyle().Foreground(DiffGutterRemovedFg).Render(fmt.Sprintf("%*d", lineNoW, dl.OldLineNo)) + " "
 			left = append(left, SideBySideRenderedLine{Prefix: oldNo, Content: content})
 			right = append(right, SideBySideRenderedLine{Prefix: blankPrefix, Blank: true})
 
 		case DiffInsert:
 			content := renderSegments(dl.Segments, DiffInsert)
-			newNo := lipgloss.NewStyle().Foreground(diffGutterAddedFg).Render(fmt.Sprintf("%*d", lineNoW, dl.NewLineNo)) + " "
+			newNo := lipgloss.NewStyle().Foreground(DiffGutterAddedFg).Render(fmt.Sprintf("%*d", lineNoW, dl.NewLineNo)) + " "
 			left = append(left, SideBySideRenderedLine{Prefix: blankPrefix, Blank: true})
 			right = append(right, SideBySideRenderedLine{Prefix: newNo, Content: content})
 		}
@@ -240,16 +226,16 @@ func renderSegments(segments []DiffSegment, lineType DiffLineType) string {
 		return ""
 	}
 
-	var normalFg, changedFg, changedBg lipgloss.Color
+	var normalFg, changedFg, changedBg lipgloss.TerminalColor
 	switch lineType {
 	case DiffInsert:
-		normalFg = diffAddedFg
-		changedFg = diffAddedChangedFg
-		changedBg = diffAddedChangedBg
+		normalFg = DiffAddedFg
+		changedFg = DiffAddedChangedFg
+		changedBg = DiffAddedChangedBg
 	case DiffDelete:
-		normalFg = diffRemovedFg
-		changedFg = diffRemovedChangedFg
-		changedBg = diffRemovedChangedBg
+		normalFg = DiffRemovedFg
+		changedFg = DiffRemovedChangedFg
+		changedBg = DiffRemovedChangedBg
 	default:
 		var sb strings.Builder
 		for _, seg := range segments {
@@ -288,6 +274,8 @@ func highlightLine(content, lang string) string {
 
 // hslice returns a horizontal slice of an ANSI-colored string,
 // skipping the first `skip` visual columns and returning up to `take` visual columns.
+// Only CSI sequences (ESC [ ... letter) are handled; OSC/DCS/hyperlink escapes are not
+// parsed. This is safe for the diff renderer which only emits lipgloss SGR sequences.
 func hslice(s string, skip, take int) string {
 	if skip == 0 {
 		return truncateToWidth(s, take)

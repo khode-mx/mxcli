@@ -49,12 +49,6 @@ type DiffView struct {
 	width    int
 	height   int
 
-	// Side-by-side state
-	syncScroll  bool
-	focus       int // 0=left, 1=right
-	leftOffset  int
-	rightOffset int
-
 	// Search
 	searching   bool
 	searchInput textinput.Model
@@ -82,7 +76,6 @@ func NewDiffView(msg DiffOpenMsg, width, height int) DiffView {
 		title:       msg.Title,
 		width:       width,
 		height:      height,
-		syncScroll:  true,
 		searchInput: ti,
 	}
 
@@ -244,12 +237,8 @@ func (dv DiffView) updateNormal(msg tea.KeyMsg) (DiffView, tea.Cmd) {
 		dv.scroll(-dv.contentHeight())
 	case "g", "home":
 		dv.yOffset = 0
-		dv.leftOffset = 0
-		dv.rightOffset = 0
 	case "G", "end":
 		dv.yOffset = dv.maxOffset()
-		dv.leftOffset = dv.maxOffset()
-		dv.rightOffset = dv.maxOffset()
 
 	// Horizontal scroll
 	case "h", "left":
@@ -269,8 +258,6 @@ func (dv DiffView) updateNormal(msg tea.KeyMsg) (DiffView, tea.Cmd) {
 		}
 		dv.yOffset = 0
 		dv.xOffset = 0
-		dv.leftOffset = 0
-		dv.rightOffset = 0
 
 	// Yank unified diff to clipboard
 	case "y":
@@ -298,19 +285,7 @@ func (dv DiffView) updateNormal(msg tea.KeyMsg) (DiffView, tea.Cmd) {
 }
 
 func (dv *DiffView) scroll(delta int) {
-	if dv.viewMode == DiffViewSideBySide && !dv.syncScroll {
-		if dv.focus == 0 {
-			dv.leftOffset = clamp(dv.leftOffset+delta, 0, dv.maxOffset())
-		} else {
-			dv.rightOffset = clamp(dv.rightOffset+delta, 0, dv.maxOffset())
-		}
-	} else {
-		dv.yOffset = clamp(dv.yOffset+delta, 0, dv.maxOffset())
-		if dv.syncScroll {
-			dv.leftOffset = dv.yOffset
-			dv.rightOffset = dv.yOffset
-		}
-	}
+	dv.yOffset = clamp(dv.yOffset+delta, 0, dv.maxOffset())
 }
 
 // --- Hunk navigation ---
@@ -421,8 +396,8 @@ func (dv DiffView) View() string {
 	dimSt := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 	keySt := lipgloss.NewStyle().Foreground(lipgloss.Color("63")).Bold(true)
 	activeSt := lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Bold(true)
-	addSt := lipgloss.NewStyle().Foreground(diffAddedFg).Bold(true)
-	delSt := lipgloss.NewStyle().Foreground(diffRemovedFg).Bold(true)
+	addSt := lipgloss.NewStyle().Foreground(DiffAddedFg).Bold(true)
+	delSt := lipgloss.NewStyle().Foreground(DiffRemovedFg).Bold(true)
 
 	// Title bar
 	var modeLabel string
@@ -494,27 +469,9 @@ func (dv DiffView) View() string {
 func (dv DiffView) renderUnified(viewH int) string {
 	lines := dv.unified
 	total := len(lines)
-	showScrollbar := total > viewH
+	thumbStart, thumbEnd, scrollW := scrollbarGeometry(total, viewH, dv.yOffset)
 
-	trackSt := lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
-	thumbSt := lipgloss.NewStyle().Foreground(lipgloss.Color("63"))
-
-	var thumbStart, thumbEnd int
-	if showScrollbar {
-		thumbSize := max(1, viewH*viewH/total)
-		if m := dv.maxOffset(); m > 0 {
-			thumbStart = dv.yOffset * (viewH - thumbSize) / m
-		}
-		thumbEnd = thumbStart + thumbSize
-	}
-
-	scrollW := 0
-	if showScrollbar {
-		scrollW = 1
-	}
-
-	// Calculate content width after prefix
-	// Prefix is fixed, content gets the remaining width
+	// Prefix is fixed (sticky line numbers); content gets remaining width.
 	prefixW := 0
 	if len(lines) > 0 {
 		prefixW = lipgloss.Width(lines[0].Prefix)
@@ -527,9 +484,7 @@ func (dv DiffView) renderUnified(viewH int) string {
 		var line string
 		if lineIdx < total {
 			rl := lines[lineIdx]
-			// Prefix is sticky (always visible)
 			content := hslice(rl.Content, dv.xOffset, contentW)
-			// Pad content to fill width
 			if pad := contentW - lipgloss.Width(content); pad > 0 {
 				content += strings.Repeat(" ", pad)
 			}
@@ -537,15 +492,9 @@ func (dv DiffView) renderUnified(viewH int) string {
 		} else {
 			line = strings.Repeat(" ", dv.width-scrollW)
 		}
-
-		if showScrollbar {
-			if vi >= thumbStart && vi < thumbEnd {
-				line += thumbSt.Render("█")
-			} else {
-				line += trackSt.Render("│")
-			}
+		if scrollW > 0 {
+			line += scrollbarChar(vi, thumbStart, thumbEnd)
 		}
-
 		sb.WriteString(line)
 		if vi < viewH-1 {
 			sb.WriteString("\n")
@@ -557,28 +506,11 @@ func (dv DiffView) renderUnified(viewH int) string {
 func (dv DiffView) renderSideBySide(viewH int) string {
 	dividerSt := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 	total := len(dv.sideLeft)
-	showScrollbar := total > viewH
+	thumbStart, thumbEnd, scrollW := scrollbarGeometry(total, viewH, dv.yOffset)
 
-	trackSt := lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
-	thumbSt := lipgloss.NewStyle().Foreground(lipgloss.Color("63"))
-
-	var thumbStart, thumbEnd int
-	if showScrollbar {
-		thumbSize := max(1, viewH*viewH/total)
-		if m := dv.maxOffset(); m > 0 {
-			thumbStart = dv.yOffset * (viewH - thumbSize) / m
-		}
-		thumbEnd = thumbStart + thumbSize
-	}
-
-	scrollW := 0
-	if showScrollbar {
-		scrollW = 1
-	}
-	dividerW := 3 // " │ "
+	const dividerW = 3 // " │ "
 	paneTotal := (dv.width - dividerW - scrollW) / 2
 
-	// Calculate prefix width from rendered data
 	prefixW := 0
 	if len(dv.sideLeft) > 0 {
 		prefixW = lipgloss.Width(dv.sideLeft[0].Prefix)
@@ -613,15 +545,9 @@ func (dv DiffView) renderSideBySide(viewH int) string {
 		}
 
 		line := leftStr + dividerSt.Render(" │ ") + rightStr
-
-		if showScrollbar {
-			if vi >= thumbStart && vi < thumbEnd {
-				line += thumbSt.Render("█")
-			} else {
-				line += trackSt.Render("│")
-			}
+		if scrollW > 0 {
+			line += scrollbarChar(vi, thumbStart, thumbEnd)
 		}
-
 		sb.WriteString(line)
 		if vi < viewH-1 {
 			sb.WriteString("\n")
@@ -633,24 +559,7 @@ func (dv DiffView) renderSideBySide(viewH int) string {
 func (dv DiffView) renderPlainDiff(viewH int) string {
 	lines := dv.plainLines
 	total := len(lines)
-	showScrollbar := total > viewH
-
-	trackSt := lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
-	thumbSt := lipgloss.NewStyle().Foreground(lipgloss.Color("63"))
-
-	var thumbStart, thumbEnd int
-	if showScrollbar {
-		thumbSize := max(1, viewH*viewH/total)
-		if m := dv.maxOffset(); m > 0 {
-			thumbStart = dv.yOffset * (viewH - thumbSize) / m
-		}
-		thumbEnd = thumbStart + thumbSize
-	}
-
-	scrollW := 0
-	if showScrollbar {
-		scrollW = 1
-	}
+	thumbStart, thumbEnd, scrollW := scrollbarGeometry(total, viewH, dv.yOffset)
 	contentW := dv.width - scrollW
 
 	var sb strings.Builder
@@ -660,26 +569,46 @@ func (dv DiffView) renderPlainDiff(viewH int) string {
 		if lineIdx < total {
 			line = hslice(lines[lineIdx], dv.xOffset, contentW)
 		}
-
 		// Pad to fill width (use visual width for multi-byte safety)
 		if pad := contentW - lipgloss.Width(line); pad > 0 {
 			line += strings.Repeat(" ", pad)
 		}
-
-		if showScrollbar {
-			if vi >= thumbStart && vi < thumbEnd {
-				line += thumbSt.Render("█")
-			} else {
-				line += trackSt.Render("│")
-			}
+		if scrollW > 0 {
+			line += scrollbarChar(vi, thumbStart, thumbEnd)
 		}
-
 		sb.WriteString(line)
 		if vi < viewH-1 {
 			sb.WriteString("\n")
 		}
 	}
 	return sb.String()
+}
+
+// scrollbarGeometry computes thumb position for a scrollbar given content/viewport metrics.
+// Returns (thumbStart, thumbEnd, scrollW); scrollW is 0 when no scrollbar is needed.
+func scrollbarGeometry(total, viewH, yOffset int) (thumbStart, thumbEnd, scrollW int) {
+	if total <= viewH {
+		return 0, 0, 0
+	}
+	maxOff := total - viewH
+	thumbSize := max(1, viewH*viewH/total)
+	if maxOff > 0 {
+		thumbStart = yOffset * (viewH - thumbSize) / maxOff
+	}
+	return thumbStart, thumbStart + thumbSize, 1
+}
+
+var (
+	scrollTrackSt = lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
+	scrollThumbSt = lipgloss.NewStyle().Foreground(lipgloss.Color("63"))
+)
+
+// scrollbarChar returns the rendered scrollbar character for row vi.
+func scrollbarChar(vi, thumbStart, thumbEnd int) string {
+	if vi >= thumbStart && vi < thumbEnd {
+		return scrollThumbSt.Render("█")
+	}
+	return scrollTrackSt.Render("│")
 }
 
 func (dv DiffView) scrollPercent() int {

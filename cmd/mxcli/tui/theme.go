@@ -11,6 +11,22 @@ var (
 	RemovedColor = lipgloss.AdaptiveColor{Light: "124", Dark: "210"}
 )
 
+// Diff view color palette — centralized so the entire diff color scheme can be
+// adjusted in one place. AdaptiveColor picks Light/Dark based on terminal background.
+var (
+	DiffAddedFg        = lipgloss.AdaptiveColor{Light: "#00875f", Dark: "#00D787"}
+	DiffAddedChangedFg = lipgloss.AdaptiveColor{Light: "#ffffff", Dark: "#ffffff"}
+	DiffAddedChangedBg = lipgloss.AdaptiveColor{Light: "#005F00", Dark: "#005F00"}
+
+	DiffRemovedFg        = lipgloss.AdaptiveColor{Light: "#AF005F", Dark: "#FF5F87"}
+	DiffRemovedChangedFg = lipgloss.AdaptiveColor{Light: "#ffffff", Dark: "#ffffff"}
+	DiffRemovedChangedBg = lipgloss.AdaptiveColor{Light: "#5F0000", Dark: "#5F0000"}
+
+	DiffEqualGutter     = lipgloss.AdaptiveColor{Light: "241", Dark: "241"}
+	DiffGutterAddedFg   = lipgloss.AdaptiveColor{Light: "#00875f", Dark: "#00D787"}
+	DiffGutterRemovedFg = lipgloss.AdaptiveColor{Light: "#AF005F", Dark: "#FF5F87"}
+)
+
 var (
 	// Column separator: dim vertical bar between panels.
 	SeparatorChar  = "│"
