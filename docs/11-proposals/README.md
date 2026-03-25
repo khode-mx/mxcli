@@ -1,0 +1,135 @@
+# Proposals Index
+
+Status of all mxcli feature proposals. See [archive/](archive/) for fully implemented proposals.
+
+## Status Legend
+
+| Status | Meaning |
+|--------|---------|
+| Done | Fully implemented |
+| Partial | Some phases/features implemented |
+| Proposed | Design complete, not yet started |
+| Draft | Early design, not finalized |
+| Reference | Analysis or reference document (not actionable) |
+| Superseded | Replaced by a newer proposal |
+
+---
+
+## Active Proposals
+
+### Schema & Version Management
+
+These proposals form a dependency chain for multi-version Mendix support.
+
+| Proposal | Status | Summary | Depends On |
+|----------|--------|---------|------------|
+| [BSON Schema Registry](BSON_SCHEMA_REGISTRY_PROPOSAL.md) | Proposed | Runtime schema registry for version-aware BSON serialization, driven by reflection data | [Multi-Version Support](#) |
+| [Multi-Version Support](MULTI_VERSION_SUPPORT.md) | Partial | Unified architecture for Mendix version differences. Phase W (widget augmentation) done; Phase 1 (schema registry core) not started | BSON Schema Registry |
+| [Version-Aware MDL](version-aware-mdl.md) | Proposed | Read any Mendix version, write to target version with hybrid schema-driven serialization | BSON Schema Registry, Multi-Version Support |
+| [Update Built-in Widget Properties](PROPOSAL_update_builtin_widget_properties.md) | Draft | Bulk property updates on built-in widgets using reflection-data schema metadata | BSON Schema Registry |
+
+```
+BSON Schema Registry ◄──── Multi-Version Support
+        ▲                          ▲
+        │                          │
+        ├── Version-Aware MDL ─────┘
+        │
+        └── Update Built-in Widget Properties
+```
+
+### MDL Language Evolution
+
+| Proposal | Status | Summary | Depends On |
+|----------|--------|---------|------------|
+| [MDL Syntax Improvements v1](PROPOSAL_mdl_syntax_improvements.md) | Draft | Go-style assignment, C-style braces, fluent list APIs | — |
+| [MDL Syntax Improvements v2](PROPOSAL_mdl_syntax_improvements_v2.md) | Proposed | Consolidated v2: unified variable declaration, C-style braces, fluent list ops | Syntax Improvements v1 |
+| [Page Syntax V2](PROPOSAL_page_syntax_v2.md) | Superseded | Page/widget syntax with `{}` blocks and `->` binding. Superseded by V3 (archived) | — |
+| [Page Styling Support](page-styling-support.md) | Partial | CSS classes, inline styles, dynamic classes, design properties. Phase 1 (Class/Style) done | — |
+| [Page Composition](proposal_page_composition.md) | Proposed | Fragment definitions and ALTER PAGE for partial page editing | Page Syntax V2, Page Styling |
+| [XPath Gaps](xpath-gaps-proposal.md) | Partial | XPath constraint support gap analysis. ~85% complete, association paths and nested predicates remain | — |
+| [LLM MDL Assistance](PROPOSAL_llm_mdl_assistance.md) | Proposed | Enhanced error messages with examples, reorganized skills by use case | — |
+
+### Testing & Evaluation
+
+| Proposal | Status | Summary | Depends On |
+|----------|--------|---------|------------|
+| [MDL Test Framework](proposal-mdl-test-framework.md) | Draft | Testing framework using MDL with javadoc annotations for test definitions | — |
+| [Playwright Testing](proposal-playwright-testing.md) | Proposed | Playwright UI testing + PostgreSQL data validation in generation pipeline | — |
+| [Playwright CLI](proposal-playwright-cli.md) | Draft | Replace generated Playwright tests with direct playwright-cli browser control | Playwright Testing |
+| [Eval Framework](proposal-eval-framework.md) | Partial | Systematic eval for Mendix app generation. Phase 1 (structural checks, scoring) done | Playwright Testing |
+| [GitHub MDL Integration](proposal-github-mdl-integration.md) | Draft | CI workflow validating MDL scripts against real Mendix projects | MDL Test Framework |
+
+```
+MDL Test Framework ◄──── GitHub MDL Integration
+
+Playwright Testing ◄──── Playwright CLI
+        ▲
+        └──── Eval Framework
+```
+
+### VS Code Extension
+
+| Proposal | Status | Summary | Depends On |
+|----------|--------|---------|------------|
+| [VS Code Visualizations](PROPOSAL_vscode_visualizations.md) | Proposed | Visual diagram previews: ER diagrams, flowcharts, wireframes, dependency graphs | — |
+| [Sprotty Visualization](proposal_sprotty_visualization.md) | Draft | Sprotty-based interactive domain model diagrams (PoC) | VS Code Visualizations |
+| [VS Code Search](PROPOSAL_vscode_search.md) | Proposed | Quick Pick full-text search UI + workspace symbol (Ctrl+T) | — |
+
+### Navigation & Visualization
+
+| Proposal | Status | Summary | Depends On |
+|----------|--------|---------|------------|
+| [Navigation Support](navigation-support.md) | Partial | MDL support for navigation profiles, menus, role-based home pages. Parser support started | — |
+| [Architecture Diagram](architecture-diagram-plan.md) | Proposed | Layered architecture diagrams per module (pages, microflows, entities, external services) | Navigation Support |
+| [Journey Architecture Viz](journey-architecture-viz.md) | Proposed | Customer journey visualization with user roles, pages, microflows. Replaced by Architecture Diagram | Navigation Support |
+
+### Runtime & External Integration
+
+| Proposal | Status | Summary | Depends On |
+|----------|--------|---------|------------|
+| [Admin API Runtime](admin_api_runtime.md) | Reference | Technical findings on M2EE admin API and XAS protocol (reverse-engineered endpoints) | — |
+| [Runtime Admin Port](proposal-runtime-admin-port.md) | Proposed | Expose M2EE admin API: hot reload, CSS reload, microflow debugging | Admin API Runtime |
+| [OData Services](odata-services-proposal.md) | Proposed | Consumed + published OData services, external entities | — |
+| [Import Associations](PROPOSAL_import_associations.md) | Draft | LINK clause in IMPORT for mapping source columns to entity associations | — |
+| [Marketplace Modules](PROPOSAL_marketplace_modules.md) | Draft | `mxcli marketplace install/search/info` for downloading marketplace modules | — |
+
+### Infrastructure & Code Quality
+
+| Proposal | Status | Summary | Depends On |
+|----------|--------|---------|------------|
+| [Concurrent Access](PROPOSAL_concurrent_access.md) | Proposed | Project-level file locking for multiple simultaneous mxcli processes | — |
+| [Session Logging](PROPOSAL_session_logging.md) | Proposed | JSON Lines session logging to `~/.mxcli/logs/` for debugging and bug reports | — |
+| [Refactor Large Files](refactor-large-files.md) | Proposed | Split 6 large source files (visitor.go, writer.go, etc.) for maintainability | — |
+| [Starlark Security API](starlark-security.md) | Proposed | Expose entity access rule data to Starlark lint rules | — |
+| [Bulk Widget Property Updates](PROPOSAL_bulk_widget_property_updates.md) | Draft | Bulk find/modify custom widget properties across pages and snippets | — |
+| [Structure Command](mxcli-structure-proposal.md) | Partial | Token-efficient project structure overview. SHOW STRUCTURE exists but some gaps remain | — |
+
+### Documentation & Analysis
+
+| Proposal | Status | Summary | Depends On |
+|----------|--------|---------|------------|
+| [LLM Training Docs](github-for-llms.md) | Proposed | Improve documentation for LLM training: examples, common mistakes, doc index | — |
+| [SDK Equivalence](SDK_EQUIVALENCE.md) | Reference | TypeScript SDK vs Go implementation gap analysis | — |
+| [Missing Capabilities](PROPOSAL_missing_capabilities.md) | Reference | Analysis of unsupported document types (REST, JSON structures, import/export mappings) | — |
+| [Case Study: MxGraphStudioDemo](CASE_STUDY_MxGraphStudioDemo.md) | Reference | Real-world project analysis showing MDL coverage gaps | — |
+
+---
+
+## Archived Proposals (Fully Implemented)
+
+| Proposal | Summary |
+|----------|---------|
+| [Pages V3](archive/proposal_pages_v3.md) | V3 page syntax — current standard |
+| [High-Level API](archive/PROPOSAL_high_level_api.md) | Fluent builder API in `api/` package |
+| [MDL Security](archive/PROPOSAL_mdl_security.md) | Module roles, user roles, access control, GRANT/REVOKE |
+| [Business Events](archive/PROPOSAL_business_events_support.md) | SHOW/DESCRIBE/CREATE/DROP business event services |
+| [Docker Integration](archive/PROPOSAL_mxcli_docker.md) | Docker PAD build/run/check integration |
+| [External SQL](archive/PROPOSAL_mxcli_sql.md) | SQL CONNECT, query, import for PostgreSQL/Oracle/SQL Server |
+| [Workflow Support](archive/PROPOSAL_workflow_support.md) | CREATE/DROP WORKFLOW with all activity types |
+| [Connector Generation](archive/PROPOSAL_generate_connector.md) | SQL GENERATE CONNECTOR from external schema |
+| [LSP Server](archive/lsp-language-server.md) | Language Server Protocol with hover, completion, diagnostics |
+| [Code Search](archive/code-search.md) | SHOW CALLERS/CALLEES/REFERENCES/IMPACT/CONTEXT |
+| [Code Search Implementation](archive/code-search-implementation.md) | References table and cross-reference catalog |
+| [Catalog Tables](archive/catalog-tables.md) | SQLite catalog with SQL querying |
+| [MPK Widget Augmentation](archive/PROPOSAL_mpk_widget_augmentation.md) | Dynamic widget template augmentation from .mpk files |
+| [Page Variables](archive/PROPOSAL_page_variables.md) | Page variable support |
