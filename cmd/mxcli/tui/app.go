@@ -265,6 +265,19 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.views.Push(ov)
 		return a, nil
 
+	case execShowResultMsg:
+		// Pop the ExecView
+		a.views.Pop()
+		// Show result in overlay
+		content := DetectAndHighlight(msg.Content)
+		ov := NewOverlayView("Exec Result", content, a.width, a.height, OverlayViewOpts{})
+		a.views.Push(ov)
+		// If execution succeeded, refresh tree
+		if msg.Success {
+			return a, a.Init()
+		}
+		return a, nil
+
 	case tea.KeyMsg:
 		Trace("app: key=%q picker=%v mode=%v help=%v", msg.String(), a.picker != nil, a.views.Active().Mode(), a.showHelp)
 		if msg.String() == "ctrl+c" {
@@ -506,6 +519,11 @@ func (a *App) handleBrowserAppKeys(msg tea.KeyMsg) tea.Cmd {
 			jumper := NewJumperView(items, a.width, a.height)
 			a.views.Push(jumper)
 		}
+		return func() tea.Msg { return nil }
+
+	case "x":
+		ev := NewExecView(a.mxcliPath, a.activeTabProjectPath(), a.width, a.height)
+		a.views.Push(ev)
 		return func() tea.Msg { return nil }
 
 	case "c":

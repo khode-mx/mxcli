@@ -42,6 +42,7 @@ var (
 		{Key: "t", Label: "tab"},
 		{Key: "T", Label: "new project"},
 		{Key: "1-9", Label: "switch tab"},
+		{Key: "x", Label: "exec"},
 		{Key: "?", Label: "help"},
 	}
 	FilterActiveHints = []Hint{
@@ -62,6 +63,11 @@ var (
 		{Key: "1/2/3", Label: "mode"},
 		{Key: "d", Label: "diff"},
 		{Key: "q", Label: "close"},
+	}
+	ExecViewHints = []Hint{
+		{Key: "Ctrl+E", Label: "execute"},
+		{Key: "Ctrl+O", Label: "open file"},
+		{Key: "Esc", Label: "close"},
 	}
 	DiffViewHints = []Hint{
 		{Key: "j/k", Label: "scroll"},

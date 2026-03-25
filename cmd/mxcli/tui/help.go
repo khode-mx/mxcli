@@ -21,6 +21,7 @@ const helpText = `
     y     copy to clipboard
     r     refresh project tree
     z     zen mode (zoom panel)
+    x     execute MDL script
     Tab   switch MDL / NDSL preview
     t     new tab (same project)
     T     new tab (pick project)

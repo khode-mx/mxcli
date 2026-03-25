@@ -12,6 +12,7 @@ const (
 	ModeDiff
 	ModePicker
 	ModeJumper
+	ModeExec
 )
 
 // String returns a human-readable label for the view mode.
@@ -29,6 +30,8 @@ func (m ViewMode) String() string {
 		return "Picker"
 	case ModeJumper:
 		return "Jump"
+	case ModeExec:
+		return "Exec"
 	default:
 		return "Unknown"
 	}
