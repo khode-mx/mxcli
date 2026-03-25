@@ -79,6 +79,8 @@ func mdlCompletionItems(linePrefixUpper string) []protocol.CompletionItem {
 }
 
 // widgetRegistryCompletions returns completion items for registered widget types.
+// NOTE: Cached via sync.Once — new .def.json files added while the LSP server is
+// running will not appear until the server is restarted.
 var (
 	widgetCompletionsOnce sync.Once
 	widgetCompletionItems []protocol.CompletionItem

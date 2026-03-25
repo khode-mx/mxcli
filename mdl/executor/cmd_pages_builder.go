@@ -34,8 +34,9 @@ type pageBuilder struct {
 	themeRegistry    *ThemeRegistry                     // Theme design property definitions (may be nil)
 
 	// Pluggable widget engine (lazily initialized)
-	widgetRegistry  *WidgetRegistry
-	pluggableEngine *PluggableWidgetEngine
+	widgetRegistry      *WidgetRegistry
+	pluggableEngine     *PluggableWidgetEngine
+	pluggableEngineErr  error // stores init failure reason for better error messages
 
 	// Per-operation caches (may change during execution)
 	layoutsCache    []*pages.Layout
@@ -54,7 +55,8 @@ func (pb *pageBuilder) initPluggableEngine() {
 	}
 	registry, err := NewWidgetRegistry()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: pluggable widget registry init failed: %v\n", err)
+		pb.pluggableEngineErr = fmt.Errorf("widget registry init failed: %w", err)
+		fmt.Fprintf(os.Stderr, "warning: %v\n", pb.pluggableEngineErr)
 		return
 	}
 	if pb.reader != nil {

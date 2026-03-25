@@ -331,6 +331,9 @@ func (pb *pageBuilder) buildWidgetV3(w *ast.WidgetV3) (pages.Widget, error) {
 				return pb.pluggableEngine.Build(def, w)
 			}
 		}
+		if pb.pluggableEngineErr != nil {
+			return nil, fmt.Errorf("unsupported V3 widget type: %s (%v)", w.Type, pb.pluggableEngineErr)
+		}
 		return nil, fmt.Errorf("unsupported V3 widget type: %s", w.Type)
 	}
 

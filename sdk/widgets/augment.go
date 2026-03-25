@@ -5,6 +5,7 @@ package widgets
 import (
 	"encoding/json"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/mendixlabs/mxcli/sdk/widgets/mpk"
 )
@@ -560,20 +561,20 @@ func buildNestedObjectType(children []mpk.PropertyDef) map[string]any {
 
 // --- Helpers ---
 
-// placeholderCounter generates sequential placeholder IDs.
-var placeholderCounter uint32
+// placeholderCounter generates sequential placeholder IDs (atomic for concurrent safety).
+var placeholderCounter atomic.Uint32
 
 // placeholderID generates a placeholder hex ID. These will be remapped by collectIDs
 // in GetTemplateFullBSON, so exact values don't matter — they just need to be unique
 // 32-char hex strings.
 func placeholderID() string {
-	placeholderCounter++
-	return fmt.Sprintf("aa000000000000000000000000%06x", placeholderCounter)
+	n := placeholderCounter.Add(1)
+	return fmt.Sprintf("aa000000000000000000000000%06x", n)
 }
 
 // ResetPlaceholderCounter resets the counter (for testing).
 func ResetPlaceholderCounter() {
-	placeholderCounter = 0
+	placeholderCounter.Store(0)
 }
 
 // getMapField gets a nested map field from a JSON map.

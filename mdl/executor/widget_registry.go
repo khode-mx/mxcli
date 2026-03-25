@@ -109,7 +109,11 @@ func (r *WidgetRegistry) LoadUserDefinitions(projectPath string) error {
 func (r *WidgetRegistry) loadDefinitionsFromDir(dir string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil // directory doesn't exist or not readable — not an error
+		if os.IsNotExist(err) {
+			return nil
+		}
+		fmt.Fprintf(os.Stderr, "warning: cannot read widget definitions from %s: %v\n", dir, err)
+		return nil
 	}
 
 	for _, entry := range entries {
