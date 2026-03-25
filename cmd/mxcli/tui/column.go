@@ -220,8 +220,12 @@ func (c *Column) handleMouse(msg tea.MouseMsg) {
 func (c Column) View() string {
 	var sb strings.Builder
 
-	// Title
-	sb.WriteString(ColumnTitleStyle.Render(c.title))
+	// Title — use accent style when focused
+	titleStyle := ColumnTitleStyle
+	if c.focused {
+		titleStyle = FocusedTitleStyle
+	}
+	sb.WriteString(titleStyle.Render(c.title))
 	sb.WriteString("\n")
 
 	// Filter bar
@@ -241,6 +245,10 @@ func (c Column) View() string {
 	contentWidth := c.width
 	showScrollbar := total > maxVis
 	if showScrollbar {
+		contentWidth--
+	}
+	// Reserve 1 column for focus edge indicator
+	if c.focused {
 		contentWidth--
 	}
 	if contentWidth < 10 {
@@ -264,6 +272,7 @@ func (c Column) View() string {
 
 	scrollThumbStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("63"))
 	scrollTrackStyle := lipgloss.NewStyle().Faint(true)
+	edgeChar := FocusedEdgeStyle.Render(FocusedEdgeChar)
 
 	for vi := range maxVis {
 		idx := c.scrollOffset + vi
@@ -297,10 +306,19 @@ func (c Column) View() string {
 			}
 		}
 
-		// Pad to contentWidth
+		// Focus edge indicator
+		if c.focused {
+			line = edgeChar + line
+		}
+
+		// Pad to contentWidth (plus edge char width)
+		targetWidth := contentWidth
+		if c.focused {
+			targetWidth++ // account for the 1-char edge prefix
+		}
 		lineWidth := lipgloss.Width(line)
-		if lineWidth < contentWidth {
-			line += strings.Repeat(" ", contentWidth-lineWidth)
+		if lineWidth < targetWidth {
+			line += strings.Repeat(" ", targetWidth-lineWidth)
 		}
 
 		// Scrollbar
@@ -318,7 +336,11 @@ func (c Column) View() string {
 		}
 	}
 
-	return sb.String()
+	result := sb.String()
+	if !c.focused {
+		result = lipgloss.NewStyle().Faint(true).Render(result)
+	}
+	return result
 }
 
 // --- Helpers ---

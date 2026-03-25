@@ -32,6 +32,7 @@ var (
 	ListBrowsingHints = []Hint{
 		{Key: "h", Label: "back"},
 		{Key: "l", Label: "open"},
+		{Key: "Space", Label: "jump"},
 		{Key: "/", Label: "filter"},
 		{Key: "Tab", Label: "mdl/ndsl"},
 		{Key: "y", Label: "copy"},
@@ -41,6 +42,8 @@ var (
 		{Key: "t", Label: "tab"},
 		{Key: "T", Label: "new project"},
 		{Key: "1-9", Label: "switch tab"},
+		{Key: "x", Label: "exec"},
+		{Key: "!", Label: "check"},
 		{Key: "?", Label: "help"},
 	}
 	FilterActiveHints = []Hint{
@@ -59,7 +62,20 @@ var (
 		{Key: "/", Label: "search"},
 		{Key: "s", Label: "sync scroll"},
 		{Key: "1/2/3", Label: "mode"},
-		{Key: "d", Label: "diff"},
+		{Key: "D", Label: "diff"},
+		{Key: "q", Label: "close"},
+	}
+	ExecViewHints = []Hint{
+		{Key: "Ctrl+E", Label: "execute"},
+		{Key: "Ctrl+O", Label: "open file"},
+		{Key: "Esc", Label: "close"},
+	}
+	DiffViewHints = []Hint{
+		{Key: "j/k", Label: "scroll"},
+		{Key: "Tab", Label: "mode"},
+		{Key: "]c/[c", Label: "hunk"},
+		{Key: "/", Label: "search"},
+		{Key: "y", Label: "yank"},
 		{Key: "q", Label: "close"},
 	}
 )
@@ -81,7 +97,7 @@ func (h *HintBar) View(width int) string {
 	}
 	items := make([]rendered, len(h.hints))
 	for i, hint := range h.hints {
-		text := HintKeyStyle.Render(hint.Key) + ":" + HintLabelStyle.Render(hint.Label)
+		text := HintKeyStyle.Render(hint.Key) + " " + HintLabelStyle.Render(hint.Label)
 		items[i] = rendered{text: text, width: lipgloss.Width(text)}
 	}
 

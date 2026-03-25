@@ -3,14 +3,18 @@ module github.com/mendixlabs/mxcli
 go 1.26.0
 
 require (
+	github.com/alecthomas/chroma/v2 v2.23.1
 	github.com/antlr4-go/antlr/v4 v4.13.1
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/chzyer/readline v1.5.1
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/jackc/pgx/v5 v5.8.0
+	github.com/mattn/go-runewidth v0.0.19
 	github.com/microsoft/go-mssqldb v1.9.8
 	github.com/pmezard/go-difflib v1.0.0
+	github.com/sergi/go-diff v1.4.0
 	github.com/sijms/go-ora/v2 v2.9.0
 	github.com/spf13/cobra v1.8.0
 	go.lsp.dev/jsonrpc2 v0.10.0
@@ -24,7 +28,6 @@ require (
 )
 
 require (
-	github.com/alecthomas/chroma/v2 v2.23.1 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/charmbracelet/colorprofile v0.4.1 // indirect
@@ -48,7 +51,6 @@ require (
 	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
-	github.com/mattn/go-runewidth v0.0.19 // indirect
 	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/muesli/termenv v0.16.0 // indirect
@@ -56,7 +58,6 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rogpeppe/go-internal v1.6.1 // indirect
-	github.com/sahilm/fuzzy v0.1.1 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect
 	github.com/segmentio/encoding v0.3.4 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect

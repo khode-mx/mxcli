@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -12,6 +13,11 @@ import (
 
 // chromeHeight is the vertical space consumed by tab bar (1) + hint bar (1) + status bar (1).
 const chromeHeight = 3
+
+// handledCmd is returned by handleBrowserAppKeys to signal that a key was
+// consumed without producing a follow-up message.  Using a shared variable
+// avoids allocating a new closure on every handled keystroke.
+var handledCmd tea.Cmd = func() tea.Msg { return nil }
 
 // compareFlashClearMsg is sent 1 s after a clipboard copy in compare view.
 type compareFlashClearMsg struct{}
@@ -26,20 +32,18 @@ type App struct {
 	height    int
 	mxcliPath string
 
-	overlay  Overlay
-	compare  CompareView
+	views    ViewStack
 	showHelp bool
 	picker   *PickerModel // non-nil when cross-project picker is open
 
-	// Overlay switch state
-	overlayQName    string
-	overlayNodeType string
-	overlayIsNDSL   bool
-
 	tabBar        TabBar
-	statusBar     StatusBar
 	hintBar       HintBar
+	statusBar     StatusBar
 	previewEngine *PreviewEngine
+
+	watcher       *Watcher
+	checkErrors   []CheckError // nil = no check run yet, empty = pass
+	checkRunning  bool
 }
 
 // NewApp creates the root App model.
@@ -50,11 +54,12 @@ func NewApp(mxcliPath, projectPath string) App {
 	engine := NewPreviewEngine(mxcliPath, projectPath)
 	tab := NewTab(1, projectPath, engine, nil)
 
+	browserView := NewBrowserView(&tab, mxcliPath, engine)
+
 	app := App{
 		mxcliPath:     mxcliPath,
 		nextTabID:     2,
-		overlay:       NewOverlay(),
-		compare:       NewCompareView(),
+		views:         NewViewStack(browserView),
 		tabBar:        NewTabBar(nil),
 		statusBar:     NewStatusBar(),
 		hintBar:       NewHintBar(ListBrowsingHints),
@@ -65,11 +70,42 @@ func NewApp(mxcliPath, projectPath string) App {
 	return app
 }
 
+// StartWatcher begins watching MPR files for external changes.
+// Call after tea.NewProgram is created but before p.Run().
+func (a *App) StartWatcher(prog *tea.Program) {
+	tab := a.activeTabPtr()
+	if tab == nil {
+		return
+	}
+	mprPath := tab.ProjectPath
+	contentsDir := ""
+	dir := filepath.Dir(mprPath)
+	candidate := filepath.Join(dir, "mprcontents")
+	if stat, err := os.Stat(candidate); err == nil && stat.IsDir() {
+		contentsDir = candidate
+	}
+	w, err := NewWatcher(mprPath, contentsDir, prog)
+	if err != nil {
+		Trace("app: failed to start watcher: %v", err)
+		return
+	}
+	a.watcher = w
+	Trace("app: watcher started for %s (contentsDir=%q)", mprPath, contentsDir)
+}
+
 func (a *App) activeTabPtr() *Tab {
 	if a.activeTab >= 0 && a.activeTab < len(a.tabs) {
 		return &a.tabs[a.activeTab]
 	}
 	return nil
+}
+
+func (a *App) activeTabProjectPath() string {
+	tab := a.activeTabPtr()
+	if tab != nil {
+		return tab.ProjectPath
+	}
+	return ""
 }
 
 func (a *App) syncTabBar() {
@@ -80,38 +116,20 @@ func (a *App) syncTabBar() {
 	a.tabBar.SetTabs(infos)
 }
 
-func (a *App) syncStatusBar() {
+func (a *App) syncBrowserView() {
 	tab := a.activeTabPtr()
 	if tab == nil {
 		return
 	}
-	crumbs := tab.Miller.Breadcrumb()
-	a.statusBar.SetBreadcrumb(crumbs)
-
-	mode := "MDL"
-	if tab.Miller.preview.mode == PreviewNDSL {
-		mode = "NDSL"
+	bv := NewBrowserView(tab, a.mxcliPath, a.previewEngine)
+	bv.allNodes = tab.AllNodes
+	// Ensure miller has current dimensions so scroll calculations in
+	// Update() work correctly (Render operates on a value copy).
+	if a.height > 0 {
+		contentH := max(5, a.height-chromeHeight)
+		bv.miller.SetSize(a.width, contentH)
 	}
-	a.statusBar.SetMode(mode)
-
-	col := tab.Miller.current
-	pos := fmt.Sprintf("%d/%d", col.cursor+1, col.ItemCount())
-	a.statusBar.SetPosition(pos)
-}
-
-func (a *App) syncHintBar() {
-	if a.overlay.IsVisible() {
-		a.hintBar.SetHints(OverlayHints)
-	} else if a.compare.IsVisible() {
-		a.hintBar.SetHints(CompareHints)
-	} else {
-		tab := a.activeTabPtr()
-		if tab != nil && tab.Miller.focusedColumn().IsFilterActive() {
-			a.hintBar.SetHints(FilterActiveHints)
-		} else {
-			a.hintBar.SetHints(ListBrowsingHints)
-		}
-	}
+	a.views.SetBase(bv)
 }
 
 // --- Init ---
@@ -138,39 +156,18 @@ func (a App) Init() tea.Cmd {
 
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case PickerDoneMsg:
-		Trace("app: PickerDoneMsg path=%q", msg.Path)
-		a.picker = nil
-		if msg.Path != "" {
-			SaveHistory(msg.Path)
-			engine := NewPreviewEngine(a.mxcliPath, msg.Path)
-			newTab := NewTab(a.nextTabID, msg.Path, engine, nil)
-			a.nextTabID++
-			a.tabs = append(a.tabs, newTab)
-			a.activeTab = len(a.tabs) - 1
-			a.resizeAll()
-			a.syncTabBar()
-			a.syncStatusBar()
-			a.syncHintBar()
-			// Load project tree for new tab
-			tabID := newTab.ID
-			mxcliPath := a.mxcliPath
-			projectPath := msg.Path
-			return a, func() tea.Msg {
-				out, err := runMxcli(mxcliPath, "project-tree", "-p", projectPath)
-				if err != nil {
-					return LoadTreeMsg{TabID: tabID, Err: err}
-				}
-				nodes, parseErr := ParseTree(out)
-				return LoadTreeMsg{TabID: tabID, Nodes: nodes, Err: parseErr}
-			}
-		}
-		a.syncHintBar()
+	// --- ViewStack navigation ---
+	case PushViewMsg:
+		a.views.Push(msg.View)
+		return a, nil
+	case PopViewMsg:
+		a.views.Pop()
 		return a, nil
 
+	// --- View creation messages ---
 	case OpenOverlayMsg:
-		a.overlay.Show(msg.Title, msg.Content, a.width, a.height)
-		a.syncHintBar()
+		ov := NewOverlayView(msg.Title, msg.Content, a.width, a.height, msg.Opts)
+		a.views.Push(ov)
 		return a, nil
 
 	case OpenImageOverlayMsg:
@@ -197,41 +194,137 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return OpenOverlayMsg{Title: title, Content: content}
 		}
 
+	case JumpToNodeMsg:
+		// Pop the jumper view first
+		a.views.Pop()
+		// Navigate browser to the target node
+		if bv, ok := a.views.Base().(BrowserView); ok {
+			cmd := bv.navigateToNode(msg.QName)
+			a.views.SetBase(bv)
+			if tab := a.activeTabPtr(); tab != nil {
+				tab.Miller = bv.miller
+				tab.UpdateLabel()
+				a.syncTabBar()
+			}
+			return a, cmd
+		}
+		return a, nil
+
+	case DiffOpenMsg:
+		dv := NewDiffView(msg, a.width, a.height)
+		a.views.Push(dv)
+		return a, nil
+
+	case PickerDoneMsg:
+		Trace("app: PickerDoneMsg path=%q", msg.Path)
+		a.picker = nil
+		if msg.Path != "" {
+			SaveHistory(msg.Path)
+			engine := NewPreviewEngine(a.mxcliPath, msg.Path)
+			newTab := NewTab(a.nextTabID, msg.Path, engine, nil)
+			a.nextTabID++
+			a.tabs = append(a.tabs, newTab)
+			a.activeTab = len(a.tabs) - 1
+			a.syncBrowserView()
+			a.syncTabBar()
+			tabID := newTab.ID
+			mxcliPath := a.mxcliPath
+			projectPath := msg.Path
+			return a, func() tea.Msg {
+				out, err := runMxcli(mxcliPath, "project-tree", "-p", projectPath)
+				if err != nil {
+					return LoadTreeMsg{TabID: tabID, Err: err}
+				}
+				nodes, parseErr := ParseTree(out)
+				return LoadTreeMsg{TabID: tabID, Nodes: nodes, Err: parseErr}
+			}
+		}
+		return a, nil
+
 	case CompareLoadMsg:
-		a.compare.SetContent(msg.Side, msg.Title, msg.NodeType, msg.Content)
+		if cv, ok := a.views.Active().(CompareView); ok {
+			cv.SetContent(msg.Side, msg.Title, msg.NodeType, msg.Content)
+			a.views.SetActive(cv)
+		}
 		return a, nil
 
 	case ComparePickMsg:
-		a.compare.SetLoading(msg.Side)
-		return a, a.loadForCompare(msg.QName, msg.NodeType, msg.Side, msg.Kind)
-
-	case CompareReloadMsg:
-		var cmds []tea.Cmd
-		if a.compare.left.qname != "" {
-			a.compare.SetLoading(CompareFocusLeft)
-			cmds = append(cmds, a.loadForCompare(a.compare.left.qname, a.compare.left.nodeType, CompareFocusLeft, msg.Kind))
+		if cv, ok := a.views.Active().(CompareView); ok {
+			cv.SetLoading(msg.Side)
+			a.views.SetActive(cv)
+			return a, cv.loadForCompare(msg.QName, msg.NodeType, msg.Side, msg.Kind)
 		}
-		if a.compare.right.qname != "" {
-			a.compare.SetLoading(CompareFocusRight)
-			cmds = append(cmds, a.loadForCompare(a.compare.right.qname, a.compare.right.nodeType, CompareFocusRight, msg.Kind))
-		}
-		return a, tea.Batch(cmds...)
-
-	case overlayFlashClearMsg:
-		a.overlay.copiedFlash = false
 		return a, nil
 
+	case CompareReloadMsg:
+		if cv, ok := a.views.Active().(CompareView); ok {
+			var cmds []tea.Cmd
+			if cv.left.qname != "" {
+				cv.SetLoading(CompareFocusLeft)
+				cmds = append(cmds, cv.loadForCompare(cv.left.qname, cv.left.nodeType, CompareFocusLeft, msg.Kind))
+			}
+			if cv.right.qname != "" {
+				cv.SetLoading(CompareFocusRight)
+				cmds = append(cmds, cv.loadForCompare(cv.right.qname, cv.right.nodeType, CompareFocusRight, msg.Kind))
+			}
+			a.views.SetActive(cv)
+			return a, tea.Batch(cmds...)
+		}
+		return a, nil
+
+	case overlayFlashClearMsg:
+		// Forward to active view (Overlay handles this internally)
+		updated, cmd := a.views.Active().Update(msg)
+		a.views.SetActive(updated)
+		return a, cmd
+
 	case compareFlashClearMsg:
-		a.compare.copiedFlash = false
+		if cv, ok := a.views.Active().(CompareView); ok {
+			cv.copiedFlash = false
+			a.views.SetActive(cv)
+		}
+		return a, nil
+
+	case overlayContentMsg:
+		updated, cmd := a.views.Active().Update(msg)
+		a.views.SetActive(updated)
+		return a, cmd
+
+	case CmdResultMsg:
+		content := msg.Output
+		if msg.Err != nil {
+			content = "-- Error:\n" + msg.Output
+		}
+		ov := NewOverlayView("Result", DetectAndHighlight(content), a.width, a.height, OverlayViewOpts{})
+		a.views.Push(ov)
+		return a, nil
+
+	case execShowResultMsg:
+		// Pop the ExecView
+		a.views.Pop()
+		// Show result in overlay
+		content := DetectAndHighlight(msg.Content)
+		ov := NewOverlayView("Exec Result", content, a.width, a.height, OverlayViewOpts{})
+		a.views.Push(ov)
+		// If execution succeeded, suppress watcher (self-modification) and refresh tree
+		if msg.Success {
+			if a.watcher != nil {
+				a.watcher.Suppress(2 * time.Second)
+			}
+			return a, a.Init()
+		}
 		return a, nil
 
 	case tea.KeyMsg:
-		Trace("app: key=%q picker=%v overlay=%v compare=%v help=%v", msg.String(), a.picker != nil, a.overlay.IsVisible(), a.compare.IsVisible(), a.showHelp)
+		Trace("app: key=%q picker=%v mode=%v help=%v", msg.String(), a.picker != nil, a.views.Active().Mode(), a.showHelp)
 		if msg.String() == "ctrl+c" {
+			if a.watcher != nil {
+				a.watcher.Close()
+			}
 			return a, tea.Quit
 		}
 
-		// Picker modal
+		// Picker modal (not a View — special case)
 		if a.picker != nil {
 			result, cmd := a.picker.Update(msg)
 			p := result.(PickerModel)
@@ -239,45 +332,49 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, cmd
 		}
 
-		// Fullscreen modes
-		if a.compare.IsVisible() {
-			var cmd tea.Cmd
-			a.compare, cmd = a.compare.Update(msg)
-			if !a.compare.IsVisible() {
-				a.syncHintBar()
-			}
-			return a, cmd
-		}
-		if a.overlay.IsVisible() {
-			if msg.String() == "tab" && a.overlayQName != "" && !a.overlay.content.IsSearching() {
-				a.overlayIsNDSL = !a.overlayIsNDSL
-				if a.overlayIsNDSL {
-					bsonType := inferBsonType(a.overlayNodeType)
-					return a, a.runBsonOverlay(bsonType, a.overlayQName)
-				}
-				return a, a.runMDLOverlay(a.overlayNodeType, a.overlayQName)
-			}
-			var cmd tea.Cmd
-			a.overlay, cmd = a.overlay.Update(msg)
-			if !a.overlay.IsVisible() {
-				a.syncHintBar()
-			}
-			return a, cmd
-		}
+		// Help toggle (global, only in Browser mode)
 		if a.showHelp {
 			a.showHelp = false
 			return a, nil
 		}
+		if msg.String() == "?" && a.views.Active().Mode() == ModeBrowser {
+			a.showHelp = !a.showHelp
+			return a, nil
+		}
 
-		return a.updateNormalMode(msg)
+		// Tab management and app-level keys (only in Browser mode)
+		if a.views.Active().Mode() == ModeBrowser {
+			if cmd := a.handleBrowserAppKeys(msg); cmd != nil {
+				return a, cmd
+			}
+		}
+
+		// Delegate to active view
+		updated, cmd := a.views.Active().Update(msg)
+		a.views.SetActive(updated)
+
+		// Sync tab label if browser view
+		if a.views.Active().Mode() == ModeBrowser {
+			tab := a.activeTabPtr()
+			if tab != nil {
+				if bv, ok := a.views.Active().(BrowserView); ok {
+					tab.Miller = bv.miller
+					tab.UpdateLabel()
+					a.syncTabBar()
+				}
+			}
+		}
+		return a, cmd
 
 	case tea.MouseMsg:
 		Trace("app: mouse x=%d y=%d btn=%v action=%v", msg.X, msg.Y, msg.Button, msg.Action)
-		if a.picker != nil || a.compare.IsVisible() || a.overlay.IsVisible() {
+		if a.picker != nil {
 			return a, nil
 		}
-		// Tab bar clicks (row 0)
-		if msg.Y == 0 && msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+
+		// Tab bar clicks (row 0) — only when in browser mode
+		if msg.Y == 0 && a.views.Active().Mode() == ModeBrowser &&
+			msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
 			if clickMsg := a.tabBar.HandleClick(msg.X); clickMsg != nil {
 				if tc, ok := clickMsg.(TabClickMsg); ok {
 					a.switchToTabByID(tc.ID)
@@ -285,24 +382,57 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
-		// Forward to Miller (offset Y by -1 for tab bar)
-		tab := a.activeTabPtr()
-		if tab != nil {
-			millerMsg := tea.MouseMsg{
+
+		// Status bar clicks (last line) — breadcrumb navigation
+		if msg.Y == a.height-1 && a.views.Active().Mode() == ModeBrowser &&
+			msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			if depth, ok := a.statusBar.HitTest(msg.X); ok {
+				if bv, ok := a.views.Active().(BrowserView); ok {
+					var cmd tea.Cmd
+					bv.miller, cmd = bv.miller.goBackToDepth(depth)
+					a.views.SetActive(bv)
+					if tab := a.activeTabPtr(); tab != nil {
+						tab.Miller = bv.miller
+						tab.UpdateLabel()
+						a.syncTabBar()
+					}
+					return a, cmd
+				}
+			}
+		}
+
+		// Offset Y by -1 for tab bar when in browser mode
+		if a.views.Active().Mode() == ModeBrowser {
+			offsetMsg := tea.MouseMsg{
 				X: msg.X, Y: msg.Y - 1,
 				Button: msg.Button, Action: msg.Action,
 			}
-			var cmd tea.Cmd
-			tab.Miller, cmd = tab.Miller.Update(millerMsg)
-			a.syncStatusBar()
+			updated, cmd := a.views.Active().Update(offsetMsg)
+			a.views.SetActive(updated)
 			return a, cmd
 		}
+
+		// Forward to active view
+		updated, cmd := a.views.Active().Update(msg)
+		a.views.SetActive(updated)
+		return a, cmd
 
 	case tea.WindowSizeMsg:
 		Trace("app: resize %dx%d", msg.Width, msg.Height)
 		a.width = msg.Width
 		a.height = msg.Height
-		a.resizeAll()
+		// Propagate content dimensions to the browser view so that
+		// subsequent Update() calls use correct column heights for
+		// scroll calculations (Render operates on a copy and cannot
+		// persist dimensions back).
+		if bv, ok := a.views.Active().(BrowserView); ok {
+			contentH := a.height - chromeHeight
+			if contentH < 5 {
+				contentH = 5
+			}
+			bv.miller.SetSize(a.width, contentH)
+			a.views.SetActive(bv)
+		}
 		return a, nil
 
 	case LoadTreeMsg:
@@ -312,74 +442,116 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if tab != nil {
 				tab.AllNodes = msg.Nodes
 				tab.Miller.SetRootNodes(msg.Nodes)
-				a.compare.SetItems(flattenQualifiedNames(msg.Nodes))
-				a.syncStatusBar()
 				a.syncTabBar()
+				// Update browser view if it's the base
+				if bv, ok := a.views.Base().(BrowserView); ok {
+					bv.allNodes = msg.Nodes
+					bv.miller = tab.Miller
+					if a.height > 0 {
+						contentH := max(5, a.height-chromeHeight)
+						bv.miller.SetSize(a.width, contentH)
+					}
+					a.views.SetBase(bv)
+				}
 			}
 		}
+		return a, nil
 
-	case PreviewReadyMsg, PreviewLoadingMsg, CursorChangedMsg, animTickMsg:
-		tab := a.activeTabPtr()
-		if tab != nil {
-			var cmd tea.Cmd
-			tab.Miller, cmd = tab.Miller.Update(msg)
-			a.syncStatusBar()
+	case MprChangedMsg:
+		Trace("app: MprChangedMsg — refreshing tree and running mx check")
+		a.previewEngine.ClearCache()
+		projectPath := a.activeTabProjectPath()
+		return a, tea.Batch(a.Init(), runMxCheck(projectPath))
+
+	case MxCheckRerunMsg:
+		Trace("app: manual mx check rerun requested")
+		projectPath := a.activeTabProjectPath()
+		return a, runMxCheck(projectPath)
+
+	case MxCheckStartMsg:
+		a.checkRunning = true
+		// Update check overlay content if it's currently visible
+		if ov, ok := a.views.Active().(OverlayView); ok && ov.refreshable {
+			ov.overlay.Show("mx check", CheckRunningStyle.Render("⟳ Running mx check..."), ov.overlay.width, ov.overlay.height)
+			a.views.SetActive(ov)
+		}
+		return a, nil
+
+	case MxCheckResultMsg:
+		a.checkRunning = false
+		if msg.Err != nil {
+			Trace("app: mx check error: %v", msg.Err)
+			a.checkErrors = nil
+		} else {
+			a.checkErrors = msg.Errors
+			Trace("app: mx check done: %d diagnostics", len(msg.Errors))
+		}
+		// Update check overlay content if it's currently visible
+		if ov, ok := a.views.Active().(OverlayView); ok && ov.refreshable {
+			content := renderCheckResults(a.checkErrors)
+			ov.overlay.Show("mx check", content, ov.overlay.width, ov.overlay.height)
+			a.views.SetActive(ov)
+		}
+		return a, nil
+
+	case PreviewReadyMsg, PreviewLoadingMsg, CursorChangedMsg, animTickMsg, previewDebounceMsg:
+		if a.views.Active().Mode() == ModeBrowser {
+			updated, cmd := a.views.Active().Update(msg)
+			a.views.SetActive(updated)
+			// Sync miller back to tab
+			if bv, ok := updated.(BrowserView); ok {
+				tab := a.activeTabPtr()
+				if tab != nil {
+					tab.Miller = bv.miller
+				}
+			}
 			return a, cmd
 		}
+		return a, nil
 
-	case CmdResultMsg:
-		content := msg.Output
-		if msg.Err != nil {
-			content = "-- Error:\n" + msg.Output
-		}
-		a.overlayQName = ""
-		a.overlay.switchable = false
-		a.overlay.Show("Result", DetectAndHighlight(content), a.width, a.height)
-		a.syncHintBar()
-	}
-	return a, nil
-}
-
-func (a App) updateNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	tab := a.activeTabPtr()
-
-	// If filter is active, forward to miller
-	if tab != nil && tab.Miller.focusedColumn().IsFilterActive() {
-		var cmd tea.Cmd
-		tab.Miller, cmd = tab.Miller.Update(msg)
-		a.syncHintBar()
-		a.syncStatusBar()
+	default:
+		// Forward everything else to active view
+		updated, cmd := a.views.Active().Update(msg)
+		a.views.SetActive(updated)
 		return a, cmd
 	}
+}
+
+// handleBrowserAppKeys handles keys that App intercepts when in Browser mode.
+// Returns a non-nil tea.Cmd if the key was handled, nil if the key should
+// be forwarded to the active view.
+func (a *App) handleBrowserAppKeys(msg tea.KeyMsg) tea.Cmd {
+	tab := a.activeTabPtr()
 
 	switch msg.String() {
 	case "q":
+		if a.watcher != nil {
+			a.watcher.Close()
+		}
 		for i := range a.tabs {
 			a.tabs[i].Miller.previewEngine.Cancel()
 		}
 		CloseTrace()
-		return a, tea.Quit
-	case "?":
-		a.showHelp = !a.showHelp
-		return a, nil
+		return tea.Quit
 
-	// Tab management
 	case "t":
 		if tab != nil {
 			newTab := tab.CloneTab(a.nextTabID, a.previewEngine)
 			a.nextTabID++
 			a.tabs = append(a.tabs, newTab)
 			a.activeTab = len(a.tabs) - 1
+			a.syncBrowserView()
 			a.syncTabBar()
-			a.syncStatusBar()
 		}
-		return a, nil
+		return handledCmd
+
 	case "T":
 		p := NewEmbeddedPicker()
 		p.width = a.width
 		p.height = a.height
 		a.picker = &p
-		return a, nil
+		return handledCmd
+
 	case "W":
 		if len(a.tabs) > 1 {
 			a.tabs[a.activeTab].Miller.previewEngine.Cancel()
@@ -387,100 +559,80 @@ func (a App) updateNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if a.activeTab >= len(a.tabs) {
 				a.activeTab = len(a.tabs) - 1
 			}
-			a.resizeAll()
+			a.syncBrowserView()
 			a.syncTabBar()
-			a.syncStatusBar()
 		}
-		return a, nil
+		return handledCmd
+
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 		idx := int(msg.String()[0]-'0') - 1
 		if idx >= 0 && idx < len(a.tabs) {
 			a.activeTab = idx
-			a.resizeAll()
+			a.syncBrowserView()
 			a.syncTabBar()
-			a.syncStatusBar()
 		}
-		return a, nil
+		return handledCmd
+
 	case "[":
 		if a.activeTab > 0 {
 			a.activeTab--
-			a.resizeAll()
+			a.syncBrowserView()
 			a.syncTabBar()
-			a.syncStatusBar()
 		}
-		return a, nil
+		return handledCmd
+
 	case "]":
 		if a.activeTab < len(a.tabs)-1 {
 			a.activeTab++
-			a.resizeAll()
+			a.syncBrowserView()
 			a.syncTabBar()
-			a.syncStatusBar()
 		}
-		return a, nil
+		return handledCmd
 
-	// Actions on selected node
-	case "b":
-		if tab != nil {
-			if node := tab.Miller.SelectedNode(); node != nil && node.QualifiedName != "" {
-				if bsonType := inferBsonType(node.Type); bsonType != "" {
-					a.overlayQName = node.QualifiedName
-					a.overlayNodeType = node.Type
-					a.overlayIsNDSL = true
-					a.overlay.switchable = true
-					return a, a.runBsonOverlay(bsonType, node.QualifiedName)
-				}
-			}
-		}
-	case "m":
-		if tab != nil {
-			if node := tab.Miller.SelectedNode(); node != nil && node.QualifiedName != "" {
-				a.overlayQName = node.QualifiedName
-				a.overlayNodeType = node.Type
-				a.overlayIsNDSL = false
-				a.overlay.switchable = true
-				return a, a.runMDLOverlay(node.Type, node.QualifiedName)
-			}
-		}
-	case "c":
-		a.compare.Show(CompareNDSL, a.width, a.height)
-		if tab != nil {
-			a.compare.SetItems(flattenQualifiedNames(tab.AllNodes))
-			if node := tab.Miller.SelectedNode(); node != nil && node.QualifiedName != "" {
-				a.compare.SetLoading(CompareFocusLeft)
-				a.syncHintBar()
-				return a, a.loadBsonNDSL(node.QualifiedName, node.Type, CompareFocusLeft)
-			}
-		}
-		a.syncHintBar()
-		return a, nil
-	case "d":
-		if tab != nil {
-			if node := tab.Miller.SelectedNode(); node != nil && node.QualifiedName != "" {
-				return a, a.openDiagram(node.Type, node.QualifiedName)
-			}
-		}
-	case "y":
-		// Copy preview content to clipboard
-		if tab != nil && tab.Miller.preview.content != "" {
-			raw := stripAnsi(tab.Miller.preview.content)
-			_ = writeClipboard(raw)
-		}
-		return a, nil
 	case "r":
-		return a, a.Init()
+		return a.Init()
+
+	case " ":
+		if tab != nil {
+			items := flattenQualifiedNames(tab.AllNodes)
+			jumper := NewJumperView(items, a.width, a.height)
+			a.views.Push(jumper)
+		}
+		return handledCmd
+
+	case "x":
+		ev := NewExecView(a.mxcliPath, a.activeTabProjectPath(), a.width, a.height)
+		a.views.Push(ev)
+		return handledCmd
+
+	case "!", "\\!": // some terminals send "\\!" for shifted-1; accept both forms
+		content := renderCheckResults(a.checkErrors)
+		ov := NewOverlayView("mx check", content, a.width, a.height, OverlayViewOpts{
+			HideLineNumbers: true,
+			Refreshable:     true,
+			RefreshMsg:      MxCheckRerunMsg{},
+		})
+		a.views.Push(ov)
+		return handledCmd
+
+	case "c":
+		cv := NewCompareView()
+		cv.mxcliPath = a.mxcliPath
+		cv.projectPath = a.activeTabProjectPath()
+		cv.Show(CompareNDSL, a.width, a.height)
+		if tab != nil {
+			cv.SetItems(flattenQualifiedNames(tab.AllNodes))
+			if node := tab.Miller.SelectedNode(); node != nil && node.QualifiedName != "" {
+				cv.SetLoading(CompareFocusLeft)
+				a.views.Push(cv)
+				return cv.loadBsonNDSL(node.QualifiedName, node.Type, CompareFocusLeft)
+			}
+		}
+		a.views.Push(cv)
+		return handledCmd
 	}
 
-	// Forward to Miller
-	if tab != nil {
-		var cmd tea.Cmd
-		tab.Miller, cmd = tab.Miller.Update(msg)
-		tab.UpdateLabel()
-		a.syncTabBar()
-		a.syncStatusBar()
-		a.syncHintBar()
-		return a, cmd
-	}
-	return a, nil
+	return nil
 }
 
 func (a *App) findTabByID(id int) *Tab {
@@ -496,25 +648,10 @@ func (a *App) switchToTabByID(id int) {
 	for i, t := range a.tabs {
 		if t.ID == id {
 			a.activeTab = i
-			a.resizeAll()
+			a.syncBrowserView()
 			a.syncTabBar()
-			a.syncStatusBar()
 			return
 		}
-	}
-}
-
-func (a *App) resizeAll() {
-	if a.width == 0 || a.height == 0 {
-		return
-	}
-	millerH := a.height - chromeHeight
-	if millerH < 5 {
-		millerH = 5
-	}
-	tab := a.activeTabPtr()
-	if tab != nil {
-		tab.Miller.SetSize(a.width, millerH)
 	}
 }
 
@@ -528,37 +665,71 @@ func (a App) View() string {
 	if a.picker != nil {
 		return a.picker.View()
 	}
-	if a.compare.IsVisible() {
-		return a.compare.View()
-	}
-	if a.overlay.IsVisible() {
-		return a.overlay.View()
+
+	active := a.views.Active()
+
+	// For non-browser views, delegate rendering entirely
+	if active.Mode() != ModeBrowser {
+		contentH := a.height
+		content := active.Render(a.width, contentH)
+
+		if a.showHelp {
+			helpView := renderHelp(a.width, a.height)
+			content = lipgloss.Place(a.width, a.height, lipgloss.Center, lipgloss.Center, helpView,
+				lipgloss.WithWhitespaceBackground(lipgloss.Color("0")))
+		}
+
+		return content
 	}
 
-	a.syncStatusBar()
+	// Browser mode: App renders chrome (tab bar, hint bar, status bar)
 
-	// Tab bar (line 1)
+	// Tab bar (line 1) with mode badge + context summary on the right
 	tabLine := a.tabBar.View(a.width)
-
-	// Miller columns (main area)
-	millerH := a.height - chromeHeight
-	if millerH < 5 {
-		millerH = 5
-	}
 	tab := a.activeTabPtr()
-	var millerView string
 	if tab != nil {
-		tab.Miller.SetSize(a.width, millerH)
-		millerView = tab.Miller.View()
-	} else {
-		millerView = strings.Repeat("\n", millerH-1)
+		modeBadge := AccentStyle.Render(active.Mode().String())
+		summary := renderContextSummary(tab.AllNodes)
+		rightSide := modeBadge
+		if summary != "" {
+			rightSide += BreadcrumbDimStyle.Render(" │ ") + BreadcrumbDimStyle.Render(summary)
+		}
+		rightWidth := lipgloss.Width(rightSide) + 1 // 1 char right padding
+		tabWidth := lipgloss.Width(tabLine)
+		if tabWidth+rightWidth <= a.width {
+			// Replace trailing spaces with gap + right side
+			trimmed := strings.TrimRight(tabLine, " ")
+			trimmedWidth := lipgloss.Width(trimmed)
+			gap := a.width - trimmedWidth - rightWidth
+			if gap < 2 {
+				gap = 2
+			}
+			tabLine = trimmed + strings.Repeat(" ", gap) + rightSide + " "
+		}
 	}
 
-	// Hint bar + Status bar (bottom 2 lines)
+	// Content area
+	contentH := a.height - chromeHeight
+	if contentH < 5 {
+		contentH = 5
+	}
+	content := active.Render(a.width, contentH)
+
+	// Hint bar — declarative from active view
+	a.hintBar.SetHints(active.Hints())
 	hintLine := a.hintBar.View(a.width)
+
+	// Status bar — declarative from active view
+	info := active.StatusInfo()
+	a.statusBar.SetBreadcrumb(info.Breadcrumb)
+	a.statusBar.SetPosition(info.Position)
+	a.statusBar.SetMode(info.Mode)
+	a.statusBar.SetCheckBadge(formatCheckBadge(a.checkErrors, a.checkRunning))
+	viewModeNames := a.collectViewModeNames()
+	a.statusBar.SetViewDepth(a.views.Depth(), viewModeNames)
 	statusLine := StatusBarStyle.Width(a.width).Render(a.statusBar.View(a.width))
 
-	rendered := tabLine + "\n" + millerView + "\n" + hintLine + "\n" + statusLine
+	rendered := tabLine + "\n" + content + "\n" + hintLine + "\n" + statusLine
 
 	if a.showHelp {
 		helpView := renderHelp(a.width, a.height)
@@ -569,37 +740,7 @@ func (a App) View() string {
 	return rendered
 }
 
-// --- Load helpers (ported from old model.go) ---
-
-func (a App) openDiagram(nodeType, qualifiedName string) tea.Cmd {
-	tab := a.activeTabPtr()
-	if tab == nil {
-		return nil
-	}
-	mxcliPath := a.mxcliPath
-	projectPath := tab.ProjectPath
-	return func() tea.Msg {
-		out, err := runMxcli(mxcliPath, "describe", "-p", projectPath,
-			"--format", "elk", nodeType, qualifiedName)
-		if err != nil {
-			return CmdResultMsg{Output: out, Err: err}
-		}
-		htmlContent := buildDiagramHTML(out, nodeType, qualifiedName)
-		tmpFile, err := os.CreateTemp("", "mxcli-diagram-*.html")
-		if err != nil {
-			return CmdResultMsg{Err: err}
-		}
-		if _, err := tmpFile.WriteString(htmlContent); err != nil {
-			tmpFile.Close()
-			return CmdResultMsg{Err: fmt.Errorf("writing diagram HTML: %w", err)}
-		}
-		tmpFile.Close()
-		tmpPath := tmpFile.Name()
-		openBrowser(tmpPath)
-		time.AfterFunc(30*time.Second, func() { os.Remove(tmpPath) })
-		return CmdResultMsg{Output: fmt.Sprintf("Opened diagram: %s", tmpPath)}
-	}
-}
+// --- Load helpers ---
 
 func buildDiagramHTML(elkJSON, nodeType, qualifiedName string) string {
 	return fmt.Sprintf(`<!DOCTYPE html>
@@ -616,105 +757,66 @@ ELK.layout(elkData).then(graph=>{
 </script></body></html>`, nodeType, qualifiedName, elkJSON)
 }
 
-func (a App) loadBsonNDSL(qname, nodeType string, side CompareFocus) tea.Cmd {
-	tab := a.activeTabPtr()
-	if tab == nil {
-		return nil
-	}
-	mxcliPath := a.mxcliPath
-	projectPath := tab.ProjectPath
-	return func() tea.Msg {
-		bsonType := inferBsonType(nodeType)
-		if bsonType == "" {
-			return CompareLoadMsg{Side: side, Title: qname, NodeType: nodeType,
-				Content: fmt.Sprintf("Error: type %q not supported for BSON dump", nodeType),
-				Err: fmt.Errorf("unsupported type")}
-		}
-		args := []string{"bson", "dump", "-p", projectPath, "--format", "ndsl",
-			"--type", bsonType, "--object", qname}
-		out, err := runMxcli(mxcliPath, args...)
-		out = StripBanner(out)
-		if err != nil {
-			return CompareLoadMsg{Side: side, Title: qname, NodeType: nodeType, Content: "Error: " + out, Err: err}
-		}
-		return CompareLoadMsg{Side: side, Title: qname, NodeType: nodeType, Content: HighlightNDSL(out)}
-	}
-}
-
-func (a App) loadMDL(qname, nodeType string, side CompareFocus) tea.Cmd {
-	tab := a.activeTabPtr()
-	if tab == nil {
-		return nil
-	}
-	mxcliPath := a.mxcliPath
-	projectPath := tab.ProjectPath
-	return func() tea.Msg {
-		out, err := runMxcli(mxcliPath, "-p", projectPath, "-c", buildDescribeCmd(nodeType, qname))
-		out = StripBanner(out)
-		if err != nil {
-			return CompareLoadMsg{Side: side, Title: qname, NodeType: nodeType, Content: "Error: " + out, Err: err}
-		}
-		return CompareLoadMsg{Side: side, Title: qname, NodeType: nodeType, Content: DetectAndHighlight(out)}
-	}
-}
-
-func (a App) loadForCompare(qname, nodeType string, side CompareFocus, kind CompareKind) tea.Cmd {
-	switch kind {
-	case CompareNDSL:
-		return a.loadBsonNDSL(qname, nodeType, side)
-	case CompareNDSLMDL:
-		if side == CompareFocusLeft {
-			return a.loadBsonNDSL(qname, nodeType, side)
-		}
-		return a.loadMDL(qname, nodeType, side)
-	case CompareMDL:
-		return a.loadMDL(qname, nodeType, side)
-	}
-	return nil
-}
-
-func (a App) runBsonOverlay(bsonType, qname string) tea.Cmd {
-	tab := a.activeTabPtr()
-	if tab == nil {
-		return nil
-	}
-	mxcliPath := a.mxcliPath
-	projectPath := tab.ProjectPath
-	return func() tea.Msg {
-		args := []string{"bson", "dump", "-p", projectPath, "--format", "ndsl",
-			"--type", bsonType, "--object", qname}
-		out, err := runMxcli(mxcliPath, args...)
-		out = StripBanner(out)
-		title := fmt.Sprintf("BSON: %s", qname)
-		if err != nil {
-			return OpenOverlayMsg{Title: title, Content: "Error: " + out}
-		}
-		return OpenOverlayMsg{Title: title, Content: HighlightNDSL(out)}
-	}
-}
-
-func (a App) runMDLOverlay(nodeType, qname string) tea.Cmd {
-	tab := a.activeTabPtr()
-	if tab == nil {
-		return nil
-	}
-	mxcliPath := a.mxcliPath
-	projectPath := tab.ProjectPath
-	return func() tea.Msg {
-		out, err := runMxcli(mxcliPath, "-p", projectPath, "-c", buildDescribeCmd(nodeType, qname))
-		out = StripBanner(out)
-		title := fmt.Sprintf("MDL: %s", qname)
-		if err != nil {
-			return OpenOverlayMsg{Title: title, Content: "Error: " + out}
-		}
-		return OpenOverlayMsg{Title: title, Content: DetectAndHighlight(out)}
-	}
-}
-
 // CmdResultMsg carries output from any mxcli command.
 type CmdResultMsg struct {
 	Output string
 	Err    error
+}
+
+// irregularPlurals maps singular type names to their correct plural forms
+// for types where simply appending "s" produces incorrect English.
+var irregularPlurals = map[string]string{
+	"Index": "indexes",
+}
+
+// renderContextSummary counts top-level node types and returns a compact summary.
+func renderContextSummary(nodes []*TreeNode) string {
+	if len(nodes) == 0 {
+		return ""
+	}
+	counts := map[string]int{}
+	for _, n := range nodes {
+		counts[n.Type]++
+	}
+	// Display in a predictable order
+	order := []struct {
+		key    string
+		plural string
+	}{
+		{"Module", "modules"},
+		{"Entity", "entities"},
+		{"Microflow", "microflows"},
+		{"Page", "pages"},
+		{"Nanoflow", "nanoflows"},
+		{"Enumeration", "enumerations"},
+	}
+	var parts []string
+	used := map[string]bool{}
+	for _, o := range order {
+		if c, ok := counts[o.key]; ok {
+			parts = append(parts, fmt.Sprintf("%d %s", c, o.plural))
+			used[o.key] = true
+		}
+	}
+	// Add remaining types not in the predefined order
+	for k, c := range counts {
+		if !used[k] {
+			plural, ok := irregularPlurals[k]
+			if !ok {
+				plural = strings.ToLower(k) + "s"
+			}
+			parts = append(parts, fmt.Sprintf("%d %s", c, plural))
+		}
+	}
+	if len(parts) > 3 {
+		parts = parts[:3]
+	}
+	return strings.Join(parts, ", ")
+}
+
+// collectViewModeNames returns the mode names for all views in the stack.
+func (a App) collectViewModeNames() []string {
+	return a.views.ModeNames()
 }
 
 // inferBsonType maps tree node types to valid bson object types.
@@ -726,5 +828,26 @@ func inferBsonType(nodeType string) string {
 		return strings.ToLower(nodeType)
 	default:
 		return ""
+	}
+}
+
+// loadBsonNDSL runs mxcli bson dump in NDSL format and returns a CompareLoadMsg.
+// Shared by BrowserView and CompareView to avoid duplicate implementations.
+func loadBsonNDSL(mxcliPath, projectPath, qname, nodeType string, side CompareFocus) tea.Cmd {
+	return func() tea.Msg {
+		bsonType := inferBsonType(nodeType)
+		if bsonType == "" {
+			return CompareLoadMsg{Side: side, Title: qname, NodeType: nodeType,
+				Content: fmt.Sprintf("Error: type %q not supported for BSON dump", nodeType),
+				Err:     fmt.Errorf("unsupported type")}
+		}
+		args := []string{"bson", "dump", "-p", projectPath, "--format", "ndsl",
+			"--type", bsonType, "--object", qname}
+		out, err := runMxcli(mxcliPath, args...)
+		out = StripBanner(out)
+		if err != nil {
+			return CompareLoadMsg{Side: side, Title: qname, NodeType: nodeType, Content: "Error: " + out, Err: err}
+		}
+		return CompareLoadMsg{Side: side, Title: qname, NodeType: nodeType, Content: HighlightNDSL(out)}
 	}
 }

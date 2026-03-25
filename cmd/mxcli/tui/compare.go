@@ -74,7 +74,6 @@ func (p comparePane) lineInfo() string {
 
 // CompareView is a side-by-side comparison overlay (lazygit-style).
 type CompareView struct {
-	visible      bool
 	kind         CompareKind
 	focus        CompareFocus
 	left         comparePane
@@ -83,21 +82,17 @@ type CompareView struct {
 	copiedFlash  bool
 
 	// Fuzzy picker
-	picker        bool
-	pickerInput   textinput.Model
-	pickerItems   []PickerItem
-	pickerMatches []pickerMatch
-	pickerCursor  int
-	pickerOffset  int
-	pickerSide    CompareFocus
+	picker      bool
+	pickerInput textinput.Model
+	pickerList  FuzzyList
+	pickerSide  CompareFocus
+
+	// Self-contained operation (for View interface)
+	mxcliPath   string
+	projectPath string
 
 	width  int
 	height int
-}
-
-type pickerMatch struct {
-	item  PickerItem
-	score int
 }
 
 const pickerMaxShow = 12
@@ -111,7 +106,6 @@ func NewCompareView() CompareView {
 }
 
 func (c *CompareView) Show(kind CompareKind, w, h int) {
-	c.visible = true
 	c.kind = kind
 	c.focus = CompareFocusLeft
 	c.width = w
@@ -135,9 +129,7 @@ func (c CompareView) paneDimensions() (int, int) {
 	return pw, ph
 }
 
-func (c *CompareView) Hide()              { c.visible = false; c.picker = false }
-func (c CompareView) IsVisible() bool     { return c.visible }
-func (c *CompareView) SetItems(items []PickerItem) { c.pickerItems = items }
+func (c *CompareView) SetItems(items []PickerItem) { c.pickerList = NewFuzzyList(items, pickerMaxShow) }
 
 func (c *CompareView) SetContent(side CompareFocus, title, nodeType, content string) {
 	p := c.pane(side)
@@ -178,77 +170,16 @@ func (c *CompareView) openPicker() {
 	c.pickerSide = c.focus
 	c.pickerInput.SetValue("")
 	c.pickerInput.Focus()
-	c.pickerCursor = 0
-	c.pickerOffset = 0
-	c.filterPicker()
+	c.pickerList.Cursor = 0
+	c.pickerList.Offset = 0
+	c.pickerList.Filter("")
 }
 
 func (c *CompareView) closePicker() { c.picker = false; c.pickerInput.Blur() }
 
-func (c *CompareView) filterPicker() {
-	query := strings.TrimSpace(c.pickerInput.Value())
-	c.pickerMatches = nil
-	for _, it := range c.pickerItems {
-		if query == "" {
-			c.pickerMatches = append(c.pickerMatches, pickerMatch{item: it})
-			continue
-		}
-		if ok, sc := fuzzyScore(it.QName, query); ok {
-			c.pickerMatches = append(c.pickerMatches, pickerMatch{item: it, score: sc})
-		}
-	}
-	// Sort by score descending (insertion sort, small n)
-	for i := 1; i < len(c.pickerMatches); i++ {
-		for j := i; j > 0 && c.pickerMatches[j].score > c.pickerMatches[j-1].score; j-- {
-			c.pickerMatches[j], c.pickerMatches[j-1] = c.pickerMatches[j-1], c.pickerMatches[j]
-		}
-	}
-	if c.pickerCursor >= len(c.pickerMatches) {
-		c.pickerCursor = max(0, len(c.pickerMatches)-1)
-	}
-	c.pickerOffset = 0
-}
-
-func (c *CompareView) pickerDown() {
-	if len(c.pickerMatches) == 0 {
-		return
-	}
-	c.pickerCursor++
-	if c.pickerCursor >= len(c.pickerMatches) {
-		c.pickerCursor = 0
-		c.pickerOffset = 0
-	} else if c.pickerCursor >= c.pickerOffset+pickerMaxShow {
-		c.pickerOffset = c.pickerCursor - pickerMaxShow + 1
-	}
-}
-
-func (c *CompareView) pickerUp() {
-	if len(c.pickerMatches) == 0 {
-		return
-	}
-	c.pickerCursor--
-	if c.pickerCursor < 0 {
-		c.pickerCursor = len(c.pickerMatches) - 1
-		c.pickerOffset = max(0, c.pickerCursor-pickerMaxShow+1)
-	} else if c.pickerCursor < c.pickerOffset {
-		c.pickerOffset = c.pickerCursor
-	}
-}
-
-func (c CompareView) pickerSelected() PickerItem {
-	if len(c.pickerMatches) == 0 || c.pickerCursor >= len(c.pickerMatches) {
-		return PickerItem{}
-	}
-	return c.pickerMatches[c.pickerCursor].item
-}
-
 // --- Update ---
 
-func (c CompareView) Update(msg tea.Msg) (CompareView, tea.Cmd) {
-	if !c.visible {
-		return c, nil
-	}
-
+func (c CompareView) updateInternal(msg tea.Msg) (CompareView, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		if c.picker {
@@ -278,7 +209,7 @@ func (c CompareView) updatePicker(msg tea.KeyMsg) (CompareView, tea.Cmd) {
 		c.closePicker()
 		return c, nil
 	case "enter":
-		selected := c.pickerSelected()
+		selected := c.pickerList.Selected()
 		c.closePicker()
 		if selected.QName != "" {
 			return c, func() tea.Msg {
@@ -287,13 +218,13 @@ func (c CompareView) updatePicker(msg tea.KeyMsg) (CompareView, tea.Cmd) {
 		}
 		return c, nil
 	case "up", "ctrl+p":
-		c.pickerUp()
+		c.pickerList.MoveUp()
 	case "down", "ctrl+n":
-		c.pickerDown()
+		c.pickerList.MoveDown()
 	default:
 		var cmd tea.Cmd
 		c.pickerInput, cmd = c.pickerInput.Update(msg)
-		c.filterPicker()
+		c.pickerList.Filter(c.pickerInput.Value())
 		return c, cmd
 	}
 	return c, nil
@@ -310,8 +241,7 @@ func (c CompareView) updateNormal(msg tea.KeyMsg) (CompareView, tea.Cmd) {
 
 	switch msg.String() {
 	case "esc", "q":
-		c.visible = false
-		return c, nil
+		return c, func() tea.Msg { return PopViewMsg{} }
 
 	// Focus switching — lazygit style: Tab only
 	case "tab":
@@ -338,6 +268,24 @@ func (c CompareView) updateNormal(msg tea.KeyMsg) (CompareView, tea.Cmd) {
 		c.kind = CompareMDL
 		return c, c.emitReload()
 
+	// Diff view — open DiffView with left vs right content
+	case "D":
+		leftText := c.left.content.PlainText()
+		rightText := c.right.content.PlainText()
+		if leftText != "" && rightText != "" {
+			leftTitle := c.left.title
+			rightTitle := c.right.title
+			return c, func() tea.Msg {
+				return DiffOpenMsg{
+					OldText:  leftText,
+					NewText:  rightText,
+					Language: "",
+					Title:    fmt.Sprintf("Diff: %s vs %s", leftTitle, rightTitle),
+				}
+			}
+		}
+		return c, nil
+
 	// Refresh both panes
 	case "r":
 		return c, c.emitReload()
@@ -351,10 +299,7 @@ func (c CompareView) updateNormal(msg tea.KeyMsg) (CompareView, tea.Cmd) {
 	case "y":
 		_ = writeClipboard(c.focusedPane().content.PlainText())
 		c.copiedFlash = true
-		return c, func() tea.Msg {
-			time.Sleep(time.Second)
-			return compareFlashClearMsg{}
-		}
+		return c, tea.Tick(time.Second, func(_ time.Time) tea.Msg { return compareFlashClearMsg{} })
 
 	// Scroll — forward j/k/arrows/pgup/pgdn/g/G to focused viewport
 	default:
@@ -405,10 +350,6 @@ func (c *CompareView) syncOtherPane() {
 // --- View ---
 
 func (c CompareView) View() string {
-	if !c.visible {
-		return ""
-	}
-
 	pw, _ := c.paneDimensions()
 
 	// Pane rendering
@@ -499,6 +440,7 @@ func (c CompareView) renderStatusBar() string {
 	if si := c.focusedPane().content.SearchInfo(); si != "" {
 		parts = append(parts, key.Render("n/N")+" "+active.Render(si))
 	}
+	parts = append(parts, key.Render("D")+" "+dim.Render("diff"))
 	parts = append(parts, key.Render("r")+" "+dim.Render("reload"))
 	parts = append(parts, key.Render("j/k")+" "+dim.Render("scroll"))
 	if c.copiedFlash {
@@ -540,27 +482,29 @@ func (c CompareView) renderPicker() string {
 		sideLabel = "RIGHT"
 	}
 
+	fl := &c.pickerList
+
 	var sb strings.Builder
 	sb.WriteString(titleSt.Render(fmt.Sprintf("Pick object (%s)", sideLabel)) + "\n\n")
 	sb.WriteString(c.pickerInput.View() + "\n\n")
 
-	end := min(c.pickerOffset+pickerMaxShow, len(c.pickerMatches))
-	if c.pickerOffset > 0 {
+	end := fl.VisibleEnd()
+	if fl.Offset > 0 {
 		sb.WriteString(dimSt.Render("  ↑ more") + "\n")
 	}
 	typeSt := lipgloss.NewStyle().Foreground(lipgloss.Color("63"))
-	for i := c.pickerOffset; i < end; i++ {
-		it := c.pickerMatches[i].item
-		if i == c.pickerCursor {
+	for i := fl.Offset; i < end; i++ {
+		it := fl.Matches[i].item
+		if i == fl.Cursor {
 			sb.WriteString(selSt.Render("▸ "+it.QName) + " " + typeSt.Render(it.NodeType) + "\n")
 		} else {
 			sb.WriteString(normSt.Render("  "+it.QName) + " " + dimSt.Render(it.NodeType) + "\n")
 		}
 	}
-	if end < len(c.pickerMatches) {
+	if end < len(fl.Matches) {
 		sb.WriteString(dimSt.Render("  ↓ more") + "\n")
 	}
-	sb.WriteString("\n" + dimSt.Render(fmt.Sprintf("  %d/%d matches", len(c.pickerMatches), len(c.pickerItems))))
+	sb.WriteString("\n" + dimSt.Render(fmt.Sprintf("  %d/%d matches", len(fl.Matches), len(fl.Items))))
 
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -570,46 +514,110 @@ func (c CompareView) renderPicker() string {
 		Render(sb.String())
 }
 
-// --- Utilities ---
+// --- View interface ---
 
-// fuzzyScore checks if query chars appear in order within target (fzf-style).
-func fuzzyScore(target, query string) (bool, int) {
-	tLower := strings.ToLower(target)
-	qLower := strings.ToLower(query)
-	if len(qLower) == 0 {
-		return true, 0
-	}
-	if len(qLower) > len(tLower) {
-		return false, 0
-	}
-	score := 0
-	qi := 0
-	prevMatched := false
-	for ti := range len(tLower) {
-		if qi >= len(qLower) {
-			break
-		}
-		if tLower[ti] == qLower[qi] {
-			qi++
-			if ti == 0 {
-				score += 7
-			} else if target[ti-1] == '.' || target[ti-1] == '_' {
-				score += 5
-			} else if target[ti] >= 'A' && target[ti] <= 'Z' {
-				score += 5
-			}
-			if prevMatched {
-				score += 3
-			}
-			prevMatched = true
-		} else {
-			prevMatched = false
-		}
-	}
-	if qi < len(qLower) {
-		return false, 0
-	}
-	score += max(0, 50-len(tLower))
-	return true, score
+// Update satisfies the View interface.
+func (c CompareView) Update(msg tea.Msg) (View, tea.Cmd) {
+	updated, cmd := c.updateInternal(msg)
+	return updated, cmd
 }
+
+// Render satisfies the View interface, with an LLM anchor prefix.
+func (c CompareView) Render(width, height int) string {
+	c.width = width
+	c.height = height
+	pw, ph := c.paneDimensions()
+	c.left.content.SetSize(pw, ph)
+	c.right.content.SetSize(pw, ph)
+	rendered := c.View()
+
+	// Embed LLM anchor as muted prefix on the first line
+	info := c.StatusInfo()
+	leftTitle := c.left.title
+	if leftTitle == "" {
+		leftTitle = "—"
+	}
+	rightTitle := c.right.title
+	if rightTitle == "" {
+		rightTitle = "—"
+	}
+	anchor := fmt.Sprintf("[mxcli:compare] Left: %s  Right: %s  %s", leftTitle, rightTitle, info.Mode)
+	anchorSt := lipgloss.NewStyle().Foreground(MutedColor).Faint(true)
+	anchorStr := anchorSt.Render(anchor)
+
+	if idx := strings.IndexByte(rendered, '\n'); idx >= 0 {
+		rendered = anchorStr + rendered[idx:]
+	} else {
+		rendered = anchorStr
+	}
+	return rendered
+}
+
+// Hints satisfies the View interface.
+func (c CompareView) Hints() []Hint {
+	return CompareHints
+}
+
+// StatusInfo satisfies the View interface.
+func (c CompareView) StatusInfo() StatusInfo {
+	kindNames := []string{"NDSL|NDSL", "NDSL|MDL", "MDL|MDL"}
+	modeLabel := "Compare"
+	if int(c.kind) < len(kindNames) {
+		modeLabel = kindNames[c.kind]
+	}
+	leftTitle := c.left.title
+	if leftTitle == "" {
+		leftTitle = "—"
+	}
+	rightTitle := c.right.title
+	if rightTitle == "" {
+		rightTitle = "—"
+	}
+	return StatusInfo{
+		Breadcrumb: []string{leftTitle, rightTitle},
+		Position:   fmt.Sprintf("%d%%", c.focusedPane().scrollPercent()),
+		Mode:       modeLabel,
+	}
+}
+
+// Mode satisfies the View interface.
+func (c CompareView) Mode() ViewMode {
+	return ModeCompare
+}
+
+// loadBsonNDSL loads BSON NDSL content for a compare pane.
+func (c CompareView) loadBsonNDSL(qname, nodeType string, side CompareFocus) tea.Cmd {
+	return loadBsonNDSL(c.mxcliPath, c.projectPath, qname, nodeType, side)
+}
+
+// loadMDL loads MDL content for a compare pane.
+func (c CompareView) loadMDL(qname, nodeType string, side CompareFocus) tea.Cmd {
+	mxcliPath := c.mxcliPath
+	projectPath := c.projectPath
+	return func() tea.Msg {
+		out, err := runMxcli(mxcliPath, "-p", projectPath, "-c", buildDescribeCmd(nodeType, qname))
+		out = StripBanner(out)
+		if err != nil {
+			return CompareLoadMsg{Side: side, Title: qname, NodeType: nodeType, Content: "Error: " + out, Err: err}
+		}
+		return CompareLoadMsg{Side: side, Title: qname, NodeType: nodeType, Content: DetectAndHighlight(out)}
+	}
+}
+
+// loadForCompare dispatches to the appropriate loader based on compare kind.
+func (c CompareView) loadForCompare(qname, nodeType string, side CompareFocus, kind CompareKind) tea.Cmd {
+	switch kind {
+	case CompareNDSL:
+		return c.loadBsonNDSL(qname, nodeType, side)
+	case CompareNDSLMDL:
+		if side == CompareFocusLeft {
+			return c.loadBsonNDSL(qname, nodeType, side)
+		}
+		return c.loadMDL(qname, nodeType, side)
+	case CompareMDL:
+		return c.loadMDL(qname, nodeType, side)
+	}
+	return nil
+}
+
 

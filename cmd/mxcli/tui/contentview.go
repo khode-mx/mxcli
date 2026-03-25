@@ -16,7 +16,8 @@ type ContentView struct {
 	yOffset int
 	width   int
 	height  int
-	gutterW int
+	gutterW        int
+	hideLineNumbers bool
 
 	// Search state
 	searching   bool
@@ -53,7 +54,7 @@ func (v ContentView) PlainText() string {
 		if i > 0 {
 			sb.WriteByte('\n')
 		}
-		sb.WriteString(stripANSI(line))
+		sb.WriteString(stripAnsi(line))
 	}
 	return sb.String()
 }
@@ -123,7 +124,7 @@ func (v *ContentView) buildMatchLines() {
 	q := strings.ToLower(v.searchQuery)
 	for i, line := range v.lines {
 		// Strip ANSI for matching
-		if strings.Contains(strings.ToLower(stripANSI(line)), q) {
+		if strings.Contains(strings.ToLower(stripAnsi(line)), q) {
 			v.matchLines = append(v.matchLines, i)
 		}
 	}
@@ -155,27 +156,6 @@ func (v *ContentView) scrollToMatch() {
 	target := v.matchLines[v.matchIdx]
 	// Center the match in the viewport
 	v.yOffset = clamp(target-v.height/2, 0, v.maxOffset())
-}
-
-// stripANSI removes ANSI escape sequences from a string for plain-text matching.
-func stripANSI(s string) string {
-	var sb strings.Builder
-	sb.Grow(len(s))
-	inEsc := false
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\x1b' {
-			inEsc = true
-			continue
-		}
-		if inEsc {
-			if (s[i] >= 'A' && s[i] <= 'Z') || (s[i] >= 'a' && s[i] <= 'z') {
-				inEsc = false
-			}
-			continue
-		}
-		sb.WriteByte(s[i])
-	}
-	return sb.String()
 }
 
 // --- Update ---
@@ -269,7 +249,11 @@ func (v ContentView) View() string {
 
 	total := len(v.lines)
 	showScrollbar := total > v.height
-	contentW := v.width - v.gutterW - 1
+	effectiveGutterW := v.gutterW
+	if v.hideLineNumbers {
+		effectiveGutterW = 0
+	}
+	contentW := v.width - effectiveGutterW - 1
 	if showScrollbar {
 		contentW--
 	}
@@ -308,16 +292,20 @@ func (v ContentView) View() string {
 		lineIdx := v.yOffset + vi
 		var line string
 		if lineIdx < total {
-			num := fmt.Sprintf("%*d", v.gutterW-1, lineIdx+1)
-
-			// Style line number based on match status
 			var gutter string
-			if lineIdx == currentMatchLine {
-				gutter = currentMatchNumSt.Render(num) + " "
-			} else if matchSet[lineIdx] {
-				gutter = matchLineNumSt.Render(num) + " "
+			if v.hideLineNumbers {
+				gutter = ""
 			} else {
-				gutter = lineNumSt.Render(num) + " "
+				num := fmt.Sprintf("%*d", v.gutterW-1, lineIdx+1)
+
+				// Style line number based on match status
+				if lineIdx == currentMatchLine {
+					gutter = currentMatchNumSt.Render(num) + " "
+				} else if matchSet[lineIdx] {
+					gutter = matchLineNumSt.Render(num) + " "
+				} else {
+					gutter = lineNumSt.Render(num) + " "
+				}
 			}
 
 			content := v.lines[lineIdx]
@@ -346,7 +334,7 @@ func (v ContentView) View() string {
 
 			line = gutter + content
 		} else {
-			line = strings.Repeat(" ", v.gutterW+contentW)
+			line = strings.Repeat(" ", effectiveGutterW+contentW)
 		}
 
 		// Scrollbar
@@ -379,7 +367,7 @@ func (v ContentView) View() string {
 // highlightMatches highlights all occurrences of query in the line (case-insensitive).
 // Works with ANSI-colored text by matching on stripped text and applying style around matches.
 func highlightMatches(line, query string, style lipgloss.Style) string {
-	plain := stripANSI(line)
+	plain := stripAnsi(line)
 	lowerPlain := strings.ToLower(plain)
 	lowerQuery := strings.ToLower(query)
 

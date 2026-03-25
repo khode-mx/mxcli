@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -18,6 +19,10 @@ const (
 	minParentWidth    = 8
 	minCurrentWidth   = 15
 )
+
+// previewDebounceDelay is the delay before requesting a preview for a leaf node,
+// preventing subprocess flooding during rapid cursor movement.
+const previewDebounceDelay = 150 * time.Millisecond
 
 // MillerFocus indicates which pane has keyboard focus.
 type MillerFocus int
@@ -51,6 +56,12 @@ type navEntry struct {
 	currentCursor int
 }
 
+// previewDebounceMsg fires after the debounce delay for leaf-node previews.
+type previewDebounceMsg struct {
+	node    *TreeNode
+	counter int
+}
+
 // animTickMsg is kept for backward compatibility (forwarded in app.go).
 type animTickMsg struct{}
 
@@ -67,9 +78,10 @@ type MillerView struct {
 	focus    MillerFocus
 	navStack []navEntry
 
-	width   int
-	height  int
-	zenMode bool
+	width           int
+	height          int
+	zenMode         bool
+	debounceCounter int
 }
 
 // NewMillerView creates a MillerView wired to the given preview engine.
@@ -136,6 +148,18 @@ func (m MillerView) Update(msg tea.Msg) (MillerView, tea.Cmd) {
 		m.preview.loading = true
 		return m, nil
 
+	case previewDebounceMsg:
+		// Ignore if superseded by a newer cursor move
+		if msg.counter != m.debounceCounter {
+			return m, nil
+		}
+		node := msg.node
+		if node != nil && node.QualifiedName != "" && node.Type != "" {
+			cmd := m.previewEngine.RequestPreview(node.Type, node.QualifiedName, m.preview.mode)
+			return m, cmd
+		}
+		return m, nil
+
 	case animTickMsg:
 		return m, nil // no-op, animation removed
 
@@ -188,7 +212,7 @@ func (m MillerView) handleCursorChanged(msg CursorChangedMsg) (MillerView, tea.C
 		return m, nil
 	}
 
-	// If node has children, show them in the preview as a child column
+	// Nodes with children: show child column immediately (no subprocess, no debounce)
 	if len(node.Children) > 0 {
 		col := NewColumn(node.Label)
 		col.SetItems(treeNodesToItems(node.Children))
@@ -202,13 +226,18 @@ func (m MillerView) handleCursorChanged(msg CursorChangedMsg) (MillerView, tea.C
 		return m, nil
 	}
 
-	// Leaf node: request preview content
+	// Leaf node: debounce preview request to avoid flooding subprocesses
 	m.preview.childColumn = nil
 	m.preview.scrollOffset = 0
+	m.debounceCounter++
+	counter := m.debounceCounter
+
 	if node.QualifiedName != "" && node.Type != "" {
-		cmd := m.previewEngine.RequestPreview(node.Type, node.QualifiedName, m.preview.mode)
-		return m, cmd
+		return m, tea.Tick(previewDebounceDelay, func(t time.Time) tea.Msg {
+			return previewDebounceMsg{node: node, counter: counter}
+		})
 	}
+
 	m.preview.content = ""
 	m.preview.imagePaths = nil
 	m.preview.contentLines = nil
@@ -319,6 +348,25 @@ func (m MillerView) goBack() (MillerView, tea.Cmd) {
 	return m, nil
 }
 
+// goBackToDepth navigates back until the navStack has targetDepth entries.
+func (m MillerView) goBackToDepth(targetDepth int) (MillerView, tea.Cmd) {
+	for len(m.navStack) > targetDepth {
+		m, _ = m.goBack()
+	}
+	// Trigger preview for current selection
+	if node := m.current.SelectedNode(); node != nil {
+		if len(node.Children) > 0 {
+			col := NewColumn(node.Label)
+			col.SetItems(treeNodesToItems(node.Children))
+			m.preview.childColumn = &col
+			m.relayout()
+		} else if node.QualifiedName != "" && node.Type != "" {
+			return m, m.previewEngine.RequestPreview(node.Type, node.QualifiedName, m.preview.mode)
+		}
+	}
+	return m, nil
+}
+
 func (m MillerView) togglePreviewMode() (MillerView, tea.Cmd) {
 	if m.preview.mode == PreviewMDL {
 		m.preview.mode = PreviewNDSL
@@ -394,6 +442,7 @@ func (m MillerView) renderPreview(previewWidth int) string {
 	}
 
 	if m.preview.childColumn != nil {
+		m.preview.childColumn.SetFocused(false)
 		m.preview.childColumn.SetSize(previewWidth, m.height)
 		return m.preview.childColumn.View()
 	}
@@ -463,7 +512,7 @@ func (m MillerView) renderPreview(previewWidth int) string {
 
 		// Build output
 		var out strings.Builder
-		out.WriteString(PreviewModeStyle.Render(modeLabel))
+		out.WriteString(AccentStyle.Render(modeLabel))
 		for _, vl := range visible {
 			out.WriteByte('\n')
 			if vl.lineNo > 0 {
@@ -840,7 +889,7 @@ func findImagePathAtClick(contentLines, imagePaths []string, clickedVLine, scrol
 			if srcIdx < 0 || srcIdx >= len(contentLines) {
 				continue
 			}
-			plain := stripANSI(contentLines[srcIdx])
+			plain := stripAnsi(contentLines[srcIdx])
 			i := strings.Index(plain, "FROM FILE '")
 			if i == -1 {
 				continue

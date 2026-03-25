@@ -16,6 +16,7 @@ type LoadTreeMsg struct {
 type OpenOverlayMsg struct {
 	Title   string
 	Content string
+	Opts    OverlayViewOpts // optional context for tab-switching, etc.
 }
 
 // OpenImageOverlayMsg requests a full-size image overlay for a list of image paths.
