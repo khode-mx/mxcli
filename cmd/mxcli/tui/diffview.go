@@ -628,6 +628,8 @@ func (dv DiffView) Update(msg tea.Msg) (View, tea.Cmd) {
 }
 
 // Render satisfies the View interface, with an LLM anchor prefix.
+// DiffView uses a value receiver: width/height are set on the local copy
+// so that View() picks them up within this call. The original is unaffected.
 func (dv DiffView) Render(width, height int) string {
 	dv.width = width
 	dv.height = height

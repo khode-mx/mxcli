@@ -94,6 +94,7 @@ func (w *Watcher) run(sender MsgSender) {
 				continue
 			}
 			ext := filepath.Ext(event.Name)
+			// Allow .mpr, .mxunit, and extensionless files (MPR v2 mprcontents/ hash files).
 			if ext != ".mpr" && ext != ".mxunit" && ext != "" {
 				continue
 			}

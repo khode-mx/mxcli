@@ -86,11 +86,11 @@ func (ov OverlayView) Update(msg tea.Msg) (View, tea.Cmd) {
 }
 
 // Render returns the overlay's rendered string at the given dimensions with an LLM anchor prefix.
+// OverlayView uses a value receiver: dimensions are set on the local copy
+// so that View() picks them up within this call. The original is unaffected.
 func (ov OverlayView) Render(width, height int) string {
-	if ov.overlay.width != width || ov.overlay.height != height {
-		ov.overlay.width = width
-		ov.overlay.height = height
-	}
+	ov.overlay.width = width
+	ov.overlay.height = height
 	rendered := ov.overlay.View()
 
 	// Embed LLM anchor as muted prefix on the first line

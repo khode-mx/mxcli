@@ -49,3 +49,22 @@ func (vs *ViewStack) SetActive(v View) {
 		vs.base = v
 	}
 }
+
+// Base returns the base view (always present, never popped).
+func (vs *ViewStack) Base() View {
+	return vs.base
+}
+
+// SetBase replaces the base view.
+func (vs *ViewStack) SetBase(v View) {
+	vs.base = v
+}
+
+// ModeNames returns the mode names for all views (base + stacked) in order.
+func (vs *ViewStack) ModeNames() []string {
+	names := []string{vs.base.Mode().String()}
+	for _, v := range vs.stack {
+		names = append(names, v.Mode().String())
+	}
+	return names
+}

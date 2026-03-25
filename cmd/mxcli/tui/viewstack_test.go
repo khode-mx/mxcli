@@ -117,3 +117,46 @@ func TestSetActive_EmptyStack_ReplacesBase(t *testing.T) {
 		t.Errorf("Depth() = %d, want 1", got)
 	}
 }
+
+func TestBase_ReturnsBaseView(t *testing.T) {
+	base := mockView{mode: ModeBrowser}
+	vs := NewViewStack(base)
+	vs.Push(mockView{mode: ModeOverlay})
+
+	if got := vs.Base(); got.Mode() != ModeBrowser {
+		t.Errorf("Base() = %v, want %v", got.Mode(), ModeBrowser)
+	}
+}
+
+func TestSetBase_ReplacesBaseView(t *testing.T) {
+	base := mockView{mode: ModeBrowser}
+	vs := NewViewStack(base)
+	vs.Push(mockView{mode: ModeOverlay})
+
+	vs.SetBase(mockView{mode: ModeCompare})
+
+	if got := vs.Base(); got.Mode() != ModeCompare {
+		t.Errorf("Base() = %v, want %v", got.Mode(), ModeCompare)
+	}
+	// Active should still be the stacked view
+	if got := vs.Active(); got.Mode() != ModeOverlay {
+		t.Errorf("Active() = %v, want %v (stack unaffected)", got.Mode(), ModeOverlay)
+	}
+}
+
+func TestModeNames(t *testing.T) {
+	vs := NewViewStack(mockView{mode: ModeBrowser})
+	vs.Push(mockView{mode: ModeDiff})
+	vs.Push(mockView{mode: ModeOverlay})
+
+	names := vs.ModeNames()
+	if len(names) != 3 {
+		t.Fatalf("ModeNames() len = %d, want 3", len(names))
+	}
+	expected := []ViewMode{ModeBrowser, ModeDiff, ModeOverlay}
+	for i, exp := range expected {
+		if names[i] != exp.String() {
+			t.Errorf("ModeNames()[%d] = %q, want %q", i, names[i], exp.String())
+		}
+	}
+}

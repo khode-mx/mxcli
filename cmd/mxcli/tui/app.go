@@ -125,7 +125,7 @@ func (a *App) syncBrowserView() {
 		contentH := max(5, a.height-chromeHeight)
 		bv.miller.SetSize(a.width, contentH)
 	}
-	a.views.base = bv
+	a.views.SetBase(bv)
 }
 
 // --- Init ---
@@ -194,9 +194,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Pop the jumper view first
 		a.views.Pop()
 		// Navigate browser to the target node
-		if bv, ok := a.views.base.(BrowserView); ok {
+		if bv, ok := a.views.Base().(BrowserView); ok {
 			cmd := bv.navigateToNode(msg.QName)
-			a.views.base = bv
+			a.views.SetBase(bv)
 			if tab := a.activeTabPtr(); tab != nil {
 				tab.Miller = bv.miller
 				tab.UpdateLabel()
@@ -440,7 +440,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				tab.Miller.SetRootNodes(msg.Nodes)
 				a.syncTabBar()
 				// Update browser view if it's the base
-				if bv, ok := a.views.base.(BrowserView); ok {
+				if bv, ok := a.views.Base().(BrowserView); ok {
 					bv.allNodes = msg.Nodes
 					bv.compareItems = flattenQualifiedNames(msg.Nodes)
 					bv.miller = tab.Miller
@@ -448,7 +448,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						contentH := max(5, a.height-chromeHeight)
 						bv.miller.SetSize(a.width, contentH)
 					}
-					a.views.base = bv
+					a.views.SetBase(bv)
 				}
 			}
 		}
@@ -783,11 +783,7 @@ func renderContextSummary(nodes []*TreeNode) string {
 
 // collectViewModeNames returns the mode names for all views in the stack.
 func (a App) collectViewModeNames() []string {
-	names := []string{a.views.base.Mode().String()}
-	for _, v := range a.views.stack {
-		names = append(names, v.Mode().String())
-	}
-	return names
+	return a.views.ModeNames()
 }
 
 // inferBsonType maps tree node types to valid bson object types.
