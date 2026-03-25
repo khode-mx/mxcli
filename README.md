@@ -4,6 +4,8 @@
 
 A command-line tool that enables AI coding assistants ([Claude Code](https://claude.ai/claude-code), Cursor, Continue.dev, Windsurf, Aider, and others) to read, understand, and modify Mendix application projects.
 
+**[Read the documentation](https://mendixlabs.github.io/mxcli/)**
+
 ## Why mxcli?
 
 Mendix projects are stored in binary `.mpr` files that AI agents can't read directly. `mxcli` bridges this gap by providing:
