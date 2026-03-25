@@ -136,11 +136,9 @@ func (w *Writer) serializeMicroflow(mf *microflows.Microflow) ([]byte, error) {
 	}
 
 	// Add remaining optional fields
-	returnVarName := mf.ReturnVariableName
-	if returnVarName == "" {
-		returnVarName = "Variable" // Default value used by Mendix
-	}
-	doc = append(doc, bson.E{Key: "ReturnVariableName", Value: returnVarName})
+	// ReturnVariableName is "" by default (Studio Pro convention).
+	// Only set a custom name when explicitly specified via "RETURNS xxx AS $VarName".
+	doc = append(doc, bson.E{Key: "ReturnVariableName", Value: mf.ReturnVariableName})
 	doc = append(doc, bson.E{Key: "StableId", Value: idToBsonBinary(generateUUID())})
 	doc = append(doc, bson.E{Key: "Url", Value: ""})
 	doc = append(doc, bson.E{Key: "UrlSearchParameters", Value: bson.A{int32(1)}})
@@ -223,7 +221,7 @@ func serializeMicroflowParameter(p *microflows.MicroflowParameter, posX int) bso
 		{Key: "$Type", Value: "Microflows$MicroflowParameter"},
 		{Key: "DefaultValue", Value: ""},
 		{Key: "Documentation", Value: p.Documentation},
-		{Key: "HasVariableNameBeenChanged", Value: true},
+		{Key: "HasVariableNameBeenChanged", Value: false},
 		{Key: "IsRequired", Value: true},
 		{Key: "Name", Value: p.Name},
 		{Key: "RelativeMiddlePoint", Value: relativeMiddlePoint},
