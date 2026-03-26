@@ -111,6 +111,26 @@ func OpenWithOptions(path string, opts OpenOptions) (*Reader, error) {
 	}
 	r.projectVersion = pv
 
+	// Reconcile version detection: the database _FormatVersion is authoritative.
+	// The folder-based check can fail if the .mpr file was copied without the
+	// mprcontents/ folder, but the schema still won't have the Contents column.
+	if pv.FormatVersion >= 2 && r.version == MPRVersionV1 {
+		// DB says v2 but mprcontents folder wasn't found — try harder to locate it
+		dir := filepath.Dir(path)
+		contentsDir := filepath.Join(dir, "mprcontents")
+		if stat, err := os.Stat(contentsDir); err == nil && stat.IsDir() {
+			r.version = MPRVersionV2
+			r.contentsDir = contentsDir
+		} else {
+			// Format is v2 (no Contents column in Unit table) but mprcontents
+			// folder is missing — set version to v2 to avoid querying the
+			// non-existent Contents column. Content reads will fail individually
+			// with clear errors instead of a blanket schema error.
+			r.version = MPRVersionV2
+			r.contentsDir = contentsDir // best-guess path
+		}
+	}
+
 	// Verify it's a valid MPR file
 	if err := r.verify(); err != nil {
 		r.Close()
