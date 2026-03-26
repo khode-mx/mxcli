@@ -4,6 +4,59 @@ All notable changes to mxcli will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-03-26
+
+### Added
+
+- **TUI** — Interactive terminal UI (`mxcli tui`) with yazi-style Miller columns, BSON/MDL preview, search, tabs, command palette (`:` key), session restore (`-c`), and mouse support
+- **Workflows** — Full CREATE/DESCRIBE WORKFLOW support with activities (UserTask, Decision, CallMicroflow, CallWorkflow, Jump, WaitForTimer, ParallelSplit, BoundaryEvent), BSON round-trip, and ANNOTATION statements
+- **Consumed REST Clients** — SHOW/DESCRIBE/CREATE consumed REST services with BSON writer and mx check validation
+- **Image Collections** — SHOW/DESCRIBE/CREATE/DROP IMAGE COLLECTION with BSON writer and Kitty/iTerm2/Sixel inline image rendering in TUI
+- **WHILE Loops** — WHILE loop support in microflows with examples
+- **ALTER PAGE Variables** — ALTER PAGE ADD/DROP VARIABLE support (Phase 3)
+- **XPath** — Dedicated XPath expression grammar, catalog table population, and skills reference
+- **BSON Tools** — `bson dump --format ndsl`, `bson compare` with smart array matching, `bson discover` for field coverage analysis
+- **Documentation Site** — mdBook-based site with full language reference, tutorials, and internals documentation
+- **Anti-pattern Detection** — `mxcli check` detects nested loops and empty list anti-patterns (issue #21)
+- **CREATE OR MODIFY** — Additive upsert for USER ROLE and DEMO USER
+- **AI PR Review** — GitHub Actions workflow using GitHub Models API for automated pull request review
+- **RETRIEVE FROM $Variable** — Support for in-memory and NPE list association traversal (issue #22)
+- **Constants** — Constant syntax help topic, LSP snippet, and CREATE OR MODIFY examples
+- **UnknownElement Fallback** — Table-driven parser registries with graceful fallback for unrecognized BSON types (issue #19)
+
+### Fixed
+
+- MPR corruption from dangling GUIDs after attribute drop/add (#4)
+- BSON field ordering loss in ALTER PAGE operations (#3)
+- ALTER PAGE SET Attribute property support (issue #10)
+- ALTER PAGE REPLACE deep GUID regeneration for stale $ID fields (issue #9)
+- Quoted identifiers not resolved in page widget references (issue #8)
+- DATAGRID placeholder ID leak during template augmentation (issue #6)
+- COMBOBOX association EntityRef via IndirectEntityRef with association path
+- Page/layout unit type mismatch (Forms$ vs Pages$ prefix)
+- VIEW entity types, constant value BSON, and test error detection
+- False positive OQL type inference for CASE expressions
+- RETRIEVE using DatabaseRetrieveSource for reverse Reference association traversal
+- RETURNS Void treated as void return type like Nothing
+- ANNOTATION keyword added to annotationName grammar rule
+- System entity types and RETURN keyword formatting in microflows
+- 10 CodeQL security alerts
+- XPath token quoting for `[%CurrentDateTime%]` (#1)
+- DROP MODULE/ROLE cascade-removes module roles from user roles
+- Security script CE0066 entity access out-of-date errors
+- Slow integration tests with build tags and TestMain (issue #16)
+- Docker run failing on fresh projects (issue #13)
+
+### Changed
+
+- Aligned `mxcli check` and `mxcli lint` reporting with shared Violation format (issue #10)
+- Promoted BSON commands from debug-only to release build
+- Auto-discover `.mpr` file when `-p` is omitted
+- Moved `bson/` and `tui/` packages under `cmd/mxcli/` for better encapsulation
+- Consolidated show-describe proposals into `docs/11-proposals/` with archive
+- Documented association ParentPointer/ChildPointer semantics in CLAUDE.md
+- Normalized CRLF to LF in bug reports via `.gitattributes`
+
 ## [0.2.0] - 2026-03-15
 
 ### Added
