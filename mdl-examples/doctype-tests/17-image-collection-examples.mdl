@@ -60,30 +60,34 @@ CREATE IMAGE COLLECTION ImgTest.BrandAssets
 /
 
 -- ============================================================================
--- LEVEL 2: Create with Image Files (syntax reference)
+-- LEVEL 2: Create with Image Files
 -- ============================================================================
---
--- IMAGE 'name' FROM FILE 'path' loads an image from the filesystem.
--- The image format is detected from the file extension.
--- Relative paths are resolved from the current working directory.
--- Supported formats: PNG, SVG, GIF, JPEG, BMP, WebP
---
--- Example (requires actual image files on disk):
---
---   CREATE IMAGE COLLECTION ImgTest.NavigationIcons (
---     IMAGE 'home' FROM FILE 'assets/home.png',
---     IMAGE 'settings' FROM FILE 'assets/settings.svg'
---   );
---
--- With options and images combined:
---
---   CREATE IMAGE COLLECTION ImgTest.AppLogos
---     EXPORT LEVEL 'Public'
---     COMMENT 'Application logos for branding' (
---     IMAGE 'logo-dark' FROM FILE 'assets/logo-dark.png',
---     IMAGE 'logo-light' FROM FILE 'assets/logo-light.png'
---   );
---
+
+/**
+ * Level 2.1: Create a collection with images from files
+ *
+ * IMAGE 'name' FROM FILE 'path' loads an image from the filesystem.
+ * The image format is detected from the file extension.
+ * Relative paths are resolved from the current working directory.
+ *
+ * Supported formats: PNG, SVG, GIF, JPEG, BMP, WebP
+ */
+CREATE IMAGE COLLECTION ImgTest.NavigationIcons (
+  IMAGE 'cli-screenshot' FROM FILE '../../docs/images/mxcli-cli.png',
+  IMAGE 'repl-screenshot' FROM FILE '../../docs/images/mxcli-repl.png'
+);
+/
+
+/**
+ * Level 2.2: Create with both options and images
+ */
+CREATE IMAGE COLLECTION ImgTest.AppLogos
+  EXPORT LEVEL 'Public'
+  COMMENT 'Application logos for branding' (
+  IMAGE 'vscode-ext' FROM FILE '../../docs/images/mxcli-vscode-ext.png',
+  IMAGE 'catalog' FROM FILE '../../docs/images/mxcli-catalog.png'
+);
+/
 
 -- MARK: Show
 
@@ -137,8 +141,8 @@ SHOW IMAGE COLLECTION IN ImgTest;
 -- ✅ CREATE IMAGE COLLECTION Module.Name
 -- ✅ CREATE IMAGE COLLECTION with EXPORT LEVEL 'Public'|'Hidden'
 -- ✅ CREATE IMAGE COLLECTION with COMMENT 'description'
--- ✅ CREATE IMAGE COLLECTION with IMAGE 'name' FROM FILE 'path' (syntax ref)
--- ✅ CREATE IMAGE COLLECTION with options + images combined (syntax ref)
+-- ✅ CREATE IMAGE COLLECTION with IMAGE 'name' FROM FILE 'path'
+-- ✅ CREATE IMAGE COLLECTION with options + images combined
 -- ✅ SHOW IMAGE COLLECTION [IN Module] — list all collections
 -- ✅ DESCRIBE IMAGE COLLECTION Module.Name — show full definition
 -- ✅ DROP IMAGE COLLECTION Module.Name — remove collection
