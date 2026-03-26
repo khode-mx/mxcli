@@ -281,8 +281,10 @@ func Run(opts RunOptions) error {
 	// Step 3b: Link PAD runtime files into mxbuild directory
 	// MxBuild's PAD builder expects template files at mxbuild/{ver}/runtime/pad/,
 	// but they live in the separately downloaded runtime at runtime/{ver}/runtime/pad/.
+	// Non-fatal: some Mendix versions don't include PAD files in the runtime archive.
+	// The docker build step handles this gracefully by downloading the runtime separately.
 	if err := ensurePADFiles(pv.ProductVersion, w); err != nil {
-		return fmt.Errorf("linking PAD files: %w", err)
+		fmt.Fprintf(w, "  Warning: %v\n", err)
 	}
 
 	// Step 3c: Ensure demo users exist
