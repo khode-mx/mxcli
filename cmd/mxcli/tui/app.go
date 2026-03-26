@@ -55,6 +55,17 @@ type App struct {
 	checkRunning  bool
 
 	pendingSession *TUISession // session to restore after tree loads
+
+	agentListener *AgentListener
+	agentPending  *agentPendingOp // non-nil when waiting for user confirmation
+}
+
+// agentPendingOp tracks an in-flight agent operation awaiting user confirmation.
+type agentPendingOp struct {
+	RequestID  int
+	Output     string
+	Success    bool
+	ResponseCh chan<- AgentResponse
 }
 
 // NewApp creates the root App model.
@@ -102,6 +113,25 @@ func (a *App) StartWatcher(prog *tea.Program) {
 	}
 	a.watcher = w
 	Trace("app: watcher started for %s (contentsDir=%q)", mprPath, contentsDir)
+}
+
+// StartAgentListener begins listening on a Unix socket for agent commands.
+// Call after tea.NewProgram is created, like StartWatcher.
+func (a *App) StartAgentListener(prog *tea.Program, socketPath string, autoProceed bool) error {
+	listener, err := NewAgentListener(socketPath, prog.Send, autoProceed)
+	if err != nil {
+		return err
+	}
+	a.agentListener = listener
+	Trace("app: agent listener started on %s (autoProceed=%v)", socketPath, autoProceed)
+	return nil
+}
+
+// CloseAgentListener stops the agent listener if running.
+func (a App) CloseAgentListener() {
+	if a.agentListener != nil {
+		a.agentListener.Close()
+	}
 }
 
 func (a *App) activeTabPtr() *Tab {
@@ -353,13 +383,146 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 
+	// --- Agent channel messages ---
+	case AgentExecMsg:
+		Trace("app: AgentExecMsg id=%d mdl=%q", msg.RequestID, msg.MDL)
+		mxcliPath := a.mxcliPath
+		projectPath := a.activeTabProjectPath()
+		requestID := msg.RequestID
+		mdlText := msg.MDL
+		responseCh := msg.ResponseCh
+		return a, func() tea.Msg {
+			tmpFile, err := os.CreateTemp("", "mxcli-agent-*.mdl")
+			if err != nil {
+				return agentExecDoneMsg{
+					RequestID: requestID, Output: err.Error(),
+					Success: false, ResponseCh: responseCh,
+				}
+			}
+			tmpPath := tmpFile.Name()
+			defer os.Remove(tmpPath)
+			tmpFile.WriteString(mdlText)
+			tmpFile.Close()
+
+			args := []string{"exec"}
+			if projectPath != "" {
+				args = append(args, "-p", projectPath)
+			}
+			args = append(args, tmpPath)
+			out, execErr := runMxcli(mxcliPath, args...)
+			return agentExecDoneMsg{
+				RequestID: requestID, Output: out,
+				Success: execErr == nil, ResponseCh: responseCh,
+			}
+		}
+
+	case agentExecDoneMsg:
+		Trace("app: agentExecDoneMsg id=%d success=%v", msg.RequestID, msg.Success)
+		content := DetectAndHighlight(msg.Output)
+		title := "Agent Exec Result"
+		if !msg.Success {
+			title = "Agent Exec Error"
+		}
+		ov := NewOverlayView(title, content, a.width, a.height, OverlayViewOpts{})
+		a.views.Push(ov)
+		if msg.Success {
+			if a.watcher != nil {
+				a.watcher.Suppress(2 * time.Second)
+			}
+		}
+		// Auto-proceed: respond immediately without waiting for user confirmation
+		if a.agentListener != nil && a.agentListener.AutoProceed() {
+			msg.ResponseCh <- AgentResponse{
+				ID: msg.RequestID, OK: msg.Success,
+				Result: msg.Output, Mode: "overlay:exec-result",
+			}
+			if msg.Success {
+				return a, a.Init()
+			}
+			return a, nil
+		}
+		// Store pending op for user confirmation (q/esc in overlay)
+		a.agentPending = &agentPendingOp{
+			RequestID: msg.RequestID, Output: msg.Output,
+			Success: msg.Success, ResponseCh: msg.ResponseCh,
+		}
+		return a, nil
+
+	case AgentStateMsg:
+		Trace("app: AgentStateMsg id=%d", msg.RequestID)
+		mode := a.views.Active().Mode().String()
+		projectPath := a.activeTabProjectPath()
+		msg.ResponseCh <- AgentResponse{
+			ID: msg.RequestID, OK: true,
+			Result: fmt.Sprintf(`{"mode":"%s","project":"%s"}`, mode, projectPath),
+			Mode:   "state",
+		}
+		return a, nil
+
+	case AgentCheckMsg:
+		Trace("app: AgentCheckMsg id=%d", msg.RequestID)
+		mxcliPath := a.mxcliPath
+		projectPath := a.activeTabProjectPath()
+		requestID := msg.RequestID
+		responseCh := msg.ResponseCh
+		return a, func() tea.Msg {
+			out, err := runMxcli(mxcliPath, "check", "-p", projectPath)
+			return agentExecDoneMsg{
+				RequestID: requestID, Output: out,
+				Success: err == nil, ResponseCh: responseCh,
+			}
+		}
+
+	case AgentNavigateMsg:
+		Trace("app: AgentNavigateMsg id=%d target=%q", msg.RequestID, msg.Target)
+		target := msg.Target
+		if bv, ok := a.views.Base().(BrowserView); ok {
+			qname := target
+			if idx := strings.Index(target, ":"); idx >= 0 {
+				qname = target[idx+1:]
+			}
+			cmd := bv.navigateToNode(qname)
+			a.views.SetBase(bv)
+			if tab := a.activeTabPtr(); tab != nil {
+				tab.Miller = bv.miller
+				tab.UpdateLabel()
+				a.syncTabBar()
+			}
+			msg.ResponseCh <- AgentResponse{
+				ID: msg.RequestID, OK: true,
+				Result: fmt.Sprintf("navigated to %s", qname), Mode: "browser",
+			}
+			return a, cmd
+		}
+		msg.ResponseCh <- AgentResponse{
+			ID: msg.RequestID, OK: false, Error: "not in browser mode",
+		}
+		return a, nil
+
 	case tea.KeyMsg:
 		Trace("app: key=%q picker=%v mode=%v help=%v", msg.String(), a.picker != nil, a.views.Active().Mode(), a.showHelp)
 		if msg.String() == "ctrl+c" {
 			if a.watcher != nil {
 				a.watcher.Close()
 			}
+			a.CloseAgentListener()
 			return a, tea.Quit
+		}
+
+		// Agent confirmation: when overlay is dismissed while agent op is pending
+		if a.agentPending != nil && a.views.Active().Mode() == ModeOverlay &&
+			(msg.String() == "q" || msg.String() == "esc") {
+			pending := a.agentPending
+			a.agentPending = nil
+			a.views.Pop()
+			pending.ResponseCh <- AgentResponse{
+				ID: pending.RequestID, OK: pending.Success,
+				Result: pending.Output, Mode: "overlay:exec-result",
+			}
+			if pending.Success {
+				return a, a.Init()
+			}
+			return a, nil
 		}
 
 		// Picker modal (not a View — special case)
