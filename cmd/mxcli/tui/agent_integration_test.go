@@ -5,19 +5,48 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// msgCollector is a thread-safe collector for tea.Msg values dispatched by the
+// agent listener goroutine. It replaces the bare []tea.Msg slice that caused
+// data races when the sender callback and the test goroutine accessed it
+// concurrently.
+type msgCollector struct {
+	mu   sync.Mutex
+	msgs []tea.Msg
+}
+
+func (c *msgCollector) add(msg tea.Msg) {
+	c.mu.Lock()
+	c.msgs = append(c.msgs, msg)
+	c.mu.Unlock()
+}
+
+func (c *msgCollector) snapshot() []tea.Msg {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([]tea.Msg, len(c.msgs))
+	copy(out, c.msgs)
+	return out
+}
+
+func (c *msgCollector) reset() {
+	c.mu.Lock()
+	c.msgs = nil
+	c.mu.Unlock()
+}
+
 func TestAgentExecEndToEnd(t *testing.T) {
 	sockPath := filepath.Join(t.TempDir(), "agent.sock")
 
-	var messages []tea.Msg
-	sender := func(msg tea.Msg) { messages = append(messages, msg) }
-
-	listener, err := NewAgentListener(sockPath, sender, true)
+	var collector msgCollector
+	listener, err := NewAgentListener(sockPath, collector.add, true)
 	if err != nil {
 		t.Fatalf("NewAgentListener: %v", err)
 	}
@@ -39,6 +68,7 @@ func TestAgentExecEndToEnd(t *testing.T) {
 
 	// Wait for message dispatch
 	time.Sleep(200 * time.Millisecond)
+	messages := collector.snapshot()
 	if len(messages) == 0 {
 		t.Fatal("no messages received")
 	}
@@ -135,10 +165,8 @@ func TestAgentSocketCleanup(t *testing.T) {
 func TestAgentMultipleActions(t *testing.T) {
 	sockPath := filepath.Join(t.TempDir(), "agent.sock")
 
-	var messages []tea.Msg
-	sender := func(msg tea.Msg) { messages = append(messages, msg) }
-
-	listener, err := NewAgentListener(sockPath, sender, true)
+	var collector msgCollector
+	listener, err := NewAgentListener(sockPath, collector.add, true)
 	if err != nil {
 		t.Fatalf("NewAgentListener: %v", err)
 	}
@@ -156,6 +184,7 @@ func TestAgentMultipleActions(t *testing.T) {
 	data = append(data, '\n')
 	conn.Write(data)
 	time.Sleep(100 * time.Millisecond)
+	messages := collector.snapshot()
 	if len(messages) == 0 {
 		t.Fatal("no state message received")
 	}
@@ -176,12 +205,13 @@ func TestAgentMultipleActions(t *testing.T) {
 	}
 
 	// Test navigate action
-	messages = nil
+	collector.reset()
 	req = AgentRequest{ID: 2, Action: "navigate", Target: "entity:MyModule.Customer"}
 	data, _ = json.Marshal(req)
 	data = append(data, '\n')
 	conn.Write(data)
 	time.Sleep(100 * time.Millisecond)
+	messages = collector.snapshot()
 	if len(messages) == 0 {
 		t.Fatal("no navigate message received")
 	}
@@ -200,5 +230,284 @@ func TestAgentMultipleActions(t *testing.T) {
 	json.Unmarshal(buf[:n], &resp)
 	if !resp.OK || resp.ID != 2 {
 		t.Errorf("navigate resp = %+v", resp)
+	}
+}
+
+func TestAgentDeleteMsg(t *testing.T) {
+	sockPath := filepath.Join(t.TempDir(), "agent.sock")
+
+	var collector msgCollector
+	listener, err := NewAgentListener(sockPath, collector.add, false)
+	if err != nil {
+		t.Fatalf("NewAgentListener: %v", err)
+	}
+	defer listener.Close()
+
+	conn, err := net.Dial("unix", sockPath)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	req := AgentRequest{ID: 10, Action: "delete", Target: "entity:MyModule.Customer"}
+	data, _ := json.Marshal(req)
+	data = append(data, '\n')
+	if _, err := conn.Write(data); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	time.Sleep(200 * time.Millisecond)
+	messages := collector.snapshot()
+	if len(messages) == 0 {
+		t.Fatal("no messages received")
+	}
+
+	delMsg, ok := messages[0].(AgentDeleteMsg)
+	if !ok {
+		t.Fatalf("expected AgentDeleteMsg, got %T", messages[0])
+	}
+	if delMsg.RequestID != 10 {
+		t.Errorf("requestID = %d, want 10", delMsg.RequestID)
+	}
+	if delMsg.Target != "entity:MyModule.Customer" {
+		t.Errorf("target = %q, want entity:MyModule.Customer", delMsg.Target)
+	}
+
+	delMsg.ResponseCh <- AgentResponse{ID: 10, OK: true, Result: "deleted"}
+
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	buf := make([]byte, 4096)
+	n, err := conn.Read(buf)
+	if err != nil {
+		t.Fatalf("read response: %v", err)
+	}
+	var resp AgentResponse
+	if err := json.Unmarshal(buf[:n], &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if resp.ID != 10 || !resp.OK {
+		t.Errorf("resp = %+v", resp)
+	}
+}
+
+func TestAgentCreateModuleMsg(t *testing.T) {
+	sockPath := filepath.Join(t.TempDir(), "agent.sock")
+
+	var collector msgCollector
+	listener, err := NewAgentListener(sockPath, collector.add, false)
+	if err != nil {
+		t.Fatalf("NewAgentListener: %v", err)
+	}
+	defer listener.Close()
+
+	conn, err := net.Dial("unix", sockPath)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	req := AgentRequest{ID: 11, Action: "create_module", Name: "NewModule"}
+	data, _ := json.Marshal(req)
+	data = append(data, '\n')
+	if _, err := conn.Write(data); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	time.Sleep(200 * time.Millisecond)
+	messages := collector.snapshot()
+	if len(messages) == 0 {
+		t.Fatal("no messages received")
+	}
+
+	createMsg, ok := messages[0].(AgentCreateModuleMsg)
+	if !ok {
+		t.Fatalf("expected AgentCreateModuleMsg, got %T", messages[0])
+	}
+	if createMsg.RequestID != 11 {
+		t.Errorf("requestID = %d, want 11", createMsg.RequestID)
+	}
+	if createMsg.Name != "NewModule" {
+		t.Errorf("name = %q, want NewModule", createMsg.Name)
+	}
+
+	createMsg.ResponseCh <- AgentResponse{ID: 11, OK: true, Result: "module created"}
+
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	buf := make([]byte, 4096)
+	n, err := conn.Read(buf)
+	if err != nil {
+		t.Fatalf("read response: %v", err)
+	}
+	var resp AgentResponse
+	if err := json.Unmarshal(buf[:n], &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if resp.ID != 11 || !resp.OK {
+		t.Errorf("resp = %+v", resp)
+	}
+}
+
+func TestAgentFormatSync(t *testing.T) {
+	sockPath := filepath.Join(t.TempDir(), "agent.sock")
+
+	var sendCount atomic.Int32
+	sender := func(msg tea.Msg) { sendCount.Add(1) }
+
+	listener, err := NewAgentListener(sockPath, sender, false)
+	if err != nil {
+		t.Fatalf("NewAgentListener: %v", err)
+	}
+	defer listener.Close()
+
+	conn, err := net.Dial("unix", sockPath)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	req := AgentRequest{ID: 12, Action: "format", MDL: "CREATE ENTITY    Mod.E"}
+	data, _ := json.Marshal(req)
+	data = append(data, '\n')
+	if _, err := conn.Write(data); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	buf := make([]byte, 4096)
+	n, err := conn.Read(buf)
+	if err != nil {
+		t.Fatalf("read response: %v", err)
+	}
+	var resp AgentResponse
+	if err := json.Unmarshal(buf[:n], &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if resp.ID != 12 {
+		t.Errorf("resp.ID = %d, want 12", resp.ID)
+	}
+	if !resp.OK {
+		t.Errorf("resp.OK = false, want true; error = %q", resp.Error)
+	}
+	if resp.Result == "" {
+		t.Error("expected non-empty formatted result")
+	}
+	if sendCount.Load() != 0 {
+		t.Errorf("sendMsg called %d times, want 0 (sync action)", sendCount.Load())
+	}
+}
+
+func TestAgentDescribeAsync(t *testing.T) {
+	sockPath := filepath.Join(t.TempDir(), "agent.sock")
+
+	var collector msgCollector
+	listener, err := NewAgentListener(sockPath, collector.add, false)
+	if err != nil {
+		t.Fatalf("NewAgentListener: %v", err)
+	}
+	defer listener.Close()
+
+	conn, err := net.Dial("unix", sockPath)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	req := AgentRequest{ID: 13, Action: "describe", Target: "entity:Mod.E"}
+	data, _ := json.Marshal(req)
+	data = append(data, '\n')
+	if _, err := conn.Write(data); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	time.Sleep(200 * time.Millisecond)
+	messages := collector.snapshot()
+	if len(messages) == 0 {
+		t.Fatal("no messages received")
+	}
+
+	execMsg, ok := messages[0].(AgentExecMsg)
+	if !ok {
+		t.Fatalf("expected AgentExecMsg, got %T", messages[0])
+	}
+	if execMsg.MDL != "DESCRIBE ENTITY Mod.E" {
+		t.Errorf("mdl = %q, want DESCRIBE ENTITY Mod.E", execMsg.MDL)
+	}
+	if execMsg.RequestID != 13 {
+		t.Errorf("requestID = %d, want 13", execMsg.RequestID)
+	}
+
+	// Simulate TUI response
+	execMsg.ResponseCh <- AgentResponse{ID: 13, OK: true, Result: "entity details"}
+
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	buf := make([]byte, 4096)
+	n, err := conn.Read(buf)
+	if err != nil {
+		t.Fatalf("read response: %v", err)
+	}
+	var resp AgentResponse
+	if err := json.Unmarshal(buf[:n], &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if resp.ID != 13 || !resp.OK {
+		t.Errorf("resp = %+v", resp)
+	}
+}
+
+func TestAgentListAsync(t *testing.T) {
+	sockPath := filepath.Join(t.TempDir(), "agent.sock")
+
+	var collector msgCollector
+	listener, err := NewAgentListener(sockPath, collector.add, false)
+	if err != nil {
+		t.Fatalf("NewAgentListener: %v", err)
+	}
+	defer listener.Close()
+
+	conn, err := net.Dial("unix", sockPath)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	req := AgentRequest{ID: 14, Action: "list", Target: "entities"}
+	data, _ := json.Marshal(req)
+	data = append(data, '\n')
+	if _, err := conn.Write(data); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	time.Sleep(200 * time.Millisecond)
+	messages := collector.snapshot()
+	if len(messages) == 0 {
+		t.Fatal("no messages received")
+	}
+
+	execMsg, ok := messages[0].(AgentExecMsg)
+	if !ok {
+		t.Fatalf("expected AgentExecMsg, got %T", messages[0])
+	}
+	if execMsg.MDL != "SHOW ENTITIES" {
+		t.Errorf("mdl = %q, want SHOW ENTITIES", execMsg.MDL)
+	}
+	if execMsg.RequestID != 14 {
+		t.Errorf("requestID = %d, want 14", execMsg.RequestID)
+	}
+
+	// Simulate TUI response
+	execMsg.ResponseCh <- AgentResponse{ID: 14, OK: true, Result: "entity list"}
+
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	buf := make([]byte, 4096)
+	n, err := conn.Read(buf)
+	if err != nil {
+		t.Fatalf("read response: %v", err)
+	}
+	var resp AgentResponse
+	if err := json.Unmarshal(buf[:n], &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if resp.ID != 14 || !resp.OK {
+		t.Errorf("resp = %+v", resp)
 	}
 }
