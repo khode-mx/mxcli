@@ -22,7 +22,11 @@ mxcli tui -p app.mpr --agent-socket /tmp/mxcli-agent.sock --agent-auto-proceed
 ### 2. Send commands via socat
 
 ```bash
-echo '{"id":1,"action":"exec","mdl":"SHOW ENTITIES"}' | socat - UNIX-CONNECT:/tmp/mxcli-agent.sock
+# For async commands (exec, check), use printf with \n and socat -t timeout
+printf '{"id":1,"action":"exec","mdl":"SHOW ENTITIES"}\n' | socat -t 30 - UNIX-CONNECT:/tmp/mxcli-agent.sock
+
+# For instant commands (state, navigate), echo works fine
+echo '{"id":2,"action":"state"}' | socat - UNIX-CONNECT:/tmp/mxcli-agent.sock
 ```
 
 ## Protocol
@@ -101,6 +105,12 @@ echo '{"id":4,"action":"navigate","target":"entity:MyModule.Customer"}' | socat 
 | `exec` without `mdl` field | Always include MDL text for exec action |
 | Socket not found | Ensure TUI is running with `--agent-socket` |
 | Response never arrives | In confirmation mode, human must press `q` in TUI |
+| `echo` pipe closes before async response | Use `printf '...\n' \| socat -t 30` for exec/check (keeps connection open) |
+| Overlay stays open after auto-proceed | By design — human can still review; press `q`/`Esc` to dismiss |
+
+## Architecture Note
+
+bubbletea copies the model at `tea.NewProgram()` time. Fields set on the original variable after that are **not visible in `Update()`**. The `agentAutoProceed` flag is set via `SetAgentAutoProceed()` before `NewProgram`. The `agentListener` (set after) is only used for lifecycle management in `cmd_tui.go`, never accessed from `Update()`.
 
 ## Key Files
 
