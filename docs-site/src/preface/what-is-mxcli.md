@@ -18,6 +18,8 @@
 
 A developer or AI agent writes MDL statements. mxcli parses and validates them, then applies the changes directly to the `.mpr` project file. The modified project can then be opened in Mendix Studio Pro as usual.
 
+> **Important:** Do not edit a project with mxcli while it is open in Studio Pro. Studio Pro maintains in-memory caches that cannot be updated externally, and concurrent edits will cause errors. Close the project in Studio Pro first, run mxcli, then re-open the project.
+
 ## Key Capabilities
 
 - **Project exploration** -- list modules, entities, microflows, pages; describe any element in MDL; full-text search across all strings and source definitions.

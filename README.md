@@ -1,6 +1,8 @@
 # mxcli - Mendix CLI for AI-Assisted Development
 
 > **WARNING: Alpha-quality software.** This project is in early stages and has been largely vibe-engineered with AI coding assistants. Expect bugs, missing features, and rough edges. **mxcli can corrupt your Mendix project files** — always work on a copy or use version control. Use at your own risk. This has been developed and tested against Mendix 11.6, other versions are currently not validated.
+>
+> **Do not edit a project with mxcli while it is open in Studio Pro.** Studio Pro maintains in-memory caches that cannot be updated externally. Close the project in Studio Pro first, run mxcli, then re-open the project.
 
 A command-line tool that enables AI coding assistants ([Claude Code](https://claude.ai/claude-code), Cursor, Continue.dev, Windsurf, Aider, and others) to read, understand, and modify Mendix application projects.
 
