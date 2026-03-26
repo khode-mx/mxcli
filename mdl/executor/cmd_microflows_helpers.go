@@ -127,14 +127,19 @@ func expressionToString(expr ast.Expression) string {
 	case *ast.QualifiedNameExpr:
 		// Qualified name (association name, entity reference) - unquoted
 		return e.QualifiedName.String()
+	case *ast.IfThenElseExpr:
+		cond := expressionToString(e.Condition)
+		thenStr := expressionToString(e.ThenExpr)
+		elseStr := expressionToString(e.ElseExpr)
+		return "if " + cond + " then " + thenStr + " else " + elseStr
 	default:
 		return ""
 	}
 }
 
 // expressionToXPath converts an AST Expression to an XPath constraint string.
-// Unlike expressionToString (for Mendix expressions), XPath requires Mendix
-// tokens like [%CurrentDateTime%] to be quoted: '[%CurrentDateTime%]'.
+// Mendix tokens like [%CurrentDateTime%] are written unquoted — they are
+// special XPath placeholders, not string literals.
 func expressionToXPath(expr ast.Expression) string {
 	if expr == nil {
 		return ""
@@ -145,7 +150,7 @@ func expressionToXPath(expr ast.Expression) string {
 
 	switch e := expr.(type) {
 	case *ast.TokenExpr:
-		return "'[%" + e.Token + "%]'"
+		return "[%" + e.Token + "%]"
 	case *ast.BinaryExpr:
 		left := expressionToXPath(e.Left)
 		right := expressionToXPath(e.Right)
