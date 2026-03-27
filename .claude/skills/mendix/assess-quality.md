@@ -265,15 +265,10 @@ The Dutch Institute for Vulnerability Disclosure (DIVD) found widespread authori
 
 | Guideline | Details |
 |-----------|---------|
-| Use SASS, not inline CSS | Override variables in `theme/web/custom-variables.scss`, not inline styles |
-| Use Design Properties over CSS classes | Prefer `DesignProperties: ['Spacing top': 'Large']` over raw CSS classes — they are theme-aware and Studio Pro-visible |
-| Customize via `custom-variables.scss` | Override Atlas variables (`$brand-primary`, `$font-size-default`, etc.) instead of writing custom CSS rules |
+| Use SASS, not inline CSS | All styling in `_custom-variables.scss` or theme files |
 | Avoid nested styling rules | Keep CSS flat for maintainability |
-| No inline `style` attributes | Use CSS classes or Design Properties instead. **Never** apply `Style` to DYNAMICTEXT (crashes MxBuild) |
+| No inline `style` attributes | Use CSS classes instead |
 | Consistent page layout | Use layout grids, not absolute positioning |
-| Theme module ordering | `themesource/` modules compile in `ThemeModuleOrder` sequence — custom theme modules should come after `atlas_core` |
-
-See [theme-styling.md](theme-styling.md) for the full theme system reference.
 
 ### J. Quality Metrics (SIG/Sigrid Model)
 

@@ -60,7 +60,6 @@ SET Title = 'New Page Title'
 | `ButtonStyle` | ACTIONBUTTON, LINKBUTTON | Primary, Default, Success, Danger, Warning, Info | `SET ButtonStyle = Danger ON btnDelete` |
 | `Class` | Any widget | CSS class string | `SET Class = 'card mx-2' ON container1` |
 | `Style` | Any widget (see warning below) | Inline CSS string | `SET Style = 'padding: 16px;' ON container1` |
-| `DesignProperties` | Any widget | Design property list | See [theme-styling.md](theme-styling.md) |
 | `Editable` | Input widgets | String | `SET Editable = 'Never' ON txtReadOnly` |
 | `Visible` | Any widget | String or Boolean | `SET Visible = false ON txtHidden` |
 | `Name` | Any widget | String | `SET Name = 'newName' ON oldName` |

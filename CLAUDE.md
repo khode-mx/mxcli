@@ -295,7 +295,6 @@ Regenerate after modifying `MDLLexer.g4` or `MDLParser.g4`: `make grammar`. See 
 - `.claude/skills/write-microflows.md` - Microflow syntax, common mistakes, validation checklist
 - `.claude/skills/create-page.md` - Page/widget syntax reference
 - `.claude/skills/alter-page.md` - ALTER PAGE/SNIPPET in-place modifications (SET, INSERT, DROP, REPLACE)
-- `.claude/skills/theme-styling.md` - **READ for any styling/theme work** - Design properties, ALTER STYLING, widget type mappings, CSS hot-reload
 - `.claude/skills/overview-pages.md` - CRUD page patterns
 - `.claude/skills/master-detail-pages.md` - Master-detail page patterns
 - `.claude/skills/generate-domain-model.md` - Entity/Association syntax

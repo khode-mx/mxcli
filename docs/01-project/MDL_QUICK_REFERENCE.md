@@ -448,31 +448,6 @@ ALTER SNIPPET Module.NavMenu {
 
 **Tip:** Run `DESCRIBE PAGE Module.PageName` first to see widget names.
 
-## Styling & Theme
-
-Commands for inspecting and modifying widget styling (CSS classes, inline styles, Atlas design properties).
-
-| Command | Syntax | Notes |
-|---------|--------|-------|
-| Show design props | `SHOW DESIGN PROPERTIES` | List all available design properties |
-| Show for type | `SHOW DESIGN PROPERTIES FOR CONTAINER` | Properties for a specific widget type |
-| Describe styling | `DESCRIBE STYLING ON PAGE Mod.Page` | Show all styled widgets |
-| Describe widget | `DESCRIBE STYLING ON PAGE Mod.Page WIDGET btn` | Show specific widget's styling |
-| Set class | `ALTER STYLING ON PAGE Mod.Page WIDGET btn SET Class = 'cls'` | CSS class |
-| Set style | `ALTER STYLING ON PAGE Mod.Page WIDGET ctn SET Style = 'css'` | Inline CSS |
-| Set design prop | `ALTER STYLING ON PAGE Mod.Page WIDGET ctn SET 'Key' = 'Val'` | Option property |
-| Toggle on/off | `ALTER STYLING ON PAGE Mod.Page WIDGET btn SET 'Full width' = ON` | Toggle property |
-| Clear all | `ALTER STYLING ON PAGE Mod.Page WIDGET ctn CLEAR DESIGN PROPERTIES` | Remove all design props |
-
-**Inline styling on widgets** (during CREATE PAGE):
-```sql
-CONTAINER c (Class: 'card', Style: 'padding: 16px;', DesignProperties: ['Spacing top': 'Large', 'Full width': ON])
-```
-
-**Design property types:** Toggle (`ON`/`OFF`), Dropdown/ColorPicker/ToggleButtonGroup (`'Value'`), Spacing (`'Large'`, `'Small'`).
-
-**Warning:** Never apply `Style` directly to DYNAMICTEXT — wrap in a CONTAINER instead.
-
 ## Reserved Words and Quoted Identifiers
 
 Most MDL keywords now work **unquoted** as entity names, attribute names, parameter names, and module names. Common words like `Caption`, `Check`, `Content`, `Format`, `Index`, `Label`, `Range`, `Select`, `Source`, `Status`, `Text`, `Title`, `Type`, `Value`, `Item`, `Version`, `Production`, etc. are all valid without quoting.

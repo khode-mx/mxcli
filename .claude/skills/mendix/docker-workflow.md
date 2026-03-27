@@ -315,9 +315,7 @@ mxcli docker reload -p app.mpr --direct
 
 ### CSS-Only Reload
 
-> See [theme-styling.md](theme-styling.md) for the full theme system reference (directory structure, SCSS compilation chain, design properties, ALTER STYLING commands).
-
-For theme/styling changes, SCSS must first be compiled by MxBuild into the PAD output. The `--css` flag skips the model reload step — it only pushes already-compiled CSS to browsers via WebSocket. Note that changes to widget properties (Class, Style, DesignProperties via MDL commands) are model changes and require a normal `docker reload`, not `--css`.
+For theme/styling changes, SCSS must first be compiled by MxBuild into the PAD output. The `--css` flag skips the model reload step — it only pushes already-compiled CSS to browsers via WebSocket.
 
 ```bash
 # Correct workflow for SCSS/theme changes:

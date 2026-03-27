@@ -60,7 +60,7 @@ Use `docker run --fresh` only when schema changes are destructive (dropped entit
 ./mxcli docker run -p MxCliDemoApp2.mpr --fresh --wait
 ```
 
-**CSS/theme changes only** (no rebuild needed; see [theme-styling.md](theme-styling.md) for full theme reference):
+**CSS/theme changes only** (no rebuild needed):
 
 ```bash
 # Instant CSS hot reload — pushes to all connected browsers

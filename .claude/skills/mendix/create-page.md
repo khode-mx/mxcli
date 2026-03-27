@@ -70,8 +70,6 @@ CREATE PAGE MyModule.OrderDetail
 
 ### Styling: Class, Style, and DesignProperties
 
-> **Full reference:** See [theme-styling.md](theme-styling.md) for the complete theme system — design property types, widget type mappings, available Atlas UI properties, ALTER STYLING commands, and CSS hot-reload workflow.
-
 Three styling mechanisms can be applied to any widget:
 
 **CSS Class** — Atlas UI utility classes or custom CSS classes:
@@ -87,16 +85,7 @@ CONTAINER c (Style: 'background-color: #f8f9fa; padding: 16px;') { ... }
 
 > **Warning:** Do NOT use `Style` directly on DYNAMICTEXT widgets — it crashes MxBuild with a NullReferenceException. Wrap the DYNAMICTEXT in a styled CONTAINER instead.
 
-**Design Properties** — Atlas UI structured properties defined in `themesource/*/web/design-properties.json`. All widgets inherit base properties from the `"Widget"` key (Spacing, Align self, Hide on). Type-specific properties add extra options. Use `SHOW DESIGN PROPERTIES FOR <type>` to browse available properties and valid option values.
-
-Property types:
-
-| Type | Syntax | Example |
-|------|--------|---------|
-| Toggle | `'Key': ON` or `'Key': OFF` | `'Full width': ON` |
-| Dropdown / ColorPicker / ToggleButtonGroup | `'Key': 'Value'` | `'Background color': 'Brand Primary'` |
-| Spacing | `'Spacing top': 'Value'` | `'Spacing top': 'Large'` |
-
+**Design Properties** — Atlas UI structured properties (spacing, colors, toggles):
 ```sql
 -- Option property: 'Key': 'Value'
 CONTAINER c (DesignProperties: ['Spacing top': 'Large', 'Background color': 'Brand Primary']) { ... }
@@ -107,8 +96,6 @@ CONTAINER c (DesignProperties: ['Full width': ON]) { ... }
 -- Multiple types combined
 ACTIONBUTTON btn (Caption: 'Save', DesignProperties: ['Size': 'Large', 'Full width': ON])
 ```
-
-> **Note:** Design property keys are **case-sensitive** and must match the `name` field in `design-properties.json` exactly.
 
 **All three can be combined on a single widget:**
 ```sql
