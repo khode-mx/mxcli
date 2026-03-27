@@ -1,0 +1,78 @@
+-- ############################################################################
+-- FOLDER EXAMPLES
+-- ############################################################################
+--
+-- This file demonstrates the MDL syntax for managing project folders:
+-- creating documents in folders, moving documents between folders,
+-- and dropping empty folders.
+--
+-- Folders are created implicitly when referenced in FOLDER clauses or
+-- MOVE statements. DROP FOLDER removes empty folders explicitly.
+--
+-- Prerequisites: Assumes a module 'FolderTest' exists.
+--
+-- ############################################################################
+
+create module FolderTest;
+
+-- MARK: - Create Documents in Folders
+
+/**
+ * Level 1.1: Create a microflow in a folder (auto-creates the folder)
+ */
+CREATE MICROFLOW FolderTest.ACT_Process()
+RETURNS Boolean
+FOLDER 'Processing'
+BEGIN
+  RETURN true;
+END;
+/
+
+/**
+ * Level 1.2: Create another microflow in a nested folder
+ */
+CREATE MICROFLOW FolderTest.ACT_Archive()
+RETURNS Boolean
+FOLDER 'Processing/Archive'
+BEGIN
+  RETURN true;
+END;
+/
+
+-- MARK: - Move Documents Between Folders
+
+/**
+ * Level 2.1: Move a microflow to a different folder (auto-creates target)
+ */
+MOVE MICROFLOW FolderTest.ACT_Process TO FOLDER 'Resources';
+/
+
+/**
+ * Level 2.2: Move a microflow to module root (out of folder)
+ */
+MOVE MICROFLOW FolderTest.ACT_Archive TO FolderTest;
+/
+
+-- MARK: - Drop Folders
+
+/**
+ * Level 3.1: Drop an empty nested folder
+ */
+DROP FOLDER 'Processing/Archive' IN FolderTest;
+/
+
+/**
+ * Level 3.2: Drop the now-empty parent folder
+ */
+DROP FOLDER 'Processing' IN FolderTest;
+/
+
+/**
+ * Level 3.3: Move contents out, then drop folder
+ */
+MOVE MICROFLOW FolderTest.ACT_Process TO FolderTest;
+DROP FOLDER 'Resources' IN FolderTest;
+/
+
+-- cleanup
+drop module FolderTest;

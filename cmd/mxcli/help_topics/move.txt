@@ -57,6 +57,18 @@ EXAMPLES
   SHOW IMPACT OF OldModule.CustomerPage;
   MOVE PAGE OldModule.CustomerPage TO NewModule;
 
+DROP FOLDER
+-----------
+
+Remove an empty folder from a module:
+  DROP FOLDER 'FolderPath' IN Module;
+  DROP FOLDER 'Parent/Child' IN Module;
+
+The folder must be empty (no documents or sub-folders).
+Move contents out first if needed:
+  MOVE MICROFLOW Module.Name TO Module;
+  DROP FOLDER 'OldFolder' IN Module;
+
 FOLDERS
 -------
 

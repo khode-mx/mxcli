@@ -260,6 +260,7 @@
 - [Organization Statements](reference/organization/README.md)
   - [CREATE MODULE](reference/organization/create-module.md)
   - [CREATE FOLDER](reference/organization/create-folder.md)
+  - [DROP FOLDER](reference/organization/drop-folder.md)
   - [MOVE](reference/organization/move.md)
 - [Session Statements](reference/session/README.md)
   - [SET](reference/session/set.md)

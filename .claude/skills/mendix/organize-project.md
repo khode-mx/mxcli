@@ -202,9 +202,26 @@ MOVE ENTITY CRM.Customer TO CustomerModule;
 MOVE ENUMERATION CRM.OrderStatus TO SharedModule;
 ```
 
+## Deleting Folders
+
+Use `DROP FOLDER` to remove empty folders. The folder must not contain any documents or sub-folders.
+
+```sql
+-- Drop an empty folder
+DROP FOLDER 'OldPages' IN MyModule;
+
+-- Drop a nested folder (only the leaf is removed)
+DROP FOLDER 'Orders/Archive' IN MyModule;
+
+-- Move contents out first, then drop
+MOVE MICROFLOW MyModule.ACT_Process TO MyModule;
+DROP FOLDER 'Processing' IN MyModule;
+```
+
 ## Validation Checklist
 
 - [ ] Folder paths use `/` separator (not `\`)
 - [ ] FOLDER keyword placement is correct (before BEGIN for microflows, inside properties for pages)
 - [ ] Cross-module moves: checked impact with `SHOW IMPACT OF` first
 - [ ] Folder naming is consistent across modules
+- [ ] DROP FOLDER: verify folder is empty before dropping

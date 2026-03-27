@@ -178,6 +178,7 @@ AUTHENTICATION Basic, Session
 |-----------|--------|-------|
 | Microflow folder | `FOLDER 'path'` (before BEGIN) | `CREATE MICROFLOW ... FOLDER 'ACT' BEGIN ... END;` |
 | Page folder | `Folder: 'path'` (in properties) | `CREATE PAGE ... (Folder: 'Pages/Detail') { ... }` |
+| Drop folder | `DROP FOLDER 'path' IN Module;` | Folder must be empty |
 | Move to folder | `MOVE PAGE\|MICROFLOW\|SNIPPET\|NANOFLOW\|ENUMERATION Module.Name TO FOLDER 'path';` | Folders created automatically |
 | Move to module root | `MOVE PAGE Module.Name TO Module;` | Removes from folder |
 | Move across modules | `MOVE PAGE Old.Name TO NewModule;` | **Breaks by-name references** — use `SHOW IMPACT OF` first |

@@ -58,4 +58,4 @@ CREATE PAGE MyModule.Order_Edit
 
 ## See Also
 
-[CREATE MODULE](create-module.md), [MOVE](move.md)
+[CREATE MODULE](create-module.md), [DROP FOLDER](drop-folder.md), [MOVE](move.md)
