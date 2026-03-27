@@ -30,6 +30,7 @@ Object Types:
   enumeration  Dump an enumeration
   snippet      Dump a snippet
   layout       Dump a layout
+  constant     Dump a constant
 
 Examples:
   # List all pages
@@ -337,7 +338,7 @@ func formatValue(val any) string {
 }
 
 func init() {
-	bsonDumpCmd.Flags().StringP("type", "t", "page", "Object type: page, microflow, nanoflow, enumeration, snippet, layout")
+	bsonDumpCmd.Flags().StringP("type", "t", "page", "Object type: page, microflow, nanoflow, enumeration, snippet, layout, constant")
 	bsonDumpCmd.Flags().StringP("object", "o", "", "Object qualified name to dump (e.g., Module.PageName)")
 	bsonDumpCmd.Flags().BoolP("list", "l", false, "List all objects of the specified type")
 	bsonDumpCmd.Flags().StringSliceP("compare", "c", nil, "Compare two objects: --compare Obj1,Obj2")
