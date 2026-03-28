@@ -53,6 +53,7 @@ Supported Tools:
   - windsurf    Windsurf (Codeium) with MDL rules
   - aider       Aider with project configuration
   - opencode    OpenCode AI agent with MDL commands and skills
+  - vibe        Mistral Vibe CLI agent with skills
 
 All tools receive universal documentation in AGENTS.md and .ai-context/
 `,
