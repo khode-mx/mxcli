@@ -288,6 +288,14 @@ func (b *Builder) Build(progress ProgressFunc) error {
 		return fmt.Errorf("failed to build enumerations: %w", err)
 	}
 
+	if err := b.buildConstants(); err != nil {
+		return fmt.Errorf("failed to build constants: %w", err)
+	}
+
+	if err := b.buildConstantValues(); err != nil {
+		return fmt.Errorf("failed to build constant values: %w", err)
+	}
+
 	if err := b.buildJavaActions(); err != nil {
 		return fmt.Errorf("failed to build java actions: %w", err)
 	}

@@ -369,6 +369,124 @@ func (e *Executor) createConstant(stmt *ast.CreateConstantStmt) error {
 	return nil
 }
 
+// showConstantValues handles SHOW CONSTANT VALUES command.
+// Displays one row per constant per configuration for easy comparison.
+func (e *Executor) showConstantValues(moduleName string) error {
+	constants, err := e.reader.ListConstants()
+	if err != nil {
+		return fmt.Errorf("failed to list constants: %w", err)
+	}
+
+	ps, err := e.reader.GetProjectSettings()
+	if err != nil {
+		return fmt.Errorf("failed to read project settings: %w", err)
+	}
+
+	h, err := e.getHierarchy()
+	if err != nil {
+		return fmt.Errorf("failed to build hierarchy: %w", err)
+	}
+
+	// Build constant list with qualified names
+	type constInfo struct {
+		qualifiedName string
+		defaultValue  string
+		typeStr       string
+	}
+	var consts []constInfo
+	for _, c := range constants {
+		modID := h.FindModuleID(c.ContainerID)
+		modName := h.GetModuleName(modID)
+		if moduleName != "" && !strings.EqualFold(modName, moduleName) {
+			continue
+		}
+		consts = append(consts, constInfo{
+			qualifiedName: modName + "." + c.Name,
+			defaultValue:  c.DefaultValue,
+			typeStr:       formatConstantType(c.Type),
+		})
+	}
+
+	if len(consts) == 0 {
+		fmt.Fprintln(e.output, "No constants found.")
+		return nil
+	}
+
+	sort.Slice(consts, func(i, j int) bool {
+		return strings.ToLower(consts[i].qualifiedName) < strings.ToLower(consts[j].qualifiedName)
+	})
+
+	// Build configuration constant value lookup: configName -> constantId -> value
+	configValues := make(map[string]map[string]string)
+	var configNames []string
+	if ps.Configuration != nil {
+		for _, cfg := range ps.Configuration.Configurations {
+			configNames = append(configNames, cfg.Name)
+			m := make(map[string]string)
+			for _, cv := range cfg.ConstantValues {
+				m[cv.ConstantId] = cv.Value
+			}
+			configValues[cfg.Name] = m
+		}
+	}
+
+	// Build rows: one per constant + "(default)" row, then one per configuration override
+	type row struct {
+		constant      string
+		configuration string
+		value         string
+	}
+	var rows []row
+	constWidth := len("Constant")
+	cfgWidth := len("Configuration")
+	valWidth := len("Value")
+
+	for _, c := range consts {
+		// Default value row
+		rows = append(rows, row{c.qualifiedName, "(default)", c.defaultValue})
+		if len(c.qualifiedName) > constWidth {
+			constWidth = len(c.qualifiedName)
+		}
+		if len(c.defaultValue) > valWidth {
+			valWidth = len(c.defaultValue)
+		}
+
+		// Per-configuration rows
+		for _, cfgName := range configNames {
+			if val, ok := configValues[cfgName][c.qualifiedName]; ok {
+				rows = append(rows, row{c.qualifiedName, cfgName, val})
+				if len(cfgName) > cfgWidth {
+					cfgWidth = len(cfgName)
+				}
+				if len(val) > valWidth {
+					valWidth = len(val)
+				}
+			}
+		}
+	}
+
+	// Cap value column width
+	if valWidth > 60 {
+		valWidth = 60
+	}
+
+	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s |\n",
+		constWidth, "Constant", cfgWidth, "Configuration", valWidth, "Value")
+	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|\n",
+		strings.Repeat("-", constWidth), strings.Repeat("-", cfgWidth), strings.Repeat("-", valWidth))
+	for _, r := range rows {
+		val := r.value
+		if len(val) > 60 {
+			val = val[:57] + "..."
+		}
+		fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s |\n",
+			constWidth, r.constant, cfgWidth, r.configuration, valWidth, val)
+	}
+	fmt.Fprintf(e.output, "\n(%d rows)\n", len(rows))
+
+	return nil
+}
+
 // dropConstant handles DROP CONSTANT command.
 func (e *Executor) dropConstant(stmt *ast.DropConstantStmt) error {
 	if e.writer == nil {

@@ -436,6 +436,7 @@ var mdlGeneratedKeywords = []protocol.CompletionItem{
 	{Label: "STRUCTURE", Kind: protocol.CompletionItemKindKeyword, Detail: "Utility keyword"},
 	{Label: "TYPE", Kind: protocol.CompletionItemKindKeyword, Detail: "Utility keyword"},
 	{Label: "VALUE", Kind: protocol.CompletionItemKindKeyword, Detail: "Utility keyword"},
+	{Label: "VALUES", Kind: protocol.CompletionItemKindKeyword, Detail: "Utility keyword"},
 	{Label: "SINGLE", Kind: protocol.CompletionItemKindKeyword, Detail: "Utility keyword"},
 	{Label: "MULTIPLE", Kind: protocol.CompletionItemKindKeyword, Detail: "Utility keyword"},
 	{Label: "NONE", Kind: protocol.CompletionItemKindKeyword, Detail: "Utility keyword"},

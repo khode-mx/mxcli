@@ -79,6 +79,7 @@ const (
 	ShowImageCollections      // SHOW IMAGE COLLECTIONS [IN module]
 	ShowRestClients           // SHOW REST CLIENTS [IN module]
 	ShowPublishedRestServices // SHOW PUBLISHED REST SERVICES [IN module]
+	ShowConstantValues       // SHOW CONSTANT VALUES [IN module]
 )
 
 // String returns the human-readable name of the show object type.
@@ -184,6 +185,8 @@ func (t ShowObjectType) String() string {
 		return "REST CLIENTS"
 	case ShowPublishedRestServices:
 		return "PUBLISHED REST SERVICES"
+	case ShowConstantValues:
+		return "CONSTANT VALUES"
 	default:
 		return "UNKNOWN"
 	}

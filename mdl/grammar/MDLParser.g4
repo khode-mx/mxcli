@@ -2439,6 +2439,7 @@ showStatement
     | SHOW SNIPPETS (IN (qualifiedName | IDENTIFIER))?
     | SHOW ENUMERATIONS (IN (qualifiedName | IDENTIFIER))?
     | SHOW CONSTANTS (IN (qualifiedName | IDENTIFIER))?
+    | SHOW CONSTANT VALUES (IN (qualifiedName | IDENTIFIER))?
     | SHOW LAYOUTS (IN (qualifiedName | IDENTIFIER))?
     | SHOW NOTEBOOKS (IN (qualifiedName | IDENTIFIER))?
     | SHOW JAVA ACTIONS (IN (qualifiedName | IDENTIFIER))?

@@ -680,6 +680,8 @@ func (e *Executor) execShow(s *ast.ShowStmt) error {
 		return e.showEnumerations(s.InModule)
 	case ast.ShowConstants:
 		return e.showConstants(s.InModule)
+	case ast.ShowConstantValues:
+		return e.showConstantValues(s.InModule)
 	case ast.ShowEntities:
 		return e.showEntities(s.InModule)
 	case ast.ShowEntity:

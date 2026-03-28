@@ -82,6 +82,16 @@ func (b *Builder) ExitShowStatement(ctx *parser.ShowStatementContext) {
 			}
 		}
 		b.statements = append(b.statements, stmt)
+	} else if ctx.CONSTANT() != nil && ctx.VALUES() != nil {
+		stmt := &ast.ShowStmt{ObjectType: ast.ShowConstantValues}
+		if ctx.IN() != nil {
+			if qn := ctx.QualifiedName(); qn != nil {
+				stmt.InModule = getQualifiedNameText(qn)
+			} else if id := ctx.IDENTIFIER(); id != nil {
+				stmt.InModule = id.GetText()
+			}
+		}
+		b.statements = append(b.statements, stmt)
 	} else if ctx.CONSTANTS() != nil {
 		stmt := &ast.ShowStmt{ObjectType: ast.ShowConstants}
 		if ctx.IN() != nil {

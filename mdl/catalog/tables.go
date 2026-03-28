@@ -646,6 +646,34 @@ func (c *Catalog) createTables() error {
 			SnapshotId TEXT
 		)`,
 
+		// Constants table
+		`CREATE TABLE IF NOT EXISTS constants (
+			Id TEXT PRIMARY KEY,
+			Name TEXT,
+			QualifiedName TEXT,
+			ModuleName TEXT,
+			Folder TEXT,
+			Description TEXT,
+			DataType TEXT,
+			DefaultValue TEXT,
+			ExposedToClient INTEGER DEFAULT 0,
+			ProjectId TEXT,
+			ProjectName TEXT,
+			SnapshotId TEXT,
+			SnapshotDate TEXT,
+			SnapshotSource TEXT
+		)`,
+
+		// Constant values table - per-configuration constant overrides
+		`CREATE TABLE IF NOT EXISTS constant_values (
+			Id INTEGER PRIMARY KEY AUTOINCREMENT,
+			ConstantName TEXT NOT NULL,
+			ConfigurationName TEXT NOT NULL,
+			Value TEXT,
+			ProjectId TEXT,
+			SnapshotId TEXT
+		)`,
+
 		// Objects view - union of all object types
 		`CREATE VIEW IF NOT EXISTS objects AS
 			SELECT Id, 'MODULE' as ObjectType, Name, QualifiedName, '' as ModuleName, Folder, Description,
@@ -679,6 +707,10 @@ func (c *Catalog) createTables() error {
 			SELECT Id, 'ENUMERATION' as ObjectType, Name, QualifiedName, ModuleName, Folder, Description,
 				ProjectId, ProjectName, SnapshotId, SnapshotDate, SnapshotSource
 			FROM enumerations
+			UNION ALL
+			SELECT Id, 'CONSTANT' as ObjectType, Name, QualifiedName, ModuleName, Folder, Description,
+				ProjectId, ProjectName, SnapshotId, SnapshotDate, SnapshotSource
+			FROM constants
 			UNION ALL
 			SELECT Id, 'JAVA_ACTION' as ObjectType, Name, QualifiedName, ModuleName, Folder, Documentation as Description,
 				ProjectId, ProjectName, SnapshotId, SnapshotDate, SnapshotSource
@@ -795,6 +827,10 @@ func (c *Catalog) createTables() error {
 		`CREATE INDEX IF NOT EXISTS idx_external_actions_module ON external_actions(ModuleName)`,
 		`CREATE INDEX IF NOT EXISTS idx_business_events_service ON business_events(ServiceId)`,
 		`CREATE INDEX IF NOT EXISTS idx_business_events_module ON business_events(ModuleName)`,
+		`CREATE INDEX IF NOT EXISTS idx_constants_name ON constants(Name)`,
+		`CREATE INDEX IF NOT EXISTS idx_constants_module ON constants(ModuleName)`,
+		`CREATE INDEX IF NOT EXISTS idx_constant_values_constant ON constant_values(ConstantName)`,
+		`CREATE INDEX IF NOT EXISTS idx_constant_values_config ON constant_values(ConfigurationName)`,
 	}
 
 	for _, schema := range schemas {
