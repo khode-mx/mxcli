@@ -43,7 +43,7 @@ export class MdlFileSystemProvider implements vscode.FileSystemProvider {
 		this.mprPath = configured || undefined;
 	}
 
-	watch(): vscode.Disposable {
+	watch(_uri: vscode.Uri, _options: { recursive: boolean; excludes: string[] }): vscode.Disposable {
 		return new vscode.Disposable(() => {});
 	}
 
@@ -58,11 +58,11 @@ export class MdlFileSystemProvider implements vscode.FileSystemProvider {
 		};
 	}
 
-	readDirectory(): [string, vscode.FileType][] {
+	readDirectory(_uri: vscode.Uri): [string, vscode.FileType][] {
 		return [];
 	}
 
-	createDirectory(): void {
+	createDirectory(_uri: vscode.Uri): void {
 		throw vscode.FileSystemError.NoPermissions('Cannot create directories');
 	}
 
@@ -92,7 +92,7 @@ export class MdlFileSystemProvider implements vscode.FileSystemProvider {
 		return encoded;
 	}
 
-	async writeFile(uri: vscode.Uri, content: Uint8Array): Promise<void> {
+	async writeFile(uri: vscode.Uri, content: Uint8Array, _options: { create: boolean; overwrite: boolean }): Promise<void> {
 		const mprFile = await this.findMprFile();
 		if (!mprFile) {
 			vscode.window.showErrorMessage('No .mpr file found. Set mdl.mprPath in settings.');
@@ -138,11 +138,11 @@ export class MdlFileSystemProvider implements vscode.FileSystemProvider {
 		vscode.window.showInformationMessage('MDL changes applied to project.');
 	}
 
-	delete(): void {
+	delete(_uri: vscode.Uri, _options: { recursive: boolean }): void {
 		throw vscode.FileSystemError.NoPermissions('Cannot delete');
 	}
 
-	rename(): void {
+	rename(_oldUri: vscode.Uri, _newUri: vscode.Uri, _options: { overwrite: boolean }): void {
 		throw vscode.FileSystemError.NoPermissions('Cannot rename');
 	}
 
