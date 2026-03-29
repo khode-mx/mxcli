@@ -259,6 +259,13 @@ New MDL commands or language features must be wired through the full pipeline:
 - [ ] Independent features (e.g., a new command, a formatter, UX improvements) go in separate PRs even if developed together
 - [ ] Refactors that touch many files (e.g., renaming a helper across executors) are their own commit, not bundled with feature work
 
+### Documentation
+- [ ] **Skills** — new features documented in `.claude/skills/` (syntax, examples, gotchas)
+- [ ] **CLI help** — `mxcli` command help text updated (Cobra `Short`/`Long`/`Example` fields)
+- [ ] **Syntax reference** — `docs/01-project/MDL_QUICK_REFERENCE.md` updated with new statement syntax
+- [ ] **MDL examples** — working examples added to `mdl-examples/` for new commands
+- [ ] **Site docs** — `docs-site/src/` pages added or updated for user-facing features
+
 ### Code quality
 - [ ] Refactors are applied consistently across all relevant files (grep for the old pattern)
 - [ ] Manually maintained lists (keyword lists, type mappings) are flagged as maintenance risks
