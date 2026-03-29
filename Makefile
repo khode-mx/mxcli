@@ -113,7 +113,7 @@ build-debug: sync-all completions
 	@echo "Built $(BUILD_DIR)/$(BINARY_NAME)-debug (debug build with bson tools)"
 
 # Build for all platforms (CGO_ENABLED=0 for cross-compilation)
-release: clean sync-all
+release: clean vscode-ext sync-all
 	@mkdir -p $(BUILD_DIR)
 	@echo "Building release binaries..."
 
@@ -181,7 +181,6 @@ grammar:
 # Clean build artifacts
 clean:
 	rm -rf $(BUILD_DIR)
-	rm -f vscode-mdl/vscode-mdl-*.vsix
 	go clean
 
 # Build VS Code extension (.vsix) with build-time version info
