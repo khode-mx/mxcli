@@ -745,6 +745,8 @@ func (fb *flowBuilder) isEntity(moduleName, entityName string) bool {
 // and sets the appropriate field on the MemberChange. It queries the domain model
 // to check if the name matches an association on the entity; if no reader is available,
 // it falls back to the dot-contains heuristic.
+//
+// memberName can be either bare ("Order_Customer") or qualified ("MfTest.Order_Customer").
 func (fb *flowBuilder) resolveMemberChange(mc *microflows.MemberChange, memberName string, entityQN string) {
 	if entityQN == "" {
 		return
@@ -758,25 +760,40 @@ func (fb *flowBuilder) resolveMemberChange(mc *microflows.MemberChange, memberNa
 	}
 	moduleName := parts[0]
 
+	// If memberName is already qualified (e.g., "MfTest.Order_Customer"),
+	// extract the bare name for association lookup.
+	bareName := memberName
+	qualifiedName := memberName
+	if dot := strings.Index(memberName, "."); dot >= 0 {
+		bareName = memberName[dot+1:]
+		// qualifiedName is already set to the full memberName
+	} else {
+		qualifiedName = moduleName + "." + memberName
+	}
+
 	// Query domain model to check if this member is an association
 	if fb.reader != nil {
 		if mod, err := fb.reader.GetModuleByName(moduleName); err == nil && mod != nil {
 			if dm, err := fb.reader.GetDomainModel(mod.ID); err == nil && dm != nil {
 				for _, a := range dm.Associations {
-					if a.Name == memberName {
-						mc.AssociationQualifiedName = moduleName + "." + memberName
+					if a.Name == bareName {
+						mc.AssociationQualifiedName = qualifiedName
 						return
 					}
 				}
-				// Also check cross-associations
 				for _, a := range dm.CrossAssociations {
-					if a.Name == memberName {
-						mc.AssociationQualifiedName = moduleName + "." + memberName
+					if a.Name == bareName {
+						mc.AssociationQualifiedName = qualifiedName
 						return
 					}
 				}
 				// Not an association — it's an attribute
-				mc.AttributeQualifiedName = entityQN + "." + memberName
+				if strings.Contains(memberName, ".") {
+					// Already qualified, don't double-qualify
+					mc.AttributeQualifiedName = memberName
+				} else {
+					mc.AttributeQualifiedName = entityQN + "." + memberName
+				}
 				return
 			}
 		}
