@@ -35,7 +35,8 @@ Instead, please use one of the following methods:
 
 ## Security Practices
 
-- Dependencies are monitored via Dependabot
+- Static analysis via CodeQL (Go) on every push
 - Go vulnerabilities are scanned with `govulncheck` in CI
+- Dependencies are monitored via Dependabot
 - CycloneDX SBOM is available via `make sbom`
 - Release binaries are built with `CGO_ENABLED=0` (no C dependencies)
