@@ -466,16 +466,23 @@ func parseWidgetPropertyV3(ctx parser.IWidgetPropertyV3Context, widget *ast.Widg
 	// DesktopWidth: ...
 	if propCtx.DESKTOPWIDTH() != nil {
 		if dwCtx := propCtx.DesktopWidthV3(); dwCtx != nil {
-			text := dwCtx.GetText()
-			if strings.EqualFold(text, "AutoFill") {
-				widget.Properties["DesktopWidth"] = "AutoFill"
-			} else {
-				if n, err := strconv.Atoi(text); err == nil {
-					widget.Properties["DesktopWidth"] = n
-				} else {
-					widget.Properties["DesktopWidth"] = text
-				}
-			}
+			widget.Properties["DesktopWidth"] = parseWidthValue(dwCtx.GetText())
+		}
+		return
+	}
+
+	// TabletWidth: ...
+	if propCtx.TABLETWIDTH() != nil {
+		if dwCtx := propCtx.DesktopWidthV3(); dwCtx != nil {
+			widget.Properties["TabletWidth"] = parseWidthValue(dwCtx.GetText())
+		}
+		return
+	}
+
+	// PhoneWidth: ...
+	if propCtx.PHONEWIDTH() != nil {
+		if dwCtx := propCtx.DesktopWidthV3(); dwCtx != nil {
+			widget.Properties["PhoneWidth"] = parseWidthValue(dwCtx.GetText())
 		}
 		return
 	}
@@ -542,10 +549,26 @@ func parseWidgetPropertyV3(ctx parser.IWidgetPropertyV3Context, widget *ast.Widg
 		return
 	}
 
+	// VISIBLE IF 'expression' (conditional visibility)
+	if propCtx.VISIBLE() != nil && propCtx.IF() != nil {
+		if str := propCtx.STRING_LITERAL(); str != nil {
+			widget.Properties["VisibleIf"] = unquoteString(str.GetText())
+		}
+		return
+	}
+
 	// Visible: expression (keyword-based property)
 	if propCtx.VISIBLE() != nil {
 		if valCtx := propCtx.PropertyValueV3(); valCtx != nil {
 			widget.Properties["Visible"] = buildPropertyValueV3(valCtx)
+		}
+		return
+	}
+
+	// EDITABLE IF 'expression' (conditional editability)
+	if propCtx.EDITABLE() != nil && propCtx.IF() != nil {
+		if str := propCtx.STRING_LITERAL(); str != nil {
+			widget.Properties["EditableIf"] = unquoteString(str.GetText())
 		}
 		return
 	}
@@ -915,6 +938,17 @@ func buildSortColumnAsOrderBy(ctx parser.ISortColumnContext) ast.OrderByItemV3 {
 }
 
 // buildPropertyValueV3 builds a generic property value.
+// parseWidthValue parses a column width value: numeric (1-12) or "AutoFill".
+func parseWidthValue(text string) any {
+	if strings.EqualFold(text, "AutoFill") {
+		return "AutoFill"
+	}
+	if n, err := strconv.Atoi(text); err == nil {
+		return n
+	}
+	return text
+}
+
 func buildPropertyValueV3(ctx parser.IPropertyValueV3Context) any {
 	if ctx == nil {
 		return nil

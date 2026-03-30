@@ -36,7 +36,18 @@ func appendDataGridPagingProps(props []string, w rawWidget) []string {
 	return props
 }
 
-// appendAppearanceProps appends Class, Style, and DesignProperties if present.
+// appendConditionalProps appends VISIBLE IF and EDITABLE IF if present.
+func appendConditionalProps(props []string, w rawWidget) []string {
+	if w.VisibleIf != "" {
+		props = append(props, fmt.Sprintf("VISIBLE IF %s", mdlQuote(w.VisibleIf)))
+	}
+	if w.EditableIf != "" {
+		props = append(props, fmt.Sprintf("EDITABLE IF %s", mdlQuote(w.EditableIf)))
+	}
+	return props
+}
+
+// appendAppearanceProps appends Class, Style, DesignProperties, and conditional settings if present.
 func appendAppearanceProps(props []string, w rawWidget) []string {
 	if w.Class != "" {
 		props = append(props, fmt.Sprintf("Class: %s", mdlQuote(w.Class)))
@@ -46,6 +57,12 @@ func appendAppearanceProps(props []string, w rawWidget) []string {
 	}
 	if len(w.DesignProperties) > 0 {
 		props = append(props, formatDesignPropertiesMDL(w.DesignProperties))
+	}
+	if w.VisibleIf != "" {
+		props = append(props, fmt.Sprintf("VISIBLE IF %s", mdlQuote(w.VisibleIf)))
+	}
+	if w.EditableIf != "" {
+		props = append(props, fmt.Sprintf("EDITABLE IF %s", mdlQuote(w.EditableIf)))
 	}
 	return props
 }
@@ -151,11 +168,19 @@ func (e *Executor) outputWidgetMDLV3(w rawWidget, indent int) {
 		for rowIdx, row := range w.Rows {
 			fmt.Fprintf(e.output, "%s  ROW row%d {\n", prefix, rowIdx+1)
 			for colIdx, col := range row.Columns {
+				var colProps []string
 				widthStr := "AutoFill"
 				if col.Width > 0 && col.Width <= 12 {
 					widthStr = fmt.Sprintf("%d", col.Width)
 				}
-				fmt.Fprintf(e.output, "%s    COLUMN col%d (DesktopWidth: %s) {\n", prefix, colIdx+1, widthStr)
+				colProps = append(colProps, "DesktopWidth: "+widthStr)
+				if col.TabletWidth > 0 && col.TabletWidth <= 12 {
+					colProps = append(colProps, fmt.Sprintf("TabletWidth: %d", col.TabletWidth))
+				}
+				if col.PhoneWidth > 0 && col.PhoneWidth <= 12 {
+					colProps = append(colProps, fmt.Sprintf("PhoneWidth: %d", col.PhoneWidth))
+				}
+				fmt.Fprintf(e.output, "%s    COLUMN col%d (%s) {\n", prefix, colIdx+1, strings.Join(colProps, ", "))
 				for _, cw := range col.Widgets {
 					e.outputWidgetMDLV3(cw, indent+3)
 				}

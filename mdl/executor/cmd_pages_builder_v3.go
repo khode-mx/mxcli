@@ -344,7 +344,43 @@ func (pb *pageBuilder) buildWidgetV3(w *ast.WidgetV3) (pages.Widget, error) {
 	// Apply Class/Style appearance properties to the widget
 	applyWidgetAppearance(widget, w, pb.themeRegistry)
 
+	// Apply conditional visibility/editability
+	applyConditionalSettings(widget, w)
+
 	return widget, nil
+}
+
+// applyConditionalSettings sets ConditionalVisibility and ConditionalEditability
+// on a widget if VISIBLE IF or EDITABLE IF properties are specified in the AST.
+func applyConditionalSettings(widget pages.Widget, w *ast.WidgetV3) {
+	type baseWidgetGetter interface {
+		GetBaseWidget() *pages.BaseWidget
+	}
+	bwg, ok := widget.(baseWidgetGetter)
+	if !ok {
+		return
+	}
+	bw := bwg.GetBaseWidget()
+
+	if visibleIf := w.GetStringProp("VisibleIf"); visibleIf != "" {
+		bw.ConditionalVisibility = &pages.ConditionalVisibilitySettings{
+			BaseElement: model.BaseElement{
+				ID:       model.ID(mpr.GenerateID()),
+				TypeName: "Forms$ConditionalVisibilitySettings",
+			},
+			Expression: visibleIf,
+		}
+	}
+
+	if editableIf := w.GetStringProp("EditableIf"); editableIf != "" {
+		bw.ConditionalEditability = &pages.ConditionalEditabilitySettings{
+			BaseElement: model.BaseElement{
+				ID:       model.ID(mpr.GenerateID()),
+				TypeName: "Forms$ConditionalEditabilitySettings",
+			},
+			Expression: editableIf,
+		}
+	}
 }
 
 // applyWidgetAppearance sets Class, Style, and DesignProperties on a widget if specified in the AST.

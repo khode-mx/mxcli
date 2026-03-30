@@ -113,6 +113,14 @@ func serializeLayoutGridRow(row *pages.LayoutGridRow) bson.D {
 	}
 }
 
+// columnWeight returns the column weight, defaulting to -1 (auto) if 0.
+func columnWeight(w int) int {
+	if w == 0 {
+		return -1
+	}
+	return w
+}
+
 // serializeLayoutGridColumn serializes a LayoutGridColumn.
 func serializeLayoutGridColumn(col *pages.LayoutGridColumn) bson.D {
 	// Weight for column width: -1 means auto-fill, 1-12 are explicit widths
@@ -125,9 +133,9 @@ func serializeLayoutGridColumn(col *pages.LayoutGridColumn) bson.D {
 		{Key: "$ID", Value: idToBsonBinary(string(col.ID))},
 		{Key: "$Type", Value: "Forms$LayoutGridColumn"},
 		{Key: "Appearance", Value: serializeAppearance("", "", nil)},
-		{Key: "PhoneWeight", Value: int32(-1)},  // Auto for phone
+		{Key: "PhoneWeight", Value: int32(columnWeight(col.PhoneWeight))},
 		{Key: "PreviewWidth", Value: int32(-1)}, // Default preview width
-		{Key: "TabletWeight", Value: int32(-1)}, // Auto for tablet
+		{Key: "TabletWeight", Value: int32(columnWeight(col.TabletWeight))},
 		{Key: "VerticalAlignment", Value: "None"},
 		{Key: "Weight", Value: int32(weight)}, // Desktop weight
 		{Key: "Widgets", Value: serializeWidgetArray(col.Widgets)},

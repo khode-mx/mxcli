@@ -1815,6 +1815,8 @@ widgetPropertyV3
     | CLASS COLON STRING_LITERAL                       // Class: 'my-class'
     | STYLE COLON STRING_LITERAL                       // Style: 'color: red'
     | DESKTOPWIDTH COLON desktopWidthV3               // DesktopWidth: 6 | AutoFill
+    | TABLETWIDTH COLON desktopWidthV3                // TabletWidth: 6 | AutoFill
+    | PHONEWIDTH COLON desktopWidthV3                 // PhoneWidth: 12 | AutoFill
     // Where: and OrderBy: removed — use inline WHERE/SORT BY in DataSource: expression
     | SELECTION COLON selectionModeV3                 // Selection: Single | Multiple
     | SNIPPET COLON qualifiedName                     // Snippet: Module.SnippetName
@@ -1823,7 +1825,9 @@ widgetPropertyV3
     | DESIGNPROPERTIES COLON designPropertyListV3       // DesignProperties: [...]
     | WIDTH COLON NUMBER_LITERAL                        // Width: 200
     | HEIGHT COLON NUMBER_LITERAL                      // Height: 100
+    | VISIBLE IF STRING_LITERAL                        // VISIBLE IF '$currentObject/IsActive = true'
     | VISIBLE COLON propertyValueV3                   // Visible: expression
+    | EDITABLE IF STRING_LITERAL                      // EDITABLE IF '$currentObject/Status = Draft'
     | TOOLTIP COLON propertyValueV3                   // Tooltip: 'text'
     | IDENTIFIER COLON propertyValueV3                // Generic: any other property
     ;
@@ -3156,6 +3160,7 @@ commonNameKeyword
     | FORMAT | RANGE | SOURCE_KW | CHECK                     // Validation/data keywords
     | FOLDER | NAVIGATION | HOME | VERSION | PRODUCTION      // Structure/config keywords
     | SELECTION | EDITABLE | VISIBLE | DATASOURCE            // Widget property keywords
+    | TABLETWIDTH | PHONEWIDTH                               // Responsive width keywords
     | WIDTH | HEIGHT | STYLE | CLASS                         // Styling keywords
     | BOTH | SINGLE | MULTIPLE | NONE                        // Cardinality keywords
     | PROTOTYPE | OFF                                        // Security level keywords

@@ -526,6 +526,9 @@ type rawWidget struct {
 	// GroupBox properties
 	Collapsible string // "No", "YesInitiallyExpanded", "YesInitiallyCollapsed"
 	HeaderMode  string // "Div", "H1"-"H6"
+	// Conditional visibility/editability
+	VisibleIf  string // Expression from ConditionalVisibilitySettings
+	EditableIf string // Expression from ConditionalEditabilitySettings
 	// Design properties from Appearance
 	DesignProperties []rawDesignProp
 }
@@ -542,8 +545,10 @@ type rawWidgetRow struct {
 }
 
 type rawWidgetColumn struct {
-	Width   int
-	Widgets []rawWidget
+	Width       int
+	TabletWidth int
+	PhoneWidth  int
+	Widgets     []rawWidget
 }
 
 // toBsonArray converts various BSON array types to []interface{}.

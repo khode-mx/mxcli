@@ -217,6 +217,8 @@ var mdlGeneratedKeywords = []protocol.CompletionItem{
 	{Label: "PARAMS", Kind: protocol.CompletionItemKindKeyword, Detail: "Widget keyword"},
 	{Label: "VARIABLES", Kind: protocol.CompletionItemKindKeyword, Detail: "Widget keyword"},
 	{Label: "DESKTOPWIDTH", Kind: protocol.CompletionItemKindKeyword, Detail: "Widget keyword"},
+	{Label: "TABLETWIDTH", Kind: protocol.CompletionItemKindKeyword, Detail: "Widget keyword"},
+	{Label: "PHONEWIDTH", Kind: protocol.CompletionItemKindKeyword, Detail: "Widget keyword"},
 	{Label: "CLASS", Kind: protocol.CompletionItemKindKeyword, Detail: "Widget keyword"},
 	{Label: "STYLE", Kind: protocol.CompletionItemKindKeyword, Detail: "Widget keyword"},
 	{Label: "BUTTONSTYLE", Kind: protocol.CompletionItemKindKeyword, Detail: "Widget keyword"},
