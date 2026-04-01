@@ -1,20 +1,20 @@
 # Mendix Version Compatibility
 
-Supported Mendix Studio Pro versions and MPR format mapping.
+Supported Mendix Studio Pro versions, BSON format differences, and known limitations.
 
 ## Supported Versions
 
-mxcli supports Mendix Studio Pro versions **8.x through 11.x**.
+mxcli supports Mendix Studio Pro versions **9.x through 11.x**. Development and nightly testing targets three versions:
 
-| Studio Pro Version | MPR Format | Status |
-|-------------------|------------|--------|
-| 8.x | v1 | Supported |
-| 9.x | v1 | Supported |
-| 10.0 -- 10.17 | v1 | Supported |
-| 10.18+ | v2 | Supported |
-| 11.x | v2 | Supported (primary development target) |
-
-> **Note:** Development and testing is primarily done against **Mendix 11.6**. Other versions are supported but may have untested edge cases.
+| Studio Pro Version | MPR Format | Nightly Tested | Status |
+|-------------------|------------|----------------|--------|
+| 9.x | v1 | No | Read-only support |
+| 10.0 -- 10.17 | v1 | No | Supported |
+| 10.18 -- 10.23 | v2 | No | Supported |
+| 10.24 (LTS) | v2 | **Yes** | Supported |
+| 11.0 -- 11.5 | v2 | No | Supported |
+| 11.6 | v2 | **Yes** | Primary development target |
+| 11.8 | v2 | **Yes** | Latest tested |
 
 ## MPR Format Versions
 
@@ -32,31 +32,125 @@ mxcli supports Mendix Studio Pro versions **8.x through 11.x**.
 
 The library auto-detects the format. No configuration is needed.
 
-## Widget Template Versions
-
-Pluggable widget templates are versioned by Mendix release. The embedded templates cover:
-
-| Mendix Version | Template Set |
-|---------------|--------------|
-| 10.6.0 | DataGrid2, ComboBox, Gallery, and others |
-| 11.6.0 | Updated templates for current widgets |
-
-When creating pages with pluggable widgets, the library selects the template matching the project's Mendix version, falling back to the nearest earlier version if an exact match is not available.
-
 ## Feature Availability by Version
+
+Not all MDL features work on all Mendix versions. The BSON document structure changes across versions, and some features were introduced in specific releases.
+
+### Core Features (all supported versions)
 
 | Feature | Minimum Version | Notes |
 |---------|----------------|-------|
-| Domain models | 8.x | Full support |
-| Microflows | 8.x | 60+ activity types |
-| Nanoflows | 8.x | Client-side flows |
-| Pages | 8.x | 50+ widget types |
-| Pluggable widgets | 9.x | Requires widget templates |
-| Workflows | 10.x | User tasks, decisions, parallel splits |
-| Business events | 10.x | Event service definitions |
-| View entities | 10.x | OQL-backed entities |
-| MPR v2 format | 10.18 | Per-document file storage |
-| Calculated attributes | 10.x | CALCULATED BY microflow |
+| Domain models (entities, attributes, associations) | 9.0 | Full CRUD support |
+| Microflows (60+ activity types) | 9.0 | Including loops, splits, error handling |
+| Nanoflows | 9.0 | Client-side flows |
+| Pages (50+ widget types) | 9.0 | Built-in widgets |
+| Enumerations | 9.0 | CREATE/ALTER/DROP |
+| Security (module roles, access rules) | 9.0 | Full support |
+| Navigation | 9.0 | Profiles, menus, home pages |
+| Workflows | 9.0 | User tasks, decisions, parallel splits |
+
+### Features Requiring Mendix 10.x+
+
+| Feature | Minimum Version | Notes |
+|---------|----------------|-------|
+| Business events | 10.0 | Event service definitions |
+| Pluggable widgets (ComboBox, DataGrid2, Gallery) | 10.0 | Requires widget templates |
+| Image collections | 10.0 | CREATE/DROP IMAGE COLLECTION |
+
+### Features Requiring Mendix 11.0+
+
+These features use BSON structures that changed in Mendix 11.0 and are **not compatible with 10.x projects**:
+
+| Feature | Minimum Version | Error on 10.x |
+|---------|----------------|---------------|
+| View entities (CREATE VIEW ENTITY) | 11.0 | CE6775: "A view entity requires an OQL query" |
+| Page parameters (Params: { ... }) | 11.0 | InvalidOperationException on 'Variable' property |
+| Design properties (Atlas v3) | 11.0 | CE6083: "Design property not supported by your theme" |
+| REST client (CREATE REST CLIENT) | 11.0 | BSON format incompatibility |
+| Database Connector (EXECUTE DATABASE QUERY) | 11.0 | Module format incompatibility |
+| Association storage format | 11.0 | Different BSON encoding for associations |
+
+### Features Requiring Mendix 11.6+
+
+| Feature | Minimum Version | Notes |
+|---------|----------------|-------|
+| Portable app format | 11.6 | New deployment format |
+
+## BSON Differences Across Versions
+
+The Mendix metamodel evolves across versions. The reflection data shows ~42% type growth from Mendix 9.0 to 11.6. Key structural differences:
+
+### View Entities (10.x vs 11.x)
+
+View entities exist in both 10.18+ and 11.x, but the BSON structure differs. Mendix 10.x stores view entities without the OQL query field that 11.x requires. Writing a view entity with 11.x BSON to a 10.x project causes CE6775.
+
+### Page Parameters (10.x vs 11.x)
+
+Mendix 11.0 changed how page parameters are stored in BSON. The `Variable` property in page parameter mappings uses a different structure. Writing 11.x-style page parameters to a 10.x project causes an `InvalidOperationException`.
+
+### Design Properties (Atlas v2 vs v3)
+
+Atlas UI v3 (Mendix 11.0+) introduced new design properties like "Card style" and "Disable row wrap" for containers. These don't exist in the Atlas v2 theme bundled with 10.x, causing CE6083.
+
+### Widget Type Definitions
+
+Pluggable widget PropertyTypes change between Mendix versions. A widget template extracted from 11.6 may have more or fewer properties than the widget installed in a 10.24 project. The [widget augmentation system](../internals/widget-templates.md) handles this by reconciling templates against the project's `.mpk` files.
+
+## Widget Template Versions
+
+Embedded widget templates are extracted from Mendix 11.6 and cover:
+
+| Widget | Template | Widget ID |
+|--------|----------|-----------|
+| Combo box | combobox.json | com.mendix.widget.web.combobox.Combobox |
+| Data grid 2 | datagrid.json | com.mendix.widget.web.datagrid.Datagrid |
+| Gallery | gallery.json | com.mendix.widget.web.gallery.Gallery |
+| Image | image.json | com.mendix.widget.web.image.Image |
+| Text filter | datagrid-text-filter.json | com.mendix.widget.web.datagridtextfilter.DatagridTextFilter |
+| Number filter | datagrid-number-filter.json | com.mendix.widget.web.datagridnumberfilter.DatagridNumberFilter |
+| Date filter | datagrid-date-filter.json | com.mendix.widget.web.datagriddatefilter.DatagridDateFilter |
+| Dropdown filter | datagrid-dropdown-filter.json | com.mendix.widget.web.datagriddropdownfilter.DatagridDropdownFilter |
+
+### MPK Augmentation
+
+When opening a project, mxcli checks the project's `widgets/` folder for `.mpk` packages. If a widget's installed version differs from the embedded template, the augmentation system:
+
+1. Extracts the XML property definition from the `.mpk`
+2. Adds properties found in `.mpk` but missing from the template
+3. Removes properties in the template but not in the `.mpk`
+4. Preserves the BSON structure (IDs, nesting, cross-references)
+
+This reduces CE0463 ("widget definition changed") errors from widget version drift. See [Widget Templates](../internals/widget-templates.md) for details.
+
+## Version Gates in MDL Scripts
+
+MDL scripts can use `-- @version:` directives to gate sections by Mendix version. This is used in the doctype integration tests to skip features incompatible with older versions:
+
+```mdl
+-- Runs on all versions
+CREATE ENTITY MyModule.Customer (Name: String(200));
+
+-- @version: 11.0+
+-- Only runs on Mendix 11.0 and later
+CREATE VIEW ENTITY MyModule.ActiveCustomers (...) AS
+  SELECT c.Name FROM MyModule.Customer AS c WHERE c.IsActive;
+
+-- @version: 10.6..10.24
+-- Only runs on Mendix 10.6 through 10.24
+CREATE ENTITY MyModule.LegacyConfig (...);
+
+-- @version: any
+-- Resets to unconditional (runs on all versions)
+CREATE ENTITY MyModule.Universal (...);
+```
+
+**Directive formats:**
+- `-- @version: 11.0+` -- minimum version (run on 11.0 and later)
+- `-- @version: 10.6..10.24` -- version range (inclusive)
+- `-- @version: ..10.24` -- maximum version only
+- `-- @version: any` -- reset to unconditional
+
+The directive applies to all lines until the next `-- @version:` directive.
 
 ## MxBuild Compatibility
 
