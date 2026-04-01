@@ -3223,9 +3223,9 @@ func mdlparserParserInit() {
 		5697, 5698, 5, 76, 0, 0, 5698, 5753, 5, 515, 0, 0, 5699, 5700, 5, 431,
 		0, 0, 5700, 5701, 5, 57, 0, 0, 5701, 5753, 5, 515, 0, 0, 5702, 5703, 5,
 		431, 0, 0, 5703, 5753, 5, 385, 0, 0, 5704, 5705, 5, 431, 0, 0, 5705, 5706,
-		5, 515, 0, 0, 5706, 5707, 5, 65, 0, 0, 5707, 5753, 5, 515, 0, 0, 5708,
+		5, 515, 0, 0, 5706, 5707, 5, 65, 0, 0, 5707, 5753, 3, 710, 355, 0, 5708,
 		5709, 5, 431, 0, 0, 5709, 5710, 5, 515, 0, 0, 5710, 5711, 5, 66, 0, 0,
-		5711, 5753, 5, 515, 0, 0, 5712, 5713, 5, 431, 0, 0, 5713, 5714, 5, 515,
+		5711, 5753, 3, 710, 355, 0, 5712, 5713, 5, 431, 0, 0, 5713, 5714, 5, 515,
 		0, 0, 5714, 5715, 5, 362, 0, 0, 5715, 5716, 5, 363, 0, 0, 5716, 5717, 5,
 		358, 0, 0, 5717, 5730, 3, 710, 355, 0, 5718, 5719, 5, 365, 0, 0, 5719,
 		5720, 5, 497, 0, 0, 5720, 5725, 3, 710, 355, 0, 5721, 5722, 5, 495, 0,
@@ -84472,16 +84472,28 @@ func (s *SqlShowTablesContext) SQL() antlr.TerminalNode {
 	return s.GetToken(MDLParserSQL, 0)
 }
 
-func (s *SqlShowTablesContext) AllIDENTIFIER() []antlr.TerminalNode {
-	return s.GetTokens(MDLParserIDENTIFIER)
-}
-
-func (s *SqlShowTablesContext) IDENTIFIER(i int) antlr.TerminalNode {
-	return s.GetToken(MDLParserIDENTIFIER, i)
+func (s *SqlShowTablesContext) IDENTIFIER() antlr.TerminalNode {
+	return s.GetToken(MDLParserIDENTIFIER, 0)
 }
 
 func (s *SqlShowTablesContext) SHOW() antlr.TerminalNode {
 	return s.GetToken(MDLParserSHOW, 0)
+}
+
+func (s *SqlShowTablesContext) IdentifierOrKeyword() IIdentifierOrKeywordContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IIdentifierOrKeywordContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IIdentifierOrKeywordContext)
 }
 
 func (s *SqlShowTablesContext) EnterRule(listener antlr.ParseTreeListener) {
@@ -84518,16 +84530,28 @@ func (s *SqlDescribeTableContext) SQL() antlr.TerminalNode {
 	return s.GetToken(MDLParserSQL, 0)
 }
 
-func (s *SqlDescribeTableContext) AllIDENTIFIER() []antlr.TerminalNode {
-	return s.GetTokens(MDLParserIDENTIFIER)
-}
-
-func (s *SqlDescribeTableContext) IDENTIFIER(i int) antlr.TerminalNode {
-	return s.GetToken(MDLParserIDENTIFIER, i)
+func (s *SqlDescribeTableContext) IDENTIFIER() antlr.TerminalNode {
+	return s.GetToken(MDLParserIDENTIFIER, 0)
 }
 
 func (s *SqlDescribeTableContext) DESCRIBE() antlr.TerminalNode {
 	return s.GetToken(MDLParserDESCRIBE, 0)
+}
+
+func (s *SqlDescribeTableContext) IdentifierOrKeyword() IIdentifierOrKeywordContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IIdentifierOrKeywordContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IIdentifierOrKeywordContext)
 }
 
 func (s *SqlDescribeTableContext) EnterRule(listener antlr.ParseTreeListener) {
@@ -84944,11 +84968,7 @@ func (p *MDLParser) SqlStatement() (localctx ISqlStatementContext) {
 		}
 		{
 			p.SetState(5707)
-			p.Match(MDLParserIDENTIFIER)
-			if p.HasError() {
-				// Recognition error - abort rule
-				goto errorExit
-			}
+			p.IdentifierOrKeyword()
 		}
 
 	case 5:
@@ -84980,11 +85000,7 @@ func (p *MDLParser) SqlStatement() (localctx ISqlStatementContext) {
 		}
 		{
 			p.SetState(5711)
-			p.Match(MDLParserIDENTIFIER)
-			if p.HasError() {
-				// Recognition error - abort rule
-				goto errorExit
-			}
+			p.IdentifierOrKeyword()
 		}
 
 	case 6:

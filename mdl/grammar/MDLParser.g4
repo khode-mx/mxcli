@@ -2918,8 +2918,8 @@ sqlStatement
     : SQL CONNECT IDENTIFIER STRING_LITERAL AS IDENTIFIER          # sqlConnect
     | SQL DISCONNECT IDENTIFIER                                     # sqlDisconnect
     | SQL CONNECTIONS                                               # sqlConnections
-    | SQL IDENTIFIER SHOW IDENTIFIER                                # sqlShowTables
-    | SQL IDENTIFIER DESCRIBE IDENTIFIER                            # sqlDescribeTable
+    | SQL IDENTIFIER SHOW identifierOrKeyword                        # sqlShowTables
+    | SQL IDENTIFIER DESCRIBE identifierOrKeyword                   # sqlDescribeTable
     | SQL IDENTIFIER GENERATE CONNECTOR INTO identifierOrKeyword
       (TABLES LPAREN identifierOrKeyword (COMMA identifierOrKeyword)* RPAREN)?
       (VIEWS LPAREN identifierOrKeyword (COMMA identifierOrKeyword)* RPAREN)?

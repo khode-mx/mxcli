@@ -46,12 +46,12 @@ func (b *Builder) ExitSqlConnections(ctx *parser.SqlConnectionsContext) {
 
 // ExitSqlShowTables handles SQL <alias> SHOW TABLES|VIEWS|FUNCTIONS
 func (b *Builder) ExitSqlShowTables(ctx *parser.SqlShowTablesContext) {
-	ids := ctx.AllIDENTIFIER()
-	if len(ids) < 2 {
+	alias := ctx.IDENTIFIER().GetText()
+	iok := ctx.IdentifierOrKeyword()
+	if iok == nil {
 		return
 	}
-	alias := ids[0].GetText()
-	target := strings.ToUpper(ids[1].GetText())
+	target := strings.ToUpper(iok.GetText())
 
 	switch target {
 	case "VIEWS":
@@ -66,12 +66,12 @@ func (b *Builder) ExitSqlShowTables(ctx *parser.SqlShowTablesContext) {
 
 // ExitSqlDescribeTable handles SQL <alias> DESCRIBE <table>
 func (b *Builder) ExitSqlDescribeTable(ctx *parser.SqlDescribeTableContext) {
-	ids := ctx.AllIDENTIFIER()
-	if len(ids) < 2 {
+	alias := ctx.IDENTIFIER().GetText()
+	iok := ctx.IdentifierOrKeyword()
+	if iok == nil {
 		return
 	}
-	alias := ids[0].GetText()
-	table := ids[1].GetText()
+	table := iok.GetText()
 	b.statements = append(b.statements, &ast.SQLDescribeTableStmt{
 		Alias: alias,
 		Table: table,
