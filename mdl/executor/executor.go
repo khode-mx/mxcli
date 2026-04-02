@@ -786,6 +786,8 @@ func (e *Executor) execShow(s *ast.ShowStmt) error {
 		return e.showRestClients(s.InModule)
 	case ast.ShowPublishedRestServices:
 		return e.showPublishedRestServices(s.InModule)
+	case ast.ShowLanguages:
+		return e.showLanguages()
 	case ast.ShowContractEntities:
 		return e.showContractEntities(s.Name)
 	case ast.ShowContractActions:

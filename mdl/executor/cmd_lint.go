@@ -56,6 +56,7 @@ func (e *Executor) execLint(s *ast.LintStmt) error {
 	lint.AddRule(rules.NewDomainModelSizeRule())
 	lint.AddRule(rules.NewValidationFeedbackRule())
 	lint.AddRule(rules.NewImageSourceRule())
+	lint.AddRule(rules.NewMissingTranslationsRule())
 
 	// Load custom Starlark rules
 	rulesDir := filepath.Join(projectDir, ".claude", "lint-rules")
@@ -122,6 +123,7 @@ func (e *Executor) showLintRules() error {
 	lint.AddRule(rules.NewDomainModelSizeRule())
 	lint.AddRule(rules.NewValidationFeedbackRule())
 	lint.AddRule(rules.NewImageSourceRule())
+	lint.AddRule(rules.NewMissingTranslationsRule())
 
 	for _, rule := range lint.Rules() {
 		fmt.Fprintf(e.output, "  %s (%s)\n", rule.ID(), rule.Name())

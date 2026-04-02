@@ -478,6 +478,9 @@ func (b *Builder) ExitShowStatement(ctx *parser.ShowStatementContext) {
 			}
 		}
 		b.statements = append(b.statements, stmt)
+	} else if ctx.LANGUAGES() != nil {
+		// SHOW LANGUAGES
+		b.statements = append(b.statements, &ast.ShowStmt{ObjectType: ast.ShowLanguages})
 	} else if ctx.REST() != nil && ctx.CLIENTS() != nil {
 		// SHOW REST CLIENTS [IN module]
 		stmt := &ast.ShowStmt{ObjectType: ast.ShowRestClients}

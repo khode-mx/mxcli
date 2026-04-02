@@ -84,6 +84,7 @@ const (
 	ShowContractActions      // SHOW CONTRACT ACTIONS FROM Module.Service
 	ShowContractChannels     // SHOW CONTRACT CHANNELS FROM Module.Service (AsyncAPI)
 	ShowContractMessages     // SHOW CONTRACT MESSAGES FROM Module.Service (AsyncAPI)
+	ShowLanguages            // SHOW LANGUAGES
 )
 
 // String returns the human-readable name of the show object type.
@@ -199,6 +200,8 @@ func (t ShowObjectType) String() string {
 		return "CONTRACT CHANNELS"
 	case ShowContractMessages:
 		return "CONTRACT MESSAGES"
+	case ShowLanguages:
+		return "LANGUAGES"
 	default:
 		return "UNKNOWN"
 	}
