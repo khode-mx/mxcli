@@ -67,69 +67,150 @@ lts_versions: ["10.24"]
 mts_versions: ["10.6", "10.12", "10.18"]
 
 features:
+  # --- Domain Model ---
   domain_model:
     entities:
       introduced: "10.0"
       mdl: "CREATE PERSISTENT ENTITY Module.Name (...)"
+    non_persistent_entities:
+      introduced: "10.0"
+      mdl: "CREATE NON-PERSISTENT ENTITY Module.Name (...)"
     view_entities:
       introduced: "10.18"
       mdl: "CREATE VIEW ENTITY Module.Name (...) AS SELECT ..."
-      notes: "OQL stored inline on OqlViewEntitySource (Oql field)"
+      bson_notes: "10.x: OQL stored inline on OqlViewEntitySource; 11.0+: removed"
     calculated_attributes:
       introduced: "10.0"
       mdl: "CALCULATED BY Module.Microflow"
     entity_generalization:
       introduced: "10.0"
       mdl: "EXTENDS Module.ParentEntity"
+    alter_entity:
+      introduced: "10.0"
+      mdl: "ALTER ENTITY Module.Name ADD ATTRIBUTE ..."
 
+  # --- OQL Functions (used in VIEW ENTITY queries) ---
+  oql_functions:
+    basic_select:
+      introduced: "10.18"
+      mdl: "SELECT, FROM, WHERE, AS, AND, OR, NOT"
+    aggregate_functions:
+      introduced: "10.18"
+      mdl: "COUNT, SUM, AVG, MIN, MAX, GROUP BY"
+    subqueries:
+      introduced: "10.18"
+      mdl: "Inline subqueries in SELECT and WHERE"
+    join_types:
+      introduced: "10.18"
+      mdl: "INNER JOIN, LEFT JOIN, RIGHT JOIN, FULL JOIN"
+    # New OQL functions added per minor release:
+    # string_length: { introduced: "10.20" }
+    # date_diff: { introduced: "10.21" }
+    # (to be populated from release notes)
+
+  # --- Microflows ---
   microflows:
     basic:
       introduced: "10.0"
+      mdl: "CREATE MICROFLOW Module.Name (...) BEGIN ... END"
     show_page_with_params:
       introduced: null
       available_in: "11.0+"
       workaround: "Pass data via a non-persistent entity or microflow parameter"
     send_rest_request:
       introduced: "10.1"
-      notes: "Query parameters require 11.0+"
+      mdl: "SEND REST REQUEST ..."
+    send_rest_query_params:
+      introduced: null
+      available_in: "11.0+"
+      notes: "Query parameters in REST requests"
+    execute_database_query:
+      introduced: "10.6"
+      mdl: "EXECUTE DATABASE QUERY ..."
+    execute_database_query_runtime_connection:
+      introduced: null
+      available_in: "11.0+"
+      notes: "Runtime connection override for database queries"
+    loop_in_branch:
+      introduced: "10.0"
+      notes: "LOOP inside IF/ELSE branches"
 
+  # --- Pages ---
   pages:
+    basic:
+      introduced: "10.0"
+      mdl: "CREATE PAGE Module.Name (...) { ... }"
     page_parameters:
+      introduced: null
+      available_in: "11.0+"
+      workaround: "Use non-persistent entity or microflow parameter"
+    page_variables:
       introduced: null
       available_in: "11.0+"
     pluggable_widgets:
       introduced: "10.0"
-      widgets:
-        - ComboBox
-        - DataGrid2
-        - Gallery
-        - Image
+      widgets: [ComboBox, DataGrid2, Gallery, Image, TextFilter, NumberFilter, DateFilter, DropdownFilter]
       notes: "Widget templates are version-specific; MPK augmentation handles drift"
     design_properties_v3:
       introduced: null
       available_in: "11.0+"
       notes: "Atlas v3 design properties (Card style, Disable row wrap)"
+    alter_page:
+      introduced: "10.0"
+      mdl: "ALTER PAGE Module.Name SET/INSERT/DROP/REPLACE ..."
 
+  # --- Security ---
   security:
     module_roles:
+      introduced: "10.0"
+    user_roles:
+      introduced: "10.0"
+    entity_access:
       introduced: "10.0"
     demo_users:
       introduced: "10.0"
 
+  # --- Integration ---
   integration:
-    rest_client:
+    rest_client_basic:
       introduced: "10.1"
-      notes: "Full BSON format requires 11.0+"
-    database_connector:
+      mdl: "CREATE REST CLIENT Module.Name ..."
+    rest_client_query_params:
+      introduced: null
+      available_in: "11.0+"
+    rest_client_headers:
+      introduced: "10.4"
+    database_connector_basic:
       introduced: "10.6"
-      notes: "EXECUTE DATABASE QUERY BSON format requires 11.0+"
+      mdl: "CREATE DATABASE CONNECTION Module.Name ..."
+    database_connector_execute:
+      introduced: "10.6"
+      mdl: "EXECUTE DATABASE QUERY in microflows"
+      bson_notes: "Full BSON format requires 11.0+"
     business_events:
       introduced: "10.0"
+      mdl: "CREATE BUSINESS EVENT SERVICE Module.Name ..."
+    odata_client:
+      introduced: "10.0"
 
+  # --- Workflows ---
   workflows:
     basic:
-      introduced: null
-      available_in: "9.0+"
+      introduced: "9.0"
+      mdl: "CREATE WORKFLOW Module.Name ..."
+    parallel_split:
+      introduced: "9.0"
+    user_task:
+      introduced: "9.0"
+
+  # --- Navigation ---
+  navigation:
+    profiles:
+      introduced: "10.0"
+    menu_items:
+      introduced: "10.0"
+    home_pages:
+      introduced: "10.0"
 
 deprecated:
   - id: "DEP001"
@@ -146,6 +227,12 @@ upgrade_opportunities:
     - feature: "design_properties_v3"
       description: "Atlas v3 design properties available for richer styling"
       effort: "low"
+    - feature: "rest_client_query_params"
+      description: "REST clients can now define query parameters directly"
+      effort: "low"
+    - feature: "database_connector_runtime_connection"
+      description: "Database queries can override connection at runtime"
+      effort: "low"
     - feature: "association_storage"
       description: "New association storage format (automatic on project upgrade)"
       effort: "none"
@@ -155,10 +242,20 @@ upgrade_opportunities:
 
 #### `SHOW FEATURES`
 
-Lists all features available for the connected project's Mendix version:
+Lists all features available for the connected project's Mendix version, or for a specified version without a project connection:
 
 ```sql
+-- When connected to a project (uses project's Mendix version)
 SHOW FEATURES;
+
+-- Without a project connection (query any version)
+SHOW FEATURES FOR VERSION 10.24;
+
+-- Filter by area
+SHOW FEATURES IN integration;
+
+-- Show only features available in the project's version
+SHOW FEATURES WHERE available = true;
 ```
 
 Output:
@@ -192,6 +289,28 @@ Output:
 | Design properties v3 | 11.0        | Atlas v3 Card style, Disable row wrap    | Low    |
 | REST query params    | 11.0        | Query parameter support in REST clients  | Low    |
 | Portable app format  | 11.6        | New deployment format                    | None   |
+```
+
+#### `SHOW UPGRADE OPPORTUNITIES`
+
+When connected, analyzes the current project for patterns that could benefit from the project's own version or a target version:
+
+```sql
+-- What can I improve using my current version's capabilities?
+SHOW UPGRADE OPPORTUNITIES;
+
+-- What would upgrading to 11.6 enable?
+SHOW UPGRADE OPPORTUNITIES TO 11.6;
+```
+
+Output:
+```
+| Opportunity                | Target  | Description                                          | Effort |
+|----------------------------|---------|------------------------------------------------------|--------|
+| Page parameters            | 11.0    | 12 pages use NP entity workaround for parameter passing | Low  |
+| Design properties v3       | 11.0    | 8 containers could use Card style / row wrap         | Low    |
+| REST query parameters      | 11.0    | 3 REST clients build query strings manually          | Low    |
+| Database runtime connection| 11.0    | 2 microflows hardcode DB connection                  | Low    |
 ```
 
 #### `SHOW DEPRECATED`
@@ -368,14 +487,25 @@ MDL Layer            Executor pre-checks  "Will this work?"
 BSON Layer           Schema Registry      "How do I serialize this?"
 ```
 
-## Open Questions
+## Design Decisions
 
-1. **YAML vs JSON for registry?** YAML is more readable for humans editing it; JSON is easier to parse. Could use YAML as source, compile to embedded JSON at build time.
+1. **YAML as source of truth.** Human-readable, easy to edit, reviewed in PRs. Compiled to embedded Go structs at build time via `go:embed` + YAML parser.
 
-2. **Granularity of features?** Per-statement (`CREATE VIEW ENTITY`), per-property (`Params:` on pages), or per-concept (`view_entities`)? Probably per-concept with per-property notes.
+2. **Fine-grained features.** Mendix adds capabilities per minor release across all areas (new OQL functions, database connector features, REST enhancements, page properties). The registry must track at the **per-capability** level, not just per-concept. Example: `oql_functions.string_length` introduced in 10.8, `oql_functions.date_diff` in 10.12, `rest_client.query_parameters` in 11.0. Grouping by area with individual capability entries:
 
-3. **Should SHOW FEATURES work without a connected project?** Could accept `SHOW FEATURES FOR VERSION 10.24` without needing an MPR file. Useful for planning.
+    ```yaml
+    oql_functions:
+      string_length: { introduced: "10.8" }
+      date_diff: { introduced: "10.12" }
+      coalesce: { introduced: "10.14" }
+    database_connector:
+      basic_query: { introduced: "10.6" }
+      parameterized_query: { introduced: "10.12" }
+      runtime_connection: { introduced: "11.0" }
+    ```
 
-4. **How to handle patch-level differences?** Most changes are at the minor level, but some patch releases introduce fixes. Use minor as the default, with patch-level overrides where needed.
+3. **SHOW FEATURES works without a project.** `SHOW FEATURES FOR VERSION 10.24` queries the registry directly without an MPR connection. When connected, it defaults to the project's version. Useful for upgrade planning: `SHOW FEATURES ADDED SINCE 10.24` shows what upgrading to the latest would gain; `SHOW FEATURES FOR VERSION 11.6` shows the full capability set of a target version. When connected, also supports: `SHOW UPGRADE OPPORTUNITIES` to identify patterns in the current project that could benefit from the project's own version capabilities (e.g., detecting workarounds that are no longer needed).
 
-5. **Should the upgrade advisor be interactive?** E.g., `mxcli upgrade --from 10.24 --to 11.6 --dry-run` that shows a migration plan and optionally applies changes.
+4. **Minor version granularity by default.** Metamodel changes happen at the minor release level. Patch-level overrides supported where needed but expected to be rare.
+
+5. **Non-interactive upgrade advisor for now.** `mxcli lint --upgrade-hints --target-version 11.6` outputs a report. Interactive `mxcli upgrade` can be added later as the tooling matures.
