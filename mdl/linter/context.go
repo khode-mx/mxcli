@@ -37,6 +37,15 @@ func NewLintContext(cat *catalog.Catalog) *LintContext {
 	}
 }
 
+// NewLintContextFromDB creates a new LintContext from a raw database connection.
+// Used in tests to provide an in-memory database with test data.
+func NewLintContextFromDB(db *sql.DB) *LintContext {
+	return &LintContext{
+		db:       db,
+		excluded: make(map[string]bool),
+	}
+}
+
 // SetExcludedModules sets the list of modules to exclude from linting.
 func (ctx *LintContext) SetExcludedModules(modules []string) {
 	ctx.excluded = make(map[string]bool)
