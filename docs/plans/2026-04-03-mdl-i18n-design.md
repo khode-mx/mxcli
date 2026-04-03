@@ -1,8 +1,8 @@
 # MDL Internationalization (i18n) Support
 
-**Date:** 2026-04-03
-**Status:** Proposal
-**Author:** @anthropics/claude-code
+**Date:** 2026-04-03 (updated 2026-04-03)
+**Status:** Proposal (revised per review feedback)
+**Author:** @engalar
 
 ## Problem
 
@@ -11,16 +11,15 @@ MDL currently handles all translatable text fields (page titles, widget captions
 This means:
 - `DESCRIBE PAGE` output loses translations — roundtripping a page strips non-default languages
 - `CREATE PAGE` can only set one language — multi-language projects require Studio Pro for translation
-- No way to audit translation coverage from the CLI
+- No way to see all translations in context (note: `SHOW LANGUAGES` and `QUAL005 MissingTranslations` linter rule already provide language inventory and gap detection via the catalog `strings` table)
 
 Mendix stores translations as `Texts$Text` objects containing an array of `Texts$Translation` entries (one per language). The mxcli internal model (`model.Text`) already represents translations as `map[string]string`, and the BSON reader/writer already handles multi-language serialization. The gap is purely at the MDL syntax and command layer.
 
 ## Scope
 
 **In scope (syntax-layer extension):**
-- Inline multi-language text literal syntax for CREATE/ALTER
+- Inline multi-language text literal syntax for CREATE/ALTER/ALTER PAGE SET
 - DESCRIBE WITH TRANSLATIONS output mode
-- SHOW TRANSLATIONS query command
 - Writer changes to serialize multi-language BSON correctly
 
 **Out of scope:**
@@ -48,16 +47,34 @@ Title: {
 
 **Grammar (ANTLR4):**
 
+New rule:
+
 ```antlr
-translatedText
-    : STRING_LITERAL
-    | '{' translationEntry (',' translationEntry)* ','? '}'
+translationMap
+    : LBRACE translationEntry (COMMA translationEntry)* COMMA? RBRACE
     ;
 
 translationEntry
-    : IDENTIFIER ':' STRING_LITERAL
+    : IDENTIFIER COLON STRING_LITERAL
     ;
 ```
+
+Integration into `propertyValueV3` (MDLParser.g4 line ~1961):
+
+```antlr
+propertyValueV3
+    : STRING_LITERAL
+    | translationMap                                        // NEW: { en_US: 'Hello', zh_CN: '你好' }
+    | NUMBER_LITERAL
+    | booleanLiteral
+    | qualifiedName
+    | IDENTIFIER
+    | H1 | H2 | H3 | H4 | H5 | H6
+    | LBRACKET (expression (COMMA expression)*)? RBRACKET
+    ;
+```
+
+**Disambiguation from widget body `{`**: `translationMap` only appears inside `propertyValueV3`, which follows `COLON` or `EQUALS` in property definitions. Widget bodies (`widgetBodyV3`) follow `)` at statement level, never after `:`. The parser sees `Caption: {` and enters `propertyValueV3 → translationMap` — there is no ambiguity because `widgetBodyV3` is a separate production in `widgetStatementV3` that requires `(...)` before `{`.
 
 **AST node:**
 
@@ -113,34 +130,24 @@ withTranslationsClause
 - DESCRIBE ENUMERATION — value captions
 - DESCRIBE WORKFLOW — task names, descriptions, outcome captions
 
-### 3. SHOW TRANSLATIONS
+### 3. ALTER PAGE SET with Translation Maps
+
+Translation maps work in ALTER PAGE SET, enabling in-place translation updates:
 
 ```sql
--- All translations in a module
-SHOW TRANSLATIONS IN Module;
-
--- Only missing translations
-SHOW TRANSLATIONS IN Module MISSING;
-
--- All translations project-wide
-SHOW TRANSLATIONS MISSING;
+ALTER PAGE Module.MyPage
+  SET WIDGET saveButton Caption: { en_US: 'Save', zh_CN: '保存' };
 ```
 
-**Output (tabular):**
+This reuses the `translationMap` rule inside `propertyValueV3` — no additional grammar changes needed since ALTER PAGE SET already uses `propertyValueV3` for values.
 
-```
-Element                    Context        en_US          zh_CN          nl_NL
-─────────────────────────────────────────────────────────────────────────────
-Module.MyPage              page_title     Hello World    你好世界        ✗
-Module.MyPage.SaveButton   caption        Save           保存            ✗
-Module.Status.Active       enum_caption   Active         活跃            ✗
-```
+### 4. Relationship to Existing Translation Features
 
-`✗` indicates a missing translation. The `MISSING` filter shows only rows with at least one gap.
+`SHOW LANGUAGES` (commit a060152) already lists project languages with string counts. `QUAL005 MissingTranslations` linter rule already detects missing translations. The catalog `strings` FTS5 table already stores per-language text with `SELECT * FROM CATALOG.strings WHERE Language = 'nl_NL'`.
 
-**Implementation:** Reuses the existing catalog `strings` FTS5 table. Pivots rows by language code into a wide-format table. Requires `REFRESH CATALOG FULL` to index strings first.
+This proposal does **not** duplicate those features. It addresses the gap they cannot fill: **writing and round-tripping multi-language text in MDL syntax**.
 
-### 4. Writer Layer Changes
+### 5. Writer Layer Changes
 
 When executing CREATE/ALTER with multi-language text, the writer serializes all provided translations into the standard Mendix BSON format:
 
@@ -156,17 +163,33 @@ for langCode, text := range translatedText.Translations {
 }
 ```
 
-**Merge semantics for bare strings:**
-When a bare string `'text'` is used, the writer must:
-1. Read the existing `Texts$Text` from the MPR
-2. Update only the `DefaultLanguageCode` entry
-3. Preserve all other language entries unchanged
+**Merge semantics for bare strings (architectural change):**
 
-**Affected writer functions:**
+Currently, all writer functions construct `Texts$Text` from scratch — e.g. `writer_pages.go:219-247` builds a new `Items` array every time. Bare-string merge semantics require a **read-modify-write cycle**:
+
+1. Read the existing `Texts$Text` BSON from the MPR via `GetRawUnit`
+2. Parse existing `Items` array to find the entry for `DefaultLanguageCode`
+3. Update that entry's `Text` field (or insert if missing)
+4. Preserve all other `Texts$Translation` entries unchanged
+5. Write back the modified `Items` array
+
+This is a significant change to writer architecture. A shared helper should be introduced:
+
+```go
+// mergeTranslation reads existing Texts$Text, merges new translations, returns updated BSON.
+// For bare strings: translations = {defaultLang: text}
+// For maps: translations = the full map
+func mergeTranslation(existingBSON bson.D, translations map[string]string) bson.D
+```
+
+**Affected writer functions (11+ call sites):**
 - `writer_pages.go` — Page Title, widget Caption/Placeholder
 - `writer_enumeration.go` — EnumerationValue Caption
 - `writer_microflow.go` — StringTemplate (log/show/validation messages)
 - `writer_widgets.go` — all widget Caption/Placeholder properties
+- `writer_widgets_action.go`, `writer_widgets_display.go`, `writer_widgets_input.go`
+
+**Serialization ordering:** Translations within `Items` array must be sorted by language code for deterministic BSON output and diff-friendly DESCRIBE.
 
 ## Translatable Fields Inventory
 
@@ -184,16 +207,17 @@ The following fields use `Texts$Text` and are affected by this proposal:
 
 ## Implementation Phases
 
-| Phase | Scope | Dependency |
-|-------|-------|------------|
-| **P1** | Grammar + AST: `translatedText` rule, `TranslatedText` node | None |
-| **P2** | Visitor: parse `{ lang: 'text' }` into AST | P1 |
-| **P3** | DESCRIBE WITH TRANSLATIONS: all describe commands output multi-language | P1 (reuses AST) |
-| **P4** | Writer: CREATE/ALTER write multi-language BSON | P1 + P2 |
-| **P5** | SHOW TRANSLATIONS: catalog query command | None (independent) |
-| **P6** | Widget translation indexing: extend catalog builder for widget-level translations | P5 |
+| Phase | Scope | Dependency | Risk |
+|-------|-------|------------|------|
+| **P1** | DESCRIBE WITH TRANSLATIONS: all describe commands output multi-language | None — read-only, no grammar change | Low |
+| **P2** | Grammar + AST: `translationMap` rule, `TranslatedText` node | None | Low |
+| **P3** | Visitor: parse `{ lang: 'text' }` into AST | P2 | Low |
+| **P4** | Writer `mergeTranslation` helper + multi-lang BSON write | P3 | **High** — architectural change to writer, must test against Studio Pro |
+| **P5** | Widget translation indexing: extend catalog builder for widget-level translations | None (independent) | Low |
 
-Each phase is independently deliverable and testable.
+P1 first — highest user value, zero risk. P4 is the riskiest phase.
+
+**Dropped**: SHOW TRANSLATIONS command — `SHOW LANGUAGES` + `QUAL005` + `SELECT ... FROM CATALOG.strings` already cover translation auditing.
 
 ## Compatibility
 
