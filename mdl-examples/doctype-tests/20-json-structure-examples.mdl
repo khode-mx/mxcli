@@ -16,10 +16,23 @@ SHOW JSON STRUCTURES IN JsonTest;
  * Simple json snippet example
  */
 CREATE JSON STRUCTURE JsonTest.SimpleItem 
+folder 'json-snippets'
 SNIPPET '{"id": 1, "name": "John", "active": true}'
 ;
 
--- Create a JSON structure in a folder
+DROP JSON STRUCTURE JsonTest.SimpleItem;
+
+/**
+ * Simple json snippet example
+ */
+CREATE JSON STRUCTURE JsonTest.SimpleItem 
+folder 'json-snippets'
+SNIPPET '{"id": 1, "name": "John", "active": true}'
+;
+
+/**
+ * Create a JSON structure in a folder
+ */
 CREATE JSON STRUCTURE JsonTest.CustomerResponse FOLDER 'Resources' SNIPPET $${
   "id": 1,
   "name": "John Doe",
@@ -38,13 +51,16 @@ CREATE JSON STRUCTURE JsonTest.CustomerResponse FOLDER 'Resources' SNIPPET $${
 -- Describe a JSON structure (shows element tree + JSON snippet)
 DESCRIBE JSON STRUCTURE JsonTest.CustomerResponse;
 
-
--- Create with a documentation comment
+/**
+ * Create with a documentation comment
+ */
 CREATE JSON STRUCTURE JsonTest.ApiError
   COMMENT 'Standard API error response'
   SNIPPET $${"code": 400, "message": "Bad Request", "details": [{"field": "email", "error": "Invalid email format"}]}$$;
 
--- Create with custom name mappings (matches Studio Pro's "Custom name" column)
+/**
+ * Create with custom name mappings (matches Studio Pro's "Custom name" column)
+ */
 CREATE JSON STRUCTURE JsonTest.ExternalApi SNIPPET $${"kvkNummer": "68750110", "vestigingsnummer": "000037178598", "naam": "Acme Corp"}$$
 CUSTOM NAME MAP (
   'kvkNummer' AS 'ChamberOfCommerceNumber',
@@ -52,7 +68,9 @@ CUSTOM NAME MAP (
   'naam' AS 'CompanyName'
 );
 
--- Edit (replace) an existing JSON structure with an updated schema
+/**
+ * Edit (replace) an existing JSON structure with an updated schema
+ */
 CREATE OR REPLACE JSON STRUCTURE JsonTest.CustomerResponse SNIPPET $${
   "id": 1,
   "name": "John Doe",
@@ -71,10 +89,10 @@ CREATE OR REPLACE JSON STRUCTURE JsonTest.CustomerResponse SNIPPET $${
 }$$;
 
 -- Delete JSON structures
-DROP JSON STRUCTURE JsonTest.SimpleItem;
+--DROP JSON STRUCTURE JsonTest.SimpleItem;
 
-DROP JSON STRUCTURE JsonTest.ApiError;
+--DROP JSON STRUCTURE JsonTest.ApiError;
 
-DROP JSON STRUCTURE JsonTest.ExternalApi;
+--DROP JSON STRUCTURE JsonTest.ExternalApi;
 
-DROP JSON STRUCTURE JsonTest.CustomerResponse;
+--DROP JSON STRUCTURE JsonTest.CustomerResponse;
