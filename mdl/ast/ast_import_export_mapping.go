@@ -9,8 +9,13 @@ package ast
 // CreateImportMappingStmt represents:
 //
 //	CREATE IMPORT MAPPING Module.Name
-//	  [FROM JSON STRUCTURE Module.JsonStructure | FROM XML SCHEMA Module.Schema]
-//	{ root AS Module.Entity (Create) { ... } }
+//	  WITH JSON STRUCTURE Module.JsonStructure
+//	{
+//	  CREATE Module.Entity {
+//	    PetId = id KEY,
+//	    Name = name
+//	  }
+//	};
 type CreateImportMappingStmt struct {
 	Name        QualifiedName
 	SchemaKind  string        // "JSON_STRUCTURE" or "XML_SCHEMA" or ""
@@ -28,19 +33,23 @@ type DropImportMappingStmt struct {
 func (s *DropImportMappingStmt) isStatement() {}
 
 // ImportMappingElementDef represents one element in the mapping tree.
-// It may be an object mapping (AS entity) or a value mapping (AS attribute).
 type ImportMappingElementDef struct {
-	// JSON field name (or "root" for the root element)
-	JsonName string
-	// Object mapping fields (set when mapping to an entity)
+	// Object mapping fields
 	Entity         string // qualified entity name (e.g. "Module.Customer")
-	ObjectHandling string // "Create", "Find", "FindOrCreate", "Custom"
-	Association    string // qualified association name for via clause
+	ObjectHandling string // "Create", "Find", "FindOrCreate"
+	Association    string // qualified association name (from Assoc/Entity path)
 	Children       []*ImportMappingElementDef
-	// Value mapping fields (set when mapping to an attribute)
-	Attribute string // attribute name (unqualified, e.g. "Name")
-	DataType  string // "String", "Integer", "Boolean", "Decimal", "DateTime"
+
+	// Value mapping fields
+	Attribute string // entity attribute name (LHS of =)
 	IsKey     bool
+
+	// Shared
+	JsonName string // JSON field name (RHS of = for both values and objects)
+
+	// Value transform via microflow
+	Converter      string // microflow qualified name (e.g. "Module.ConvertStringToDate")
+	ConverterParam string // json field passed to converter
 }
 
 // ============================================================================
@@ -50,9 +59,13 @@ type ImportMappingElementDef struct {
 // CreateExportMappingStmt represents:
 //
 //	CREATE EXPORT MAPPING Module.Name
-//	  [TO JSON STRUCTURE Module.JsonStructure | TO XML SCHEMA Module.Schema]
-//	  [NULL VALUES LeaveOutElement | SendAsNil]
-//	{ Module.Entity AS root { ... } }
+//	  WITH JSON STRUCTURE Module.JsonStructure
+//	{
+//	  Module.Entity {
+//	    jsonField = Attr,
+//	    Module.Assoc/Module.Child AS jsonKey { ... }
+//	  }
+//	};
 type CreateExportMappingStmt struct {
 	Name            QualifiedName
 	SchemaKind      string        // "JSON_STRUCTURE" or "XML_SCHEMA" or ""
@@ -71,15 +84,15 @@ type DropExportMappingStmt struct {
 func (s *DropExportMappingStmt) isStatement() {}
 
 // ExportMappingElementDef represents one element in an export mapping tree.
-// It may be an object mapping (entity AS JSON key) or a value mapping (attribute AS JSON key).
 type ExportMappingElementDef struct {
-	// JSON field name (the RHS of AS)
-	JsonName string
-	// Object mapping fields (set when mapping from an entity)
+	// Object mapping fields
 	Entity      string // qualified entity name (e.g. "Module.Customer")
-	Association string // qualified association name for VIA clause
+	Association string // qualified association name (from Assoc/Entity path)
 	Children    []*ExportMappingElementDef
-	// Value mapping fields (set when mapping from an attribute)
-	Attribute string // attribute name (unqualified, e.g. "Name")
-	DataType  string // "String", "Integer", "Boolean", "Decimal", "DateTime"
+
+	// Value mapping fields
+	Attribute string // entity attribute name (RHS of =)
+
+	// Shared
+	JsonName string // JSON field name (LHS of = for values, RHS of AS for objects)
 }

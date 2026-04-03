@@ -1207,12 +1207,12 @@ CREATE NON-PERSISTENT ENTITY RestTest.PetResponse (
 /
 
 CREATE IMPORT MAPPING RestTest.IMM_Pet
-  FROM JSON STRUCTURE RestTest.JSON_Pet
+  WITH JSON STRUCTURE RestTest.JSON_Pet
 {
-  "" AS RestTest.PetResponse (Create) {
-    id AS PetId (Integer, KEY),
-    name AS Name (String),
-    status AS Status (String)
+  CREATE RestTest.PetResponse {
+    PetId = id,
+    Name = name,
+    Status = status
   }
 };
 
@@ -1251,21 +1251,54 @@ CREATE ASSOCIATION RestTest.OrderResponse_OrderItem
 /
 
 CREATE IMPORT MAPPING RestTest.IMM_Order
-  FROM JSON STRUCTURE RestTest.JSON_Order
+  WITH JSON STRUCTURE RestTest.JSON_Order
 {
-  "" AS RestTest.OrderResponse (Create) {
-    orderId AS OrderId (Integer, KEY),
-    customer AS RestTest.CustomerInfo (Create) VIA RestTest.OrderResponse_CustomerInfo {
-      email AS Email (String),
-      name AS Name (String)
+  CREATE RestTest.OrderResponse {
+    OrderId = orderId KEY,
+    CREATE RestTest.OrderResponse_CustomerInfo/RestTest.CustomerInfo = customer {
+      Email = email,
+      Name = name
     },
-    items AS RestTest.OrderItem (Create) VIA RestTest.OrderResponse_OrderItem {
-      price AS Price (Decimal),
-      quantity AS Quantity (Integer),
-      sku AS Sku (String)
+    CREATE RestTest.OrderResponse_OrderItem/RestTest.OrderItem = items {
+      Sku = sku,
+      Quantity = quantity,
+      Price = price
     }
   }
 };
+
+-- ============================================================================
+-- Level 13.3: Find Or Create Import Mapping
+-- ============================================================================
+--
+-- Uses FIND OR CREATE to upsert: find existing by KEY, create if not found.
+
+CREATE IMPORT MAPPING RestTest.IMM_UpsertPet
+  WITH JSON STRUCTURE RestTest.JSON_Pet
+{
+  FIND OR CREATE RestTest.PetResponse {
+    PetId = id KEY,
+    Name = name,
+    Status = status
+  }
+};
+
+-- ============================================================================
+-- Level 13.4: Import Mapping with Value Transform
+-- ============================================================================
+--
+-- Demonstrates calling a microflow to transform a JSON value during import.
+-- The microflow receives the raw JSON field value and returns the converted type.
+
+-- CREATE IMPORT MAPPING RestTest.IMM_TransformPet
+--   WITH JSON STRUCTURE RestTest.JSON_Pet
+-- {
+--   CREATE RestTest.PetResponse {
+--     PetId = id,
+--     Name = RestTest.TrimAndUpperCase(name),
+--     Status = status
+--   }
+-- };
 
 -- ############################################################################
 -- PART 14: EXPORT MAPPINGS
@@ -1280,12 +1313,12 @@ CREATE IMPORT MAPPING RestTest.IMM_Order
 -- Maps an entity back to JSON for outgoing REST calls.
 
 CREATE EXPORT MAPPING RestTest.EMM_Pet
-  TO JSON STRUCTURE RestTest.JSON_Pet
+  WITH JSON STRUCTURE RestTest.JSON_Pet
 {
-  RestTest.PetResponse AS root {
-    PetId AS id (Integer),
-    Name AS name (String),
-    Status AS status (String)
+  RestTest.PetResponse {
+    id = PetId,
+    name = Name,
+    status = Status
   }
 };
 
@@ -1296,19 +1329,19 @@ CREATE EXPORT MAPPING RestTest.EMM_Pet
 -- Demonstrates configurable null value handling (LeaveOutElement vs SendAsNil).
 
 CREATE EXPORT MAPPING RestTest.EMM_Order
-  TO JSON STRUCTURE RestTest.JSON_Order
+  WITH JSON STRUCTURE RestTest.JSON_Order
   NULL VALUES LeaveOutElement
 {
-  RestTest.OrderResponse AS root {
-    OrderId AS orderId (Integer),
-    RestTest.CustomerInfo VIA RestTest.OrderResponse_CustomerInfo AS customer {
-      Email AS email (String),
-      Name AS name (String)
+  RestTest.OrderResponse {
+    orderId = OrderId,
+    RestTest.OrderResponse_CustomerInfo/RestTest.CustomerInfo AS customer {
+      email = Email,
+      name = Name
     },
-    RestTest.OrderItem VIA RestTest.OrderResponse_OrderItem AS items {
-      Price AS price (Decimal),
-      Quantity AS quantity (Integer),
-      Sku AS sku (String)
+    RestTest.OrderResponse_OrderItem/RestTest.OrderItem AS items {
+      price = Price,
+      quantity = Quantity,
+      sku = Sku
     }
   }
 };

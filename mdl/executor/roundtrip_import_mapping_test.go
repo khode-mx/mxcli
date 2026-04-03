@@ -15,7 +15,6 @@ func TestRoundtripImportMapping_NoSchema(t *testing.T) {
 	env := setupTestEnv(t)
 	defer env.teardown()
 
-	// First create the entity that will be mapped to
 	if err := env.executeMDL(`CREATE ENTITY ` + testModule + `.IMPet (
   PetId: Integer,
   Name: String(200)
@@ -24,9 +23,9 @@ func TestRoundtripImportMapping_NoSchema(t *testing.T) {
 	}
 
 	createMDL := `CREATE IMPORT MAPPING ` + testModule + `.ImportPetBasic {
-  "" AS ` + testModule + `.IMPet (Create) {
-    id AS PetId (Integer, KEY),
-    name AS Name (String)
+  CREATE ` + testModule + `.IMPet {
+    PetId = id KEY,
+    Name = name
   }
 };`
 
@@ -34,7 +33,7 @@ func TestRoundtripImportMapping_NoSchema(t *testing.T) {
 		"IMPORT MAPPING",
 		"ImportPetBasic",
 		"IMPet",
-		"(Create)",
+		"CREATE",
 	})
 }
 
@@ -42,7 +41,6 @@ func TestRoundtripImportMapping_WithJsonStructureRef(t *testing.T) {
 	env := setupTestEnv(t)
 	defer env.teardown()
 
-	// Create required entity and JSON structure first
 	if err := env.executeMDL(`CREATE ENTITY ` + testModule + `.IMOrder (
   OrderId: Integer,
   Total: Decimal
@@ -56,18 +54,18 @@ SNIPPET '{"orderId": 1, "total": 99.99}';`); err != nil {
 	}
 
 	createMDL := `CREATE IMPORT MAPPING ` + testModule + `.ImportOrder
-  FROM JSON STRUCTURE ` + testModule + `.OrderJS
+  WITH JSON STRUCTURE ` + testModule + `.OrderJS
 {
-  "" AS ` + testModule + `.IMOrder (Create) {
-    orderId AS OrderId (Integer, KEY),
-    total AS Total (Decimal)
+  CREATE ` + testModule + `.IMOrder {
+    OrderId = orderId KEY,
+    Total = total
   }
 };`
 
 	env.assertContains(createMDL, []string{
 		"IMPORT MAPPING",
 		"ImportOrder",
-		"FROM JSON STRUCTURE",
+		"WITH JSON STRUCTURE",
 		"IMOrder",
 		"orderId",
 		"total",
@@ -88,19 +86,19 @@ func TestRoundtripImportMapping_ValueTypes(t *testing.T) {
 	}
 
 	createMDL := `CREATE IMPORT MAPPING ` + testModule + `.ImportAllTypes {
-  "" AS ` + testModule + `.IMAllTypes (Create) {
-    intVal AS IntVal (Integer, KEY),
-    decVal AS DecVal (Decimal),
-    boolVal AS BoolVal (Boolean),
-    dateVal AS DateVal (DateTime)
+  CREATE ` + testModule + `.IMAllTypes {
+    IntVal = intVal KEY,
+    DecVal = decVal,
+    BoolVal = boolVal,
+    DateVal = dateVal
   }
 };`
 
 	env.assertContains(createMDL, []string{
-		"Integer",
-		"Decimal",
-		"Boolean",
-		"DateTime",
+		"IntVal",
+		"DecVal",
+		"BoolVal",
+		"DateVal",
 	})
 }
 
@@ -115,8 +113,8 @@ func TestRoundtripImportMapping_Drop(t *testing.T) {
 	}
 
 	if err := env.executeMDL(`CREATE IMPORT MAPPING ` + testModule + `.ToDropIM {
-  "" AS ` + testModule + `.IMDropPet (Create) {
-    id AS PetId (Integer, KEY)
+  CREATE ` + testModule + `.IMDropPet {
+    PetId = id KEY
   }
 };`); err != nil {
 		t.Fatalf("CREATE IMPORT MAPPING failed: %v", err)
@@ -146,8 +144,8 @@ func TestRoundtripImportMapping_ShowAppearsInList(t *testing.T) {
 	}
 
 	if err := env.executeMDL(`CREATE IMPORT MAPPING ` + testModule + `.ListableIM {
-  "" AS ` + testModule + `.IMListPet (Create) {
-    id AS PetId (Integer, KEY)
+  CREATE ` + testModule + `.IMListPet {
+    PetId = id KEY
   }
 };`); err != nil {
 		t.Fatalf("CREATE IMPORT MAPPING failed: %v", err)
@@ -186,11 +184,11 @@ SNIPPET '{"id": 1, "name": "Fido"}';`); err != nil {
 	}
 
 	if err := env.executeMDL(`CREATE IMPORT MAPPING ` + testModule + `.MxCheckImportPet
-  FROM JSON STRUCTURE ` + testModule + `.MxCheckIMJS
+  WITH JSON STRUCTURE ` + testModule + `.MxCheckIMJS
 {
-  "" AS ` + testModule + `.MxCheckIMPet (Create) {
-    id AS PetId (Integer),
-    name AS Name (String)
+  CREATE ` + testModule + `.MxCheckIMPet {
+    PetId = id,
+    Name = name
   }
 };`); err != nil {
 		t.Fatalf("CREATE IMPORT MAPPING failed: %v", err)

@@ -119,9 +119,9 @@ func (e *Executor) describeExportMapping(name ast.QualifiedName) error {
 	fmt.Fprintf(e.output, "CREATE EXPORT MAPPING %s.%s\n", moduleName, em.Name)
 
 	if em.JsonStructure != "" {
-		fmt.Fprintf(e.output, "  TO JSON STRUCTURE %s\n", em.JsonStructure)
+		fmt.Fprintf(e.output, "  WITH JSON STRUCTURE %s\n", em.JsonStructure)
 	} else if em.XmlSchema != "" {
-		fmt.Fprintf(e.output, "  TO XML SCHEMA %s\n", em.XmlSchema)
+		fmt.Fprintf(e.output, "  WITH XML SCHEMA %s\n", em.XmlSchema)
 	}
 
 	if em.NullValueOption != "" && em.NullValueOption != "LeaveOutElement" {
@@ -131,7 +131,7 @@ func (e *Executor) describeExportMapping(name ast.QualifiedName) error {
 	if len(em.Elements) > 0 {
 		fmt.Fprintln(e.output, "{")
 		for _, elem := range em.Elements {
-			printExportMappingElement(e, elem, 1)
+			printExportMappingElement(e, elem, 1, true)
 			fmt.Fprintln(e.output)
 		}
 		fmt.Fprintln(e.output, "};")
@@ -139,17 +139,22 @@ func (e *Executor) describeExportMapping(name ast.QualifiedName) error {
 	return nil
 }
 
-func printExportMappingElement(e *Executor, elem *model.ExportMappingElement, depth int) {
+func printExportMappingElement(e *Executor, elem *model.ExportMappingElement, depth int, isRoot bool) {
 	indent := strings.Repeat("  ", depth)
 	if elem.Kind == "Object" {
-		via := ""
-		if elem.Association != "" {
-			via = " VIA " + elem.Association
+		if isRoot {
+			// Root: Module.Entity {
+			fmt.Fprintf(e.output, "%s%s {\n", indent, elem.Entity)
+		} else {
+			// Nested: Assoc/Entity AS jsonKey {
+			fmt.Fprintf(e.output, "%s%s/%s AS %s", indent, elem.Association, elem.Entity, elem.ExposedName)
+			if len(elem.Children) > 0 {
+				fmt.Fprintln(e.output, " {")
+			}
 		}
 		if len(elem.Children) > 0 {
-			fmt.Fprintf(e.output, "%s%s%s AS %s {\n", indent, elem.Entity, via, elem.ExposedName)
 			for i, child := range elem.Children {
-				printExportMappingElement(e, child, depth+1)
+				printExportMappingElement(e, child, depth+1, false)
 				if i < len(elem.Children)-1 {
 					fmt.Fprintln(e.output, ",")
 				} else {
@@ -157,21 +162,15 @@ func printExportMappingElement(e *Executor, elem *model.ExportMappingElement, de
 				}
 			}
 			fmt.Fprintf(e.output, "%s}", indent)
-		} else {
-			fmt.Fprintf(e.output, "%s%s%s AS %s", indent, elem.Entity, via, elem.ExposedName)
 		}
 	} else {
-		// Value mapping
+		// Value mapping: jsonField = Attr
 		attrName := elem.Attribute
 		// Strip module prefix if present (Module.Entity.Attr → Attr)
 		if parts := strings.Split(attrName, "."); len(parts) == 3 {
 			attrName = parts[2]
 		}
-		dt := elem.DataType
-		if dt == "" {
-			dt = "String"
-		}
-		fmt.Fprintf(e.output, "%s%s AS %s (%s)", indent, attrName, elem.ExposedName, dt)
+		fmt.Fprintf(e.output, "%s%s = %s", indent, elem.ExposedName, attrName)
 	}
 }
 
@@ -295,10 +294,7 @@ func buildExportMappingElementModel(moduleName string, def *ast.ExportMappingEle
 		// Value mapping — qualify attribute name as Module.Entity.Attribute
 		elem.Kind = "Value"
 		elem.TypeName = "ExportMappings$ValueMappingElement"
-		elem.DataType = def.DataType
-		if elem.DataType == "" {
-			elem.DataType = "String"
-		}
+		elem.DataType = "String" // default; entity already defines the real type
 		attr := def.Attribute
 		if parentEntity != "" && !strings.Contains(attr, ".") {
 			attr = parentEntity + "." + attr

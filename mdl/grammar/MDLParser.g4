@@ -834,85 +834,86 @@ customNameMapping
 
 /**
  * CREATE IMPORT MAPPING Module.Name
- *   FROM JSON STRUCTURE Module.JsonStructure
+ *   WITH JSON STRUCTURE Module.JsonStructure
  * {
- *   root AS Module.Entity (Create) {
- *     id AS Id (Integer, KEY),
- *     name AS Name (String)
+ *   CREATE Module.Entity {
+ *     PetId = id KEY,
+ *     Name = name,
+ *     CREATE Module.Assoc/Module.Child = jsonKey {
+ *       Email = email
+ *     }
  *   }
  * };
  */
 createImportMappingStatement
     : IMPORT MAPPING qualifiedName
-      importMappingSchemaClause?
-      LBRACE importMappingElement RBRACE
+      importMappingWithClause?
+      LBRACE importMappingRootElement RBRACE
     ;
 
-importMappingSchemaClause
-    : FROM JSON STRUCTURE qualifiedName
-    | FROM XML SCHEMA qualifiedName
+importMappingWithClause
+    : WITH JSON STRUCTURE qualifiedName
+    | WITH XML SCHEMA qualifiedName
     ;
 
-importMappingElement
-    : identifierOrKeyword AS qualifiedName LPAREN importMappingHandling RPAREN
-      (VIA qualifiedName)?
-      (LBRACE importMappingElement (COMMA importMappingElement)* RBRACE)?
-    | identifierOrKeyword AS identifierOrKeyword
-      LPAREN importMappingValueType (COMMA KEY)? RPAREN
+importMappingRootElement
+    : importMappingObjectHandling qualifiedName
+      LBRACE importMappingChild (COMMA importMappingChild)* RBRACE
     ;
 
-importMappingHandling
+importMappingChild
+    : importMappingObjectHandling qualifiedName SLASH qualifiedName EQUALS identifierOrKeyword
+      LBRACE importMappingChild (COMMA importMappingChild)* RBRACE       // nested object with children
+    | importMappingObjectHandling qualifiedName SLASH qualifiedName EQUALS identifierOrKeyword  // leaf object
+    | identifierOrKeyword EQUALS qualifiedName LPAREN identifierOrKeyword RPAREN  // value transform: Attr = Module.MF(jsonField)
+    | identifierOrKeyword EQUALS identifierOrKeyword KEY?                         // value: Attr = jsonField [KEY]
+    ;
+
+importMappingObjectHandling
     : CREATE
     | FIND
-    | UPDATE
-    | IDENTIFIER
-    ;
-
-importMappingValueType
-    : STRING_TYPE
-    | INTEGER_TYPE
-    | LONG_TYPE
-    | DECIMAL_TYPE
-    | BOOLEAN_TYPE
-    | DATETIME_TYPE
-    | DATE_TYPE
-    | BINARY_TYPE
+    | FIND OR CREATE
     ;
 
 /**
  * CREATE EXPORT MAPPING Module.Name
- *   [TO JSON STRUCTURE Module.JsonStructure]
+ *   WITH JSON STRUCTURE Module.JsonStructure
  *   [NULL VALUES LeaveOutElement]
  * {
- *   Module.Customer AS root {
- *     Name AS name (String),
- *     Module.Address VIA Module.Customer_Address AS addresses {
- *       Street AS street (String)
+ *   Module.Entity {
+ *     jsonField = Attr,
+ *     Module.Assoc/Module.Child AS jsonKey {
+ *       email = Email
  *     }
  *   }
  * };
  */
 createExportMappingStatement
     : EXPORT MAPPING qualifiedName
-      exportMappingSchemaClause?
+      exportMappingWithClause?
       exportMappingNullValuesClause?
-      LBRACE exportMappingElement RBRACE
+      LBRACE exportMappingRootElement RBRACE
     ;
 
-exportMappingSchemaClause
-    : TO JSON STRUCTURE qualifiedName
-    | TO XML SCHEMA qualifiedName
+exportMappingWithClause
+    : WITH JSON STRUCTURE qualifiedName
+    | WITH XML SCHEMA qualifiedName
     ;
 
 exportMappingNullValuesClause
     : NULL VALUES identifierOrKeyword
     ;
 
-exportMappingElement
-    : qualifiedName (VIA qualifiedName)? AS identifierOrKeyword
-      (LBRACE exportMappingElement (COMMA exportMappingElement)* RBRACE)?
-    | identifierOrKeyword AS identifierOrKeyword
-      LPAREN importMappingValueType RPAREN
+exportMappingRootElement
+    : qualifiedName
+      LBRACE exportMappingChild (COMMA exportMappingChild)* RBRACE
+    ;
+
+exportMappingChild
+    : qualifiedName SLASH qualifiedName AS identifierOrKeyword
+      LBRACE exportMappingChild (COMMA exportMappingChild)* RBRACE       // nested object with children
+    | qualifiedName SLASH qualifiedName AS identifierOrKeyword            // leaf object
+    | identifierOrKeyword EQUALS identifierOrKeyword                      // value: jsonField = Attr
     ;
 
 // =============================================================================

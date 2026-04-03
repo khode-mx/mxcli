@@ -268,29 +268,32 @@ type MDLParserListener interface {
 	// EnterCreateImportMappingStatement is called when entering the createImportMappingStatement production.
 	EnterCreateImportMappingStatement(c *CreateImportMappingStatementContext)
 
-	// EnterImportMappingSchemaClause is called when entering the importMappingSchemaClause production.
-	EnterImportMappingSchemaClause(c *ImportMappingSchemaClauseContext)
+	// EnterImportMappingWithClause is called when entering the importMappingWithClause production.
+	EnterImportMappingWithClause(c *ImportMappingWithClauseContext)
 
-	// EnterImportMappingElement is called when entering the importMappingElement production.
-	EnterImportMappingElement(c *ImportMappingElementContext)
+	// EnterImportMappingRootElement is called when entering the importMappingRootElement production.
+	EnterImportMappingRootElement(c *ImportMappingRootElementContext)
 
-	// EnterImportMappingHandling is called when entering the importMappingHandling production.
-	EnterImportMappingHandling(c *ImportMappingHandlingContext)
+	// EnterImportMappingChild is called when entering the importMappingChild production.
+	EnterImportMappingChild(c *ImportMappingChildContext)
 
-	// EnterImportMappingValueType is called when entering the importMappingValueType production.
-	EnterImportMappingValueType(c *ImportMappingValueTypeContext)
+	// EnterImportMappingObjectHandling is called when entering the importMappingObjectHandling production.
+	EnterImportMappingObjectHandling(c *ImportMappingObjectHandlingContext)
 
 	// EnterCreateExportMappingStatement is called when entering the createExportMappingStatement production.
 	EnterCreateExportMappingStatement(c *CreateExportMappingStatementContext)
 
-	// EnterExportMappingSchemaClause is called when entering the exportMappingSchemaClause production.
-	EnterExportMappingSchemaClause(c *ExportMappingSchemaClauseContext)
+	// EnterExportMappingWithClause is called when entering the exportMappingWithClause production.
+	EnterExportMappingWithClause(c *ExportMappingWithClauseContext)
 
 	// EnterExportMappingNullValuesClause is called when entering the exportMappingNullValuesClause production.
 	EnterExportMappingNullValuesClause(c *ExportMappingNullValuesClauseContext)
 
-	// EnterExportMappingElement is called when entering the exportMappingElement production.
-	EnterExportMappingElement(c *ExportMappingElementContext)
+	// EnterExportMappingRootElement is called when entering the exportMappingRootElement production.
+	EnterExportMappingRootElement(c *ExportMappingRootElementContext)
+
+	// EnterExportMappingChild is called when entering the exportMappingChild production.
+	EnterExportMappingChild(c *ExportMappingChildContext)
 
 	// EnterCreateValidationRuleStatement is called when entering the createValidationRuleStatement production.
 	EnterCreateValidationRuleStatement(c *CreateValidationRuleStatementContext)
@@ -1426,29 +1429,32 @@ type MDLParserListener interface {
 	// ExitCreateImportMappingStatement is called when exiting the createImportMappingStatement production.
 	ExitCreateImportMappingStatement(c *CreateImportMappingStatementContext)
 
-	// ExitImportMappingSchemaClause is called when exiting the importMappingSchemaClause production.
-	ExitImportMappingSchemaClause(c *ImportMappingSchemaClauseContext)
+	// ExitImportMappingWithClause is called when exiting the importMappingWithClause production.
+	ExitImportMappingWithClause(c *ImportMappingWithClauseContext)
 
-	// ExitImportMappingElement is called when exiting the importMappingElement production.
-	ExitImportMappingElement(c *ImportMappingElementContext)
+	// ExitImportMappingRootElement is called when exiting the importMappingRootElement production.
+	ExitImportMappingRootElement(c *ImportMappingRootElementContext)
 
-	// ExitImportMappingHandling is called when exiting the importMappingHandling production.
-	ExitImportMappingHandling(c *ImportMappingHandlingContext)
+	// ExitImportMappingChild is called when exiting the importMappingChild production.
+	ExitImportMappingChild(c *ImportMappingChildContext)
 
-	// ExitImportMappingValueType is called when exiting the importMappingValueType production.
-	ExitImportMappingValueType(c *ImportMappingValueTypeContext)
+	// ExitImportMappingObjectHandling is called when exiting the importMappingObjectHandling production.
+	ExitImportMappingObjectHandling(c *ImportMappingObjectHandlingContext)
 
 	// ExitCreateExportMappingStatement is called when exiting the createExportMappingStatement production.
 	ExitCreateExportMappingStatement(c *CreateExportMappingStatementContext)
 
-	// ExitExportMappingSchemaClause is called when exiting the exportMappingSchemaClause production.
-	ExitExportMappingSchemaClause(c *ExportMappingSchemaClauseContext)
+	// ExitExportMappingWithClause is called when exiting the exportMappingWithClause production.
+	ExitExportMappingWithClause(c *ExportMappingWithClauseContext)
 
 	// ExitExportMappingNullValuesClause is called when exiting the exportMappingNullValuesClause production.
 	ExitExportMappingNullValuesClause(c *ExportMappingNullValuesClauseContext)
 
-	// ExitExportMappingElement is called when exiting the exportMappingElement production.
-	ExitExportMappingElement(c *ExportMappingElementContext)
+	// ExitExportMappingRootElement is called when exiting the exportMappingRootElement production.
+	ExitExportMappingRootElement(c *ExportMappingRootElementContext)
+
+	// ExitExportMappingChild is called when exiting the exportMappingChild production.
+	ExitExportMappingChild(c *ExportMappingChildContext)
 
 	// ExitCreateValidationRuleStatement is called when exiting the createValidationRuleStatement production.
 	ExitCreateValidationRuleStatement(c *CreateValidationRuleStatementContext)

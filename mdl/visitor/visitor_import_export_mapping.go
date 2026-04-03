@@ -13,9 +13,9 @@ func (b *Builder) ExitCreateImportMappingStatement(ctx *parser.CreateImportMappi
 		Name: buildQualifiedName(ctx.QualifiedName()),
 	}
 
-	// Parse schema clause
-	if schemaCtx := ctx.ImportMappingSchemaClause(); schemaCtx != nil {
-		sc := schemaCtx.(*parser.ImportMappingSchemaClauseContext)
+	// Parse WITH clause
+	if wc := ctx.ImportMappingWithClause(); wc != nil {
+		sc := wc.(*parser.ImportMappingWithClauseContext)
 		if sc.JSON() != nil {
 			stmt.SchemaKind = "JSON_STRUCTURE"
 		} else {
@@ -26,53 +26,91 @@ func (b *Builder) ExitCreateImportMappingStatement(ctx *parser.CreateImportMappi
 		}
 	}
 
-	// Parse the root mapping element
-	if elemCtx := ctx.ImportMappingElement(); elemCtx != nil {
-		stmt.RootElement = buildImportMappingElement(elemCtx.(*parser.ImportMappingElementContext))
+	// Parse root element
+	if root := ctx.ImportMappingRootElement(); root != nil {
+		stmt.RootElement = buildImportRootElement(root.(*parser.ImportMappingRootElementContext))
 	}
 
 	b.statements = append(b.statements, stmt)
 }
 
-// buildImportMappingElement converts an importMappingElement context to an AST node.
-func buildImportMappingElement(ctx *parser.ImportMappingElementContext) *ast.ImportMappingElementDef {
+// buildImportRootElement builds the root element from the grammar context.
+// Grammar: importMappingObjectHandling qualifiedName LBRACE importMappingChild (COMMA importMappingChild)* RBRACE
+func buildImportRootElement(ctx *parser.ImportMappingRootElementContext) *ast.ImportMappingElementDef {
 	elem := &ast.ImportMappingElementDef{}
 
-	allQN := ctx.AllQualifiedName()
-	allIdent := ctx.AllIdentifierOrKeyword()
-
-	// JSON field name (left side of AS): strip QUOTED_IDENTIFIER delimiters.
-	if len(allIdent) > 0 {
-		elem.JsonName = identifierOrKeywordText(allIdent[0])
+	// Object handling: CREATE | FIND | FIND OR CREATE
+	if hCtx := ctx.ImportMappingObjectHandling(); hCtx != nil {
+		elem.ObjectHandling = extractObjectHandling(hCtx.(*parser.ImportMappingObjectHandlingContext))
 	}
 
-	// Check if this is an object mapping (has qualifiedName RHS with entity)
-	// or value mapping (has identifierOrKeyword RHS with attribute name + type in parens)
-	if ctx.ImportMappingHandling() != nil {
-		// Object mapping: IDENTIFIER AS qualifiedName LPAREN handling RPAREN
-		if len(allQN) >= 1 {
-			elem.Entity = allQN[0].GetText()
-		}
-		handlingCtx := ctx.ImportMappingHandling().(*parser.ImportMappingHandlingContext)
-		elem.ObjectHandling = extractImportMappingHandling(handlingCtx)
+	// Entity name
+	if ctx.QualifiedName() != nil {
+		elem.Entity = ctx.QualifiedName().GetText()
+	}
 
-		// VIA clause: second qualifiedName
-		if ctx.VIA() != nil && len(allQN) >= 2 {
-			elem.Association = allQN[1].GetText()
+	// Children
+	for _, childCtx := range ctx.AllImportMappingChild() {
+		child := buildImportChild(childCtx.(*parser.ImportMappingChildContext))
+		elem.Children = append(elem.Children, child)
+	}
+
+	return elem
+}
+
+// buildImportChild builds a child element from the grammar context.
+// Four alternatives:
+// 1. handling assocPath = jsonKey { children }   (nested object with children)
+// 2. handling assocPath = jsonKey                 (leaf object)
+// 3. attr = Module.MF(jsonField)                 (value transform)
+// 4. attr = jsonField KEY?                        (value assignment)
+func buildImportChild(ctx *parser.ImportMappingChildContext) *ast.ImportMappingElementDef {
+	elem := &ast.ImportMappingElementDef{}
+
+	// Check if this is an object mapping (has handling keyword)
+	if hCtx := ctx.ImportMappingObjectHandling(); hCtx != nil {
+		// Object mapping: CREATE/FIND/FIND OR CREATE Assoc/Entity = jsonKey
+		elem.ObjectHandling = extractObjectHandling(hCtx.(*parser.ImportMappingObjectHandlingContext))
+
+		// Association path: qualifiedName SLASH qualifiedName
+		allQN := ctx.AllQualifiedName()
+		if len(allQN) >= 2 {
+			elem.Association = allQN[0].GetText()
+			elem.Entity = allQN[1].GetText()
+		}
+
+		// JSON key after EQUALS
+		allIdent := ctx.AllIdentifierOrKeyword()
+		if len(allIdent) >= 1 {
+			elem.JsonName = identifierOrKeywordText(allIdent[0])
 		}
 
 		// Nested children
-		for _, childCtx := range ctx.AllImportMappingElement() {
-			child := buildImportMappingElement(childCtx.(*parser.ImportMappingElementContext))
+		for _, childCtx := range ctx.AllImportMappingChild() {
+			child := buildImportChild(childCtx.(*parser.ImportMappingChildContext))
 			elem.Children = append(elem.Children, child)
 		}
-	} else {
-		// Value mapping: IDENTIFIER AS identifierOrKeyword LPAREN type (COMMA KEY)? RPAREN
-		if len(allIdent) >= 2 {
-			elem.Attribute = identifierOrKeywordText(allIdent[1])
+	} else if ctx.LPAREN() != nil {
+		// Value transform: attr = Module.MF(jsonField)
+		allIdent := ctx.AllIdentifierOrKeyword()
+		if len(allIdent) >= 1 {
+			elem.Attribute = identifierOrKeywordText(allIdent[0])
 		}
-		if vtCtx := ctx.ImportMappingValueType(); vtCtx != nil {
-			elem.DataType = extractImportValueType(vtCtx.(*parser.ImportMappingValueTypeContext))
+		allQN := ctx.AllQualifiedName()
+		if len(allQN) >= 1 {
+			elem.Converter = allQN[0].GetText()
+		}
+		if len(allIdent) >= 2 {
+			elem.ConverterParam = identifierOrKeywordText(allIdent[1])
+		}
+	} else {
+		// Value assignment: attr = jsonField KEY?
+		allIdent := ctx.AllIdentifierOrKeyword()
+		if len(allIdent) >= 1 {
+			elem.Attribute = identifierOrKeywordText(allIdent[0])
+		}
+		if len(allIdent) >= 2 {
+			elem.JsonName = identifierOrKeywordText(allIdent[1])
 		}
 		if ctx.KEY() != nil {
 			elem.IsKey = true
@@ -88,9 +126,9 @@ func (b *Builder) ExitCreateExportMappingStatement(ctx *parser.CreateExportMappi
 		Name: buildQualifiedName(ctx.QualifiedName()),
 	}
 
-	// Parse schema clause
-	if schemaCtx := ctx.ExportMappingSchemaClause(); schemaCtx != nil {
-		sc := schemaCtx.(*parser.ExportMappingSchemaClauseContext)
+	// Parse WITH clause
+	if wc := ctx.ExportMappingWithClause(); wc != nil {
+		sc := wc.(*parser.ExportMappingWithClauseContext)
 		if sc.JSON() != nil {
 			stmt.SchemaKind = "JSON_STRUCTURE"
 		} else {
@@ -102,103 +140,85 @@ func (b *Builder) ExitCreateExportMappingStatement(ctx *parser.CreateExportMappi
 	}
 
 	// Parse null values clause
-	if nullCtx := ctx.ExportMappingNullValuesClause(); nullCtx != nil {
-		nc := nullCtx.(*parser.ExportMappingNullValuesClauseContext)
-		if nc.IdentifierOrKeyword() != nil {
-			stmt.NullValueOption = identifierOrKeywordText(nc.IdentifierOrKeyword().(*parser.IdentifierOrKeywordContext))
+	if nc := ctx.ExportMappingNullValuesClause(); nc != nil {
+		ncc := nc.(*parser.ExportMappingNullValuesClauseContext)
+		if ncc.IdentifierOrKeyword() != nil {
+			stmt.NullValueOption = identifierOrKeywordText(ncc.IdentifierOrKeyword().(*parser.IdentifierOrKeywordContext))
 		}
 	}
 
-	// Parse the root mapping element
-	if elemCtx := ctx.ExportMappingElement(); elemCtx != nil {
-		stmt.RootElement = buildExportMappingElement(elemCtx.(*parser.ExportMappingElementContext))
+	// Parse root element
+	if root := ctx.ExportMappingRootElement(); root != nil {
+		stmt.RootElement = buildExportRootElement(root.(*parser.ExportMappingRootElementContext))
 	}
 
 	b.statements = append(b.statements, stmt)
 }
 
-// buildExportMappingElement converts an exportMappingElement context to an AST node.
-func buildExportMappingElement(ctx *parser.ExportMappingElementContext) *ast.ExportMappingElementDef {
+// buildExportRootElement builds the root element from the grammar context.
+// Grammar: qualifiedName LBRACE exportMappingChild (COMMA exportMappingChild)* RBRACE
+func buildExportRootElement(ctx *parser.ExportMappingRootElementContext) *ast.ExportMappingElementDef {
 	elem := &ast.ExportMappingElementDef{}
 
-	// Distinguish object vs value element by presence of importMappingValueType
-	if ctx.ImportMappingValueType() != nil {
-		// Value mapping: identifierOrKeyword AS identifierOrKeyword (Type)
-		// AllIdentifierOrKeyword()[0] = attribute name, [1] = JSON name
-		allIdent := ctx.AllIdentifierOrKeyword()
-		if len(allIdent) >= 1 {
-			elem.Attribute = identifierOrKeywordText(allIdent[0].(*parser.IdentifierOrKeywordContext))
-		}
-		if len(allIdent) >= 2 {
-			elem.JsonName = identifierOrKeywordText(allIdent[1].(*parser.IdentifierOrKeywordContext))
-		}
-		elem.DataType = extractImportValueType(ctx.ImportMappingValueType().(*parser.ImportMappingValueTypeContext))
-	} else {
-		// Object mapping: qualifiedName [VIA qualifiedName] AS identifierOrKeyword { children }
-		allQN := ctx.AllQualifiedName()
-		if len(allQN) >= 1 {
-			elem.Entity = allQN[0].GetText()
-		}
-		if ctx.VIA() != nil && len(allQN) >= 2 {
-			elem.Association = allQN[1].GetText()
-		}
-		// The identifierOrKeyword after AS is the JSON exposed name
+	if ctx.QualifiedName() != nil {
+		elem.Entity = ctx.QualifiedName().GetText()
+	}
+
+	for _, childCtx := range ctx.AllExportMappingChild() {
+		child := buildExportChild(childCtx.(*parser.ExportMappingChildContext))
+		elem.Children = append(elem.Children, child)
+	}
+
+	return elem
+}
+
+// buildExportChild builds a child element from the grammar context.
+// Three alternatives:
+// 1. Assoc/Entity AS jsonKey { children }   (nested object with children)
+// 2. Assoc/Entity AS jsonKey                 (leaf object)
+// 3. jsonField = Attr                        (value assignment)
+func buildExportChild(ctx *parser.ExportMappingChildContext) *ast.ExportMappingElementDef {
+	elem := &ast.ExportMappingElementDef{}
+
+	allQN := ctx.AllQualifiedName()
+
+	if len(allQN) >= 2 {
+		// Object mapping: Assoc/Entity AS jsonKey
+		elem.Association = allQN[0].GetText()
+		elem.Entity = allQN[1].GetText()
+
+		// JSON key after AS
 		allIdent := ctx.AllIdentifierOrKeyword()
 		if len(allIdent) >= 1 {
 			elem.JsonName = identifierOrKeywordText(allIdent[0].(*parser.IdentifierOrKeywordContext))
 		}
+
 		// Nested children
-		for _, childCtx := range ctx.AllExportMappingElement() {
-			child := buildExportMappingElement(childCtx.(*parser.ExportMappingElementContext))
+		for _, childCtx := range ctx.AllExportMappingChild() {
+			child := buildExportChild(childCtx.(*parser.ExportMappingChildContext))
 			elem.Children = append(elem.Children, child)
+		}
+	} else {
+		// Value mapping: jsonField = Attr
+		allIdent := ctx.AllIdentifierOrKeyword()
+		if len(allIdent) >= 1 {
+			elem.JsonName = identifierOrKeywordText(allIdent[0].(*parser.IdentifierOrKeywordContext))
+		}
+		if len(allIdent) >= 2 {
+			elem.Attribute = identifierOrKeywordText(allIdent[1].(*parser.IdentifierOrKeywordContext))
 		}
 	}
 
 	return elem
 }
 
-// extractImportMappingHandling extracts the handling string from the grammar context.
-func extractImportMappingHandling(ctx *parser.ImportMappingHandlingContext) string {
-	if ctx.CREATE() != nil {
-		return "Create"
+// extractObjectHandling extracts the handling mode from the grammar context.
+func extractObjectHandling(ctx *parser.ImportMappingObjectHandlingContext) string {
+	if ctx.FIND() != nil && ctx.OR() != nil {
+		return "FindOrCreate"
 	}
 	if ctx.FIND() != nil {
 		return "Find"
 	}
-	if ctx.UPDATE() != nil {
-		return "FindOrCreate"
-	}
-	if ctx.IDENTIFIER() != nil {
-		return ctx.IDENTIFIER().GetText()
-	}
 	return "Create"
-}
-
-// extractImportValueType maps a grammar type keyword to a string.
-func extractImportValueType(ctx *parser.ImportMappingValueTypeContext) string {
-	if ctx.STRING_TYPE() != nil {
-		return "String"
-	}
-	if ctx.INTEGER_TYPE() != nil {
-		return "Integer"
-	}
-	if ctx.LONG_TYPE() != nil {
-		return "Long"
-	}
-	if ctx.DECIMAL_TYPE() != nil {
-		return "Decimal"
-	}
-	if ctx.BOOLEAN_TYPE() != nil {
-		return "Boolean"
-	}
-	if ctx.DATETIME_TYPE() != nil {
-		return "DateTime"
-	}
-	if ctx.DATE_TYPE() != nil {
-		return "Date"
-	}
-	if ctx.BINARY_TYPE() != nil {
-		return "Binary"
-	}
-	return "String"
 }

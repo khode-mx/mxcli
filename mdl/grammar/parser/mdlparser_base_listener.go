@@ -574,31 +574,31 @@ func (s *BaseMDLParserListener) EnterCreateImportMappingStatement(ctx *CreateImp
 func (s *BaseMDLParserListener) ExitCreateImportMappingStatement(ctx *CreateImportMappingStatementContext) {
 }
 
-// EnterImportMappingSchemaClause is called when production importMappingSchemaClause is entered.
-func (s *BaseMDLParserListener) EnterImportMappingSchemaClause(ctx *ImportMappingSchemaClauseContext) {
+// EnterImportMappingWithClause is called when production importMappingWithClause is entered.
+func (s *BaseMDLParserListener) EnterImportMappingWithClause(ctx *ImportMappingWithClauseContext) {}
+
+// ExitImportMappingWithClause is called when production importMappingWithClause is exited.
+func (s *BaseMDLParserListener) ExitImportMappingWithClause(ctx *ImportMappingWithClauseContext) {}
+
+// EnterImportMappingRootElement is called when production importMappingRootElement is entered.
+func (s *BaseMDLParserListener) EnterImportMappingRootElement(ctx *ImportMappingRootElementContext) {}
+
+// ExitImportMappingRootElement is called when production importMappingRootElement is exited.
+func (s *BaseMDLParserListener) ExitImportMappingRootElement(ctx *ImportMappingRootElementContext) {}
+
+// EnterImportMappingChild is called when production importMappingChild is entered.
+func (s *BaseMDLParserListener) EnterImportMappingChild(ctx *ImportMappingChildContext) {}
+
+// ExitImportMappingChild is called when production importMappingChild is exited.
+func (s *BaseMDLParserListener) ExitImportMappingChild(ctx *ImportMappingChildContext) {}
+
+// EnterImportMappingObjectHandling is called when production importMappingObjectHandling is entered.
+func (s *BaseMDLParserListener) EnterImportMappingObjectHandling(ctx *ImportMappingObjectHandlingContext) {
 }
 
-// ExitImportMappingSchemaClause is called when production importMappingSchemaClause is exited.
-func (s *BaseMDLParserListener) ExitImportMappingSchemaClause(ctx *ImportMappingSchemaClauseContext) {
+// ExitImportMappingObjectHandling is called when production importMappingObjectHandling is exited.
+func (s *BaseMDLParserListener) ExitImportMappingObjectHandling(ctx *ImportMappingObjectHandlingContext) {
 }
-
-// EnterImportMappingElement is called when production importMappingElement is entered.
-func (s *BaseMDLParserListener) EnterImportMappingElement(ctx *ImportMappingElementContext) {}
-
-// ExitImportMappingElement is called when production importMappingElement is exited.
-func (s *BaseMDLParserListener) ExitImportMappingElement(ctx *ImportMappingElementContext) {}
-
-// EnterImportMappingHandling is called when production importMappingHandling is entered.
-func (s *BaseMDLParserListener) EnterImportMappingHandling(ctx *ImportMappingHandlingContext) {}
-
-// ExitImportMappingHandling is called when production importMappingHandling is exited.
-func (s *BaseMDLParserListener) ExitImportMappingHandling(ctx *ImportMappingHandlingContext) {}
-
-// EnterImportMappingValueType is called when production importMappingValueType is entered.
-func (s *BaseMDLParserListener) EnterImportMappingValueType(ctx *ImportMappingValueTypeContext) {}
-
-// ExitImportMappingValueType is called when production importMappingValueType is exited.
-func (s *BaseMDLParserListener) ExitImportMappingValueType(ctx *ImportMappingValueTypeContext) {}
 
 // EnterCreateExportMappingStatement is called when production createExportMappingStatement is entered.
 func (s *BaseMDLParserListener) EnterCreateExportMappingStatement(ctx *CreateExportMappingStatementContext) {
@@ -608,13 +608,11 @@ func (s *BaseMDLParserListener) EnterCreateExportMappingStatement(ctx *CreateExp
 func (s *BaseMDLParserListener) ExitCreateExportMappingStatement(ctx *CreateExportMappingStatementContext) {
 }
 
-// EnterExportMappingSchemaClause is called when production exportMappingSchemaClause is entered.
-func (s *BaseMDLParserListener) EnterExportMappingSchemaClause(ctx *ExportMappingSchemaClauseContext) {
-}
+// EnterExportMappingWithClause is called when production exportMappingWithClause is entered.
+func (s *BaseMDLParserListener) EnterExportMappingWithClause(ctx *ExportMappingWithClauseContext) {}
 
-// ExitExportMappingSchemaClause is called when production exportMappingSchemaClause is exited.
-func (s *BaseMDLParserListener) ExitExportMappingSchemaClause(ctx *ExportMappingSchemaClauseContext) {
-}
+// ExitExportMappingWithClause is called when production exportMappingWithClause is exited.
+func (s *BaseMDLParserListener) ExitExportMappingWithClause(ctx *ExportMappingWithClauseContext) {}
 
 // EnterExportMappingNullValuesClause is called when production exportMappingNullValuesClause is entered.
 func (s *BaseMDLParserListener) EnterExportMappingNullValuesClause(ctx *ExportMappingNullValuesClauseContext) {
@@ -624,11 +622,17 @@ func (s *BaseMDLParserListener) EnterExportMappingNullValuesClause(ctx *ExportMa
 func (s *BaseMDLParserListener) ExitExportMappingNullValuesClause(ctx *ExportMappingNullValuesClauseContext) {
 }
 
-// EnterExportMappingElement is called when production exportMappingElement is entered.
-func (s *BaseMDLParserListener) EnterExportMappingElement(ctx *ExportMappingElementContext) {}
+// EnterExportMappingRootElement is called when production exportMappingRootElement is entered.
+func (s *BaseMDLParserListener) EnterExportMappingRootElement(ctx *ExportMappingRootElementContext) {}
 
-// ExitExportMappingElement is called when production exportMappingElement is exited.
-func (s *BaseMDLParserListener) ExitExportMappingElement(ctx *ExportMappingElementContext) {}
+// ExitExportMappingRootElement is called when production exportMappingRootElement is exited.
+func (s *BaseMDLParserListener) ExitExportMappingRootElement(ctx *ExportMappingRootElementContext) {}
+
+// EnterExportMappingChild is called when production exportMappingChild is entered.
+func (s *BaseMDLParserListener) EnterExportMappingChild(ctx *ExportMappingChildContext) {}
+
+// ExitExportMappingChild is called when production exportMappingChild is exited.
+func (s *BaseMDLParserListener) ExitExportMappingChild(ctx *ExportMappingChildContext) {}
 
 // EnterCreateValidationRuleStatement is called when production createValidationRuleStatement is entered.
 func (s *BaseMDLParserListener) EnterCreateValidationRuleStatement(ctx *CreateValidationRuleStatementContext) {

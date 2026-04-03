@@ -119,15 +119,15 @@ func (e *Executor) describeImportMapping(name ast.QualifiedName) error {
 	fmt.Fprintf(e.output, "CREATE IMPORT MAPPING %s.%s\n", moduleName, im.Name)
 
 	if im.JsonStructure != "" {
-		fmt.Fprintf(e.output, "  FROM JSON STRUCTURE %s\n", im.JsonStructure)
+		fmt.Fprintf(e.output, "  WITH JSON STRUCTURE %s\n", im.JsonStructure)
 	} else if im.XmlSchema != "" {
-		fmt.Fprintf(e.output, "  FROM XML SCHEMA %s\n", im.XmlSchema)
+		fmt.Fprintf(e.output, "  WITH XML SCHEMA %s\n", im.XmlSchema)
 	}
 
 	if len(im.Elements) > 0 {
 		fmt.Fprintln(e.output, "{")
 		for _, elem := range im.Elements {
-			printImportMappingElement(e, elem, 1)
+			printImportMappingElement(e, elem, 1, true)
 			fmt.Fprintln(e.output)
 		}
 		fmt.Fprintln(e.output, "};")
@@ -135,28 +135,35 @@ func (e *Executor) describeImportMapping(name ast.QualifiedName) error {
 	return nil
 }
 
-func printImportMappingElement(e *Executor, elem *model.ImportMappingElement, depth int) {
+// handlingKeyword returns the MDL keyword for a Mendix ObjectHandling value.
+func handlingKeyword(handling string) string {
+	switch handling {
+	case "Find":
+		return "FIND"
+	case "FindOrCreate":
+		return "FIND OR CREATE"
+	default:
+		return "CREATE"
+	}
+}
+
+func printImportMappingElement(e *Executor, elem *model.ImportMappingElement, depth int, isRoot bool) {
 	indent := strings.Repeat("  ", depth)
 	if elem.Kind == "Object" {
-		entityOrName := elem.Entity
-		handling := elem.ObjectHandling
-		if handling == "" {
-			handling = "Create"
-		}
-		via := ""
-		if elem.Association != "" {
-			via = " VIA " + elem.Association
-		}
-		// Empty ExposedName means root element — use "" so output is valid re-executable MDL.
-		// The grammar requires identifierOrKeyword before AS, so bare AS is not valid.
-		jsonKey := elem.ExposedName
-		if jsonKey == "" {
-			jsonKey = `""`
+		handling := handlingKeyword(elem.ObjectHandling)
+		if isRoot {
+			// Root: CREATE Module.Entity {
+			fmt.Fprintf(e.output, "%s%s %s {\n", indent, handling, elem.Entity)
+		} else {
+			// Nested: CREATE Assoc/Entity = jsonKey {
+			fmt.Fprintf(e.output, "%s%s %s/%s = %s", indent, handling, elem.Association, elem.Entity, elem.ExposedName)
+			if len(elem.Children) > 0 {
+				fmt.Fprintln(e.output, " {")
+			}
 		}
 		if len(elem.Children) > 0 {
-			fmt.Fprintf(e.output, "%s%s AS %s (%s)%s {\n", indent, jsonKey, entityOrName, handling, via)
 			for i, child := range elem.Children {
-				printImportMappingElement(e, child, depth+1)
+				printImportMappingElement(e, child, depth+1, false)
 				if i < len(elem.Children)-1 {
 					fmt.Fprintln(e.output, ",")
 				} else {
@@ -164,25 +171,19 @@ func printImportMappingElement(e *Executor, elem *model.ImportMappingElement, de
 				}
 			}
 			fmt.Fprintf(e.output, "%s}", indent)
-		} else {
-			fmt.Fprintf(e.output, "%s%s AS %s (%s)%s", indent, jsonKey, entityOrName, handling, via)
 		}
 	} else {
-		// Value mapping
+		// Value mapping: Attr = jsonField KEY
 		attrName := elem.Attribute
 		// Strip module prefix if present (Module.Entity.Attr → Attr)
 		if parts := strings.Split(attrName, "."); len(parts) == 3 {
 			attrName = parts[2]
 		}
-		dt := elem.DataType
-		if dt == "" {
-			dt = "String"
-		}
 		keyStr := ""
 		if elem.IsKey {
-			keyStr = ", KEY"
+			keyStr = " KEY"
 		}
-		fmt.Fprintf(e.output, "%s%s AS %s (%s%s)", indent, elem.ExposedName, attrName, dt, keyStr)
+		fmt.Fprintf(e.output, "%s%s = %s%s", indent, attrName, elem.ExposedName, keyStr)
 	}
 }
 
@@ -269,10 +270,7 @@ func buildImportMappingElementModel(moduleName string, def *ast.ImportMappingEle
 		// Value mapping — qualify attribute name as Module.Entity.Attribute
 		elem.Kind = "Value"
 		elem.TypeName = "ImportMappings$ValueMappingElement"
-		elem.DataType = def.DataType
-		if elem.DataType == "" {
-			elem.DataType = "String"
-		}
+		elem.DataType = "String" // default; entity already defines the real type
 		elem.IsKey = def.IsKey
 		attr := def.Attribute
 		if parentEntity != "" && !strings.Contains(attr, ".") {

@@ -65,25 +65,26 @@ CREATE ASSOCIATION Module.MyRootObject_MyNestedObject
 
 ```sql
 CREATE IMPORT MAPPING Module.IMM_MyMapping
-  FROM JSON STRUCTURE Module.JSON_MyStructure
+  WITH JSON STRUCTURE Module.JSON_MyStructure
 {
-  "" AS Module.MyRootObject (Create) {
-    nestedKey AS Module.MyNestedObject (Create) VIA Module.MyRootObject_MyNestedObject {
-      name AS name (String),
-      code AS code (String)
-    },
-    stringField AS stringField (String),
-    intField    AS intField    (Integer)
+  CREATE Module.MyRootObject {
+    stringField = stringField,
+    intField    = intField,
+    CREATE Module.MyRootObject_MyNestedObject/Module.MyNestedObject = nestedKey {
+      name = name,
+      code = code
+    }
   }
 };
 ```
 
 **Syntax rules:**
-- Root element uses `""` (empty string) as the JSON key — it maps the top-level object
-- Object mappings: `jsonKey AS Module.Entity (Create|Find|FindOrCreate)`
-- Value mappings: `jsonKey AS attributeName (String|Integer|Long|Decimal|Boolean|DateTime)`
-- `VIA Module.Association` — required when mapping a nested object reachable via an association
-- No semicolons between child elements inside `{}`
+- Root object: `CREATE Module.Entity { ... }` — always starts with handling keyword
+- Value mappings: `AttributeName = jsonFieldName` — entity attribute on the left, JSON field on the right
+- Nested objects: `CREATE Association/Entity = jsonKey { ... }` — association path + JSON key
+- Object handling: `CREATE` (default), `FIND` (requires KEY), `FIND OR CREATE`
+- KEY marker: `Attr = jsonField KEY` — marks the attribute as a matching key
+- Value transforms: `Attr = Module.Microflow(jsonField)` — call a microflow to transform the value
 
 **Verify** after creation — check Schema elements are ticked in Studio Pro:
 - Open the import mapping in Studio Pro
@@ -166,22 +167,22 @@ CREATE ASSOCIATION Integrations.BibleApiResponse_BibleVerse
 
 -- Step 3: Import Mapping
 CREATE IMPORT MAPPING Integrations.IMM_BibleVerse
-  FROM JSON STRUCTURE Integrations.JSON_BibleVerse
+  WITH JSON STRUCTURE Integrations.JSON_BibleVerse
 {
-  "" AS Integrations.BibleApiResponse (Create) {
-    translation AS Integrations.BibleTranslation (Create) VIA Integrations.BibleApiResponse_BibleTranslation {
-      identifier    AS identifier    (String),
-      language      AS language      (String),
-      language_code AS language_code (String),
-      license       AS license       (String),
-      name          AS name          (String)
+  CREATE Integrations.BibleApiResponse {
+    CREATE Integrations.BibleApiResponse_BibleTranslation/Integrations.BibleTranslation = translation {
+      identifier    = identifier,
+      language      = language,
+      language_code = language_code,
+      license       = license,
+      name          = name
     },
-    random_verse AS Integrations.BibleVerse (Create) VIA Integrations.BibleApiResponse_BibleVerse {
-      book    AS book    (String),
-      book_id AS book_id (String),
-      chapter AS chapter (Integer),
-      text    AS text    (String),
-      verse   AS verse   (Integer)
+    CREATE Integrations.BibleApiResponse_BibleVerse/Integrations.BibleVerse = random_verse {
+      book    = book,
+      book_id = book_id,
+      chapter = chapter,
+      text    = text,
+      verse   = verse
     }
   }
 };
