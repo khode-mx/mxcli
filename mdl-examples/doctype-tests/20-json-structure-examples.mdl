@@ -2,20 +2,24 @@
 -- JSON Structure Examples
 -- =============================================================================
 
+-- MARK: Setup
 create module JsonTest;
 
--- List all JSON structures in the project
+-- MARK: Show (empty)
+
+-- List all JSON structures in the project (empty initially)
 SHOW JSON STRUCTURES;
 
 -- List JSON structures in a specific module
 SHOW JSON STRUCTURES IN JsonTest;
 
+-- MARK: Create
 
 -- Create a JSON structure from a JSON snippet (single-line)
 /**
  * Simple json snippet example
  */
-CREATE JSON STRUCTURE JsonTest.SimpleItem 
+CREATE JSON STRUCTURE JsonTest.SimpleItem
 folder 'json-snippets'
 SNIPPET '{"id": 1, "name": "John", "active": true}'
 ;
@@ -25,7 +29,7 @@ DROP JSON STRUCTURE JsonTest.SimpleItem;
 /**
  * Simple json snippet example
  */
-CREATE JSON STRUCTURE JsonTest.SimpleItem 
+CREATE JSON STRUCTURE JsonTest.SimpleItem
 folder 'json-snippets'
 SNIPPET '{"id": 1, "name": "John", "active": true}'
 ;
@@ -68,6 +72,13 @@ CUSTOM NAME MAP (
   'naam' AS 'CompanyName'
 );
 
+-- MARK: Describe
+
+-- Describe a JSON structure (shows element tree + JSON snippet)
+DESCRIBE JSON STRUCTURE JsonTest.CustomerResponse;
+
+-- MARK: Replace
+
 /**
  * Edit (replace) an existing JSON structure with an updated schema
  */
@@ -87,6 +98,8 @@ CREATE OR REPLACE JSON STRUCTURE JsonTest.CustomerResponse SNIPPET $${
   ],
   "tags": ["premium", "verified"]
 }$$;
+
+-- MARK: Drop
 
 -- Delete JSON structures
 --DROP JSON STRUCTURE JsonTest.SimpleItem;
