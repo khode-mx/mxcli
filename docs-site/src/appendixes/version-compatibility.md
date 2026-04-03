@@ -1,6 +1,6 @@
 # Mendix Version Compatibility
 
-Supported Mendix Studio Pro versions, BSON format differences, and known limitations.
+Supported Mendix Studio Pro versions, feature availability matrix, and known limitations.
 
 ## Supported Versions
 
@@ -14,7 +14,7 @@ mxcli supports Mendix Studio Pro versions **9.x through 11.x**. Development and 
 | 10.24 (LTS) | v2 | **Yes** | Supported |
 | 11.0 -- 11.5 | v2 | No | Supported |
 | 11.6 | v2 | **Yes** | Primary development target |
-| 11.8 | v2 | **Yes** | Latest tested |
+| 11.9 | v2 | **Yes** | Latest tested |
 
 ## MPR Format Versions
 
@@ -32,48 +32,102 @@ mxcli supports Mendix Studio Pro versions **9.x through 11.x**. Development and 
 
 The library auto-detects the format. No configuration is needed.
 
-## Feature Availability by Version
+## Feature Availability Matrix
 
-Not all MDL features work on all Mendix versions. The BSON document structure changes across versions, and some features were introduced in specific releases.
+The tables below show exactly which features are available on each Mendix version. Data is sourced from `sdk/versions/mendix-{9,10,11}.yaml`.
 
-### Core Features (all supported versions)
+### Domain Model
+
+| Feature | MDL Syntax | 9.x | 10.0+ | 10.18+ | 11.0+ |
+|---------|-----------|-----|-------|--------|-------|
+| Persistent entities | `CREATE PERSISTENT ENTITY` | Yes | Yes | Yes | Yes |
+| Non-persistent entities | `CREATE NON-PERSISTENT ENTITY` | Yes | Yes | Yes | Yes |
+| Calculated attributes | `CALCULATED BY Module.Microflow` | Yes | Yes | Yes | Yes |
+| Entity generalization | `EXTENDS Module.ParentEntity` | Yes | Yes | Yes | Yes |
+| ALTER ENTITY | `ALTER ENTITY ... ADD/DROP/RENAME` | -- | Yes | Yes | Yes |
+| View entities | `CREATE VIEW ENTITY ... AS SELECT` | -- | -- | Yes | Yes |
+
+### Microflows
+
+| Feature | MDL Syntax | 9.x | 10.0+ | 10.6+ | 11.0+ |
+|---------|-----------|-----|-------|-------|-------|
+| Basic microflows | `CREATE MICROFLOW ... BEGIN ... END` | Yes | Yes | Yes | Yes |
+| Loop in branches | `LOOP inside IF/ELSE` | Yes | Yes | Yes | Yes |
+| SEND REST REQUEST | `SEND REST REQUEST Module.Service.Op` | -- | 10.1+ | Yes | Yes |
+| Execute database query | `EXECUTE DATABASE QUERY ...` | -- | -- | Yes | Yes |
+| Show page with params | `SHOW PAGE ... WITH PARAMS` | -- | -- | -- | Yes |
+| REST query parameters | `SEND REST REQUEST with QUERY params` | -- | -- | -- | Yes |
+| DB query runtime connection | `EXECUTE DATABASE QUERY CONNECTION ...` | -- | -- | -- | Yes |
+
+### Pages
+
+| Feature | MDL Syntax | 9.x | 10.0+ | 10.18+ | 11.0+ |
+|---------|-----------|-----|-------|--------|-------|
+| Basic pages | `CREATE PAGE ... { ... }` | Yes | Yes | Yes | Yes |
+| ALTER PAGE | `ALTER PAGE ... SET/INSERT/DROP` | -- | Yes | Yes | Yes |
+| Pluggable widgets | `DATAGRID`, `GALLERY`, `COMBOBOX`, `IMAGE` | -- | Yes | Yes | Yes |
+| Conditional visibility | `Visible: [xpath]` | -- | -- | -- | Yes |
+| Conditional editability | `Editable: [xpath]` | -- | -- | -- | Yes |
+| Responsive column widths | `TabletWidth: 6, PhoneWidth: 12` | -- | -- | -- | Yes |
+| Page parameters | `Params: { $Item: Module.Entity }` | -- | -- | -- | Yes |
+| Page variables | `Variables: { ... }` | -- | -- | -- | Yes |
+| Design properties (Atlas v3) | `DesignProperties: [...]` | -- | -- | -- | Yes |
+
+::: tip Widget Templates
+Pluggable widget templates are currently extracted from Mendix 11.6. When used on 10.x projects, the [MPK augmentation system](../internals/widget-templates.md) reconciles property differences. Some CE0463 ("widget definition changed") errors may still occur.
+:::
+
+### Security
+
+| Feature | MDL Syntax | 9.x | 10.0+ |
+|---------|-----------|-----|-------|
+| Module roles | `CREATE MODULE ROLE` | Yes | Yes |
+| User roles | `CREATE USER ROLE` | Yes | Yes |
+| Entity access rules | `GRANT READ/WRITE ON ...` | Yes | Yes |
+| Demo users | `CREATE DEMO USER` | Yes | Yes |
+
+### Integration
+
+| Feature | MDL Syntax | 10.0+ | 10.1+ | 10.4+ | 10.6+ | 11.0+ |
+|---------|-----------|-------|-------|-------|-------|-------|
+| OData client | `CREATE ODATA CLIENT` | Yes | Yes | Yes | Yes | Yes |
+| Business events | `CREATE BUSINESS EVENT SERVICE` | Yes | Yes | Yes | Yes | Yes |
+| REST client (basic) | `CREATE REST CLIENT ... BEGIN ... END` | -- | Yes | Yes | Yes | Yes |
+| REST client headers | `HEADER 'Name' = 'Value'` | -- | -- | Yes | Yes | Yes |
+| Database Connector | `CREATE DATABASE CONNECTION` | -- | -- | -- | Yes | Yes |
+| REST client query params | `QUERY $param: Type` | -- | -- | -- | -- | Yes |
+
+### Workflows
+
+| Feature | MDL Syntax | 9.x | 10.0+ |
+|---------|-----------|-----|-------|
+| Basic workflows | `CREATE WORKFLOW` | Yes | Yes |
+| User tasks | `USER TASK ... OUTCOMES (...)` | Yes | Yes |
+| Parallel splits | `PARALLEL SPLIT` | Yes | Yes |
+
+### Navigation
+
+| Feature | MDL Syntax | 9.x | 10.0+ |
+|---------|-----------|-----|-------|
+| Navigation profiles | `ALTER NAVIGATION ...` | Yes | Yes |
+| Menu items | `MENU ITEM ...` | Yes | Yes |
+| Home pages | `HOME PAGE Module.Page` | Yes | Yes |
+
+### OQL (View Entity queries)
+
+| Feature | MDL Syntax | 10.18+ | 11.0+ |
+|---------|-----------|--------|-------|
+| Basic SELECT | `SELECT, FROM, WHERE` | Yes | Yes |
+| Aggregate functions | `COUNT, SUM, AVG, MIN, MAX, GROUP BY` | Yes | Yes |
+| Subqueries | Inline subqueries in SELECT/WHERE | Yes | Yes |
+| JOIN types | `INNER/LEFT/RIGHT/FULL JOIN` | Yes | Yes |
+
+### MPR Format & Infrastructure
 
 | Feature | Minimum Version | Notes |
 |---------|----------------|-------|
-| Domain models (entities, attributes, associations) | 9.0 | Full CRUD support |
-| Microflows (60+ activity types) | 9.0 | Including loops, splits, error handling |
-| Nanoflows | 9.0 | Client-side flows |
-| Pages (50+ widget types) | 9.0 | Built-in widgets |
-| Enumerations | 9.0 | CREATE/ALTER/DROP |
-| Security (module roles, access rules) | 9.0 | Full support |
-| Navigation | 9.0 | Profiles, menus, home pages |
-| Workflows | 9.0 | User tasks, decisions, parallel splits |
-
-### Features Requiring Mendix 10.x+
-
-| Feature | Minimum Version | Notes |
-|---------|----------------|-------|
-| Business events | 10.0 | Event service definitions |
-| Pluggable widgets (ComboBox, DataGrid2, Gallery) | 10.0 | Requires widget templates |
-| Image collections | 10.0 | CREATE/DROP IMAGE COLLECTION |
-
-### Features Requiring Mendix 11.0+
-
-These features use BSON structures that changed in Mendix 11.0 and are **not compatible with 10.x projects**:
-
-| Feature | Minimum Version | Error on 10.x |
-|---------|----------------|---------------|
-| View entities (CREATE VIEW ENTITY) | 10.18 | Version-aware serialization (inline OQL on 10.x) |
-| Page parameters (Params: { ... }) | 11.0 | InvalidOperationException on 'Variable' property |
-| Design properties (Atlas v3) | 11.0 | CE6083: "Design property not supported by your theme" |
-| REST client (CREATE REST CLIENT) | 11.0 | BSON format incompatibility |
-| Database Connector (EXECUTE DATABASE QUERY) | 11.0 | Module format incompatibility |
-| Association storage format | 11.0 | Different BSON encoding for associations |
-
-### Features Requiring Mendix 11.6+
-
-| Feature | Minimum Version | Notes |
-|---------|----------------|-------|
+| MPR v2 (mprcontents/) | 10.18 | Per-document files for Git compatibility |
+| Association storage format | 11.0 | New BSON encoding for associations |
 | Portable app format | 11.6 | New deployment format |
 
 ## BSON Differences Across Versions
@@ -124,7 +178,7 @@ This reduces CE0463 ("widget definition changed") errors from widget version dri
 
 ## Version Gates in MDL Scripts
 
-MDL scripts can use `-- @version:` directives to gate sections by Mendix version. This is used in the doctype integration tests to skip features incompatible with older versions:
+MDL scripts can use `-- @version:` directives to conditionally execute features based on the target Mendix version. This is used in the doctype integration tests to skip features incompatible with older versions:
 
 ```mdl
 -- Runs on all versions

@@ -70,7 +70,19 @@ features:
       min_version: "11.0.0"
     pluggable_widgets:
       min_version: "10.0.0"
-      notes: "Widget templates are version-specific; MPK augmentation handles drift"
+      notes: "Widget templates are currently extracted from 11.6; may cause CE0463 on 10.x"
+    conditional_visibility:
+      min_version: "10.0.0"
+      mdl: "Visible: [$currentObject/Attribute != empty]"
+      notes: "ConditionalVisibilitySettings BSON; MDL syntax available from 11.0+"
+    conditional_editability:
+      min_version: "10.0.0"
+      mdl: "Editable: [expression]"
+      notes: "ConditionalEditabilitySettings BSON; MDL syntax available from 11.0+"
+    responsive_column_widths:
+      min_version: "10.0.0"
+      mdl: "TabletWidth: 6, PhoneWidth: 12"
+      notes: "BSON fields exist in 10.x; MDL syntax available from 11.0+"
     design_properties_v3:
       min_version: "11.0.0"
       notes: "Atlas v3 design properties (Card style, Disable row wrap)"

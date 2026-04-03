@@ -162,7 +162,10 @@ func TestMxCheck_DoctypeScripts(t *testing.T) {
 				hasErrors := strings.Contains(output, "[error]") || strings.Contains(output, "ERROR:")
 				if hasErrors {
 					// Check if all errors are from known CE codes (limitations of syntax showcases)
-					knownCodes := []string{"CE0161"} // XPath serializer limitation (global)
+					knownCodes := []string{
+						"CE0161", // XPath serializer limitation (global)
+						"CE0463", // Widget template version mismatch (templates are from 11.6, may differ on 10.x)
+					}
 					if codes, ok := scriptKnownCEErrors[name]; ok {
 						knownCodes = append(knownCodes, codes...)
 					}

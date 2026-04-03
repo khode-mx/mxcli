@@ -2275,6 +2275,7 @@ END;
 /
 
 
+-- @version: 11.0+
 /**
  * Level 9.1: Page with conditional visibility and editability
  */
@@ -2300,6 +2301,7 @@ CREATE PAGE PgTest.P040_ConditionalProps
 };
 /
 
+-- @version: any
 -- MARK: Move Examples
 
 -- =============================================================================
