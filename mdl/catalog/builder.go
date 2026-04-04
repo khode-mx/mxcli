@@ -376,6 +376,14 @@ func (b *Builder) Build(progress ProgressFunc) error {
 		return fmt.Errorf("failed to build JSON structures: %w", err)
 	}
 
+	if err := b.buildImportMappings(); err != nil {
+		return fmt.Errorf("failed to build import mappings: %w", err)
+	}
+
+	if err := b.buildExportMappings(); err != nil {
+		return fmt.Errorf("failed to build export mappings: %w", err)
+	}
+
 	// Build cross-references (only in full mode)
 	if err := b.buildReferences(); err != nil {
 		return fmt.Errorf("failed to build references: %w", err)

@@ -1,0 +1,284 @@
+-- ============================================================================
+-- Import & Export Mapping Examples
+-- ============================================================================
+--
+-- This file demonstrates import and export mapping features supported by
+-- the Mendix REPL, organized by increasing complexity.
+--
+-- Prerequisites:
+--   - JSON structures must exist before creating mappings
+--   - Entities and associations must exist before referencing them
+--
+-- Usage:
+--   1. Connect to your project
+--   2. Execute: EXECUTE SCRIPT 'examples/21-import-export-mapping-examples.mdl';
+--   3. Verify: DESCRIBE IMPORT MAPPING MapTest.IMM_SimplePet;
+--
+-- Features demonstrated:
+--   - Simple import mapping (flat JSON → single entity)
+--   - Nested import mapping with association paths
+--   - Object handling: CREATE, FIND OR CREATE
+--   - Simple export mapping (entity → JSON)
+--   - Nested export mapping with association paths
+--   - NULL VALUES option for export mappings
+--   - SHOW / DESCRIBE / DROP commands
+--   - IMPORT FROM MAPPING / EXPORT TO MAPPING microflow actions
+--
+-- ============================================================================
+
+-- ############################################################################
+-- PART 0: MODULE AND ENTITY SETUP
+-- ############################################################################
+
+CREATE MODULE MapTest;
+
+-- ============================================================================
+-- JSON Structures
+-- ============================================================================
+
+CREATE JSON STRUCTURE MapTest.JSON_Pet
+SNIPPET '{"id": 1, "name": "Fido", "status": "available"}';
+
+CREATE JSON STRUCTURE MapTest.JSON_Order
+SNIPPET '{"orderId": 100, "customer": {"name": "Alice", "email": "alice@example.com"}, "items": [{"sku": "A1", "quantity": 2, "price": 9.99}]}';
+
+-- ============================================================================
+-- Entities
+-- ============================================================================
+
+CREATE NON-PERSISTENT ENTITY MapTest.PetResponse (
+  PetId: Integer,
+  Name: String,
+  Status: String
+);
+/
+
+CREATE NON-PERSISTENT ENTITY MapTest.OrderResponse (
+  OrderId: Integer
+);
+/
+
+CREATE NON-PERSISTENT ENTITY MapTest.CustomerInfo (
+  Name: String,
+  Email: String
+);
+/
+
+CREATE NON-PERSISTENT ENTITY MapTest.OrderItem (
+  Sku: String,
+  Quantity: Integer,
+  Price: Decimal
+);
+/
+
+CREATE ASSOCIATION MapTest.OrderResponse_CustomerInfo
+  FROM MapTest.OrderResponse
+  TO MapTest.CustomerInfo;
+/
+
+CREATE ASSOCIATION MapTest.OrderResponse_OrderItem
+  FROM MapTest.OrderResponse
+  TO MapTest.OrderItem;
+/
+
+-- ############################################################################
+-- PART 1: IMPORT MAPPINGS
+-- ############################################################################
+
+-- ============================================================================
+-- Level 1.1: Simple Import Mapping (flat JSON → single entity)
+-- ============================================================================
+
+CREATE IMPORT MAPPING MapTest.IMM_SimplePet
+  WITH JSON STRUCTURE MapTest.JSON_Pet
+{
+  CREATE MapTest.PetResponse {
+    PetId = id,
+    Name = name,
+    Status = status
+  }
+};
+
+DESCRIBE IMPORT MAPPING MapTest.IMM_SimplePet;
+
+-- ============================================================================
+-- Level 1.2: Nested Import Mapping with Associations
+-- ============================================================================
+
+CREATE IMPORT MAPPING MapTest.IMM_Order
+  WITH JSON STRUCTURE MapTest.JSON_Order
+{
+  CREATE MapTest.OrderResponse {
+    OrderId = orderId,
+    CREATE MapTest.OrderResponse_CustomerInfo/MapTest.CustomerInfo = customer {
+      Email = email,
+      Name = name
+    },
+    CREATE MapTest.OrderResponse_OrderItem/MapTest.OrderItem = items {
+      Sku = sku,
+      Quantity = quantity,
+      Price = price
+    }
+  }
+};
+
+DESCRIBE IMPORT MAPPING MapTest.IMM_Order;
+
+-- ============================================================================
+-- Level 1.3: Find Or Create (upsert pattern)
+-- ============================================================================
+--
+-- FIND OR CREATE looks up an existing object by KEY attributes.
+-- If not found, creates a new one. Useful for idempotent imports.
+
+CREATE IMPORT MAPPING MapTest.IMM_UpsertPet
+  WITH JSON STRUCTURE MapTest.JSON_Pet
+{
+  FIND OR CREATE MapTest.PetResponse {
+    PetId = id KEY,
+    Name = name,
+    Status = status
+  }
+};
+
+DESCRIBE IMPORT MAPPING MapTest.IMM_UpsertPet;
+
+-- ############################################################################
+-- PART 2: EXPORT MAPPINGS
+-- ############################################################################
+
+-- ============================================================================
+-- Level 2.1: Simple Export Mapping (entity → JSON)
+-- ============================================================================
+
+CREATE EXPORT MAPPING MapTest.EMM_Pet
+  WITH JSON STRUCTURE MapTest.JSON_Pet
+{
+  MapTest.PetResponse {
+    id = PetId,
+    name = Name,
+    status = Status
+  }
+};
+
+DESCRIBE EXPORT MAPPING MapTest.EMM_Pet;
+
+-- ============================================================================
+-- Level 2.2: Nested Export Mapping with Associations
+-- ============================================================================
+
+CREATE EXPORT MAPPING MapTest.EMM_Order
+  WITH JSON STRUCTURE MapTest.JSON_Order
+{
+  MapTest.OrderResponse {
+    orderId = OrderId,
+    MapTest.OrderResponse_CustomerInfo/MapTest.CustomerInfo AS customer {
+      email = Email,
+      name = Name
+    },
+    MapTest.OrderResponse_OrderItem/MapTest.OrderItem AS items {
+      sku = Sku,
+      quantity = Quantity,
+      price = Price
+    }
+  }
+};
+
+DESCRIBE EXPORT MAPPING MapTest.EMM_Order;
+
+-- ============================================================================
+-- Level 2.3: Export Mapping with NULL VALUES option
+-- ============================================================================
+--
+-- NULL VALUES controls how null attributes are serialized:
+--   LeaveOutElement — omit the JSON key entirely (default)
+--   SendAsNil      — include the key with null value
+
+CREATE EXPORT MAPPING MapTest.EMM_PetNullable
+  WITH JSON STRUCTURE MapTest.JSON_Pet
+  NULL VALUES SendAsNil
+{
+  MapTest.PetResponse {
+    id = PetId,
+    name = Name,
+    status = Status
+  }
+};
+
+DESCRIBE EXPORT MAPPING MapTest.EMM_PetNullable;
+
+-- ############################################################################
+-- PART 3: SHOW AND LIST COMMANDS
+-- ############################################################################
+
+SHOW IMPORT MAPPINGS;
+SHOW IMPORT MAPPINGS IN MapTest;
+SHOW EXPORT MAPPINGS;
+SHOW EXPORT MAPPINGS IN MapTest;
+
+-- ############################################################################
+-- PART 4: DROP COMMANDS
+-- ############################################################################
+
+-- Drop a mapping
+DROP IMPORT MAPPING MapTest.IMM_UpsertPet;
+DROP EXPORT MAPPING MapTest.EMM_PetNullable;
+
+-- Verify they're gone
+SHOW IMPORT MAPPINGS IN MapTest;
+SHOW EXPORT MAPPINGS IN MapTest;
+
+-- ############################################################################
+-- PART 5: MICROFLOW ACTIONS (IMPORT FROM / EXPORT TO MAPPING)
+-- ############################################################################
+
+-- ============================================================================
+-- Level 5.1: Import from mapping (JSON string → entity)
+-- ============================================================================
+
+CREATE MICROFLOW MapTest.ACT_ImportPet ()
+RETURNS Boolean AS $Success
+BEGIN
+  DECLARE $Success Boolean = false;
+  DECLARE $Json String = '{{\"id\": 1, \"name\": \"Fido\", \"status\": \"available\"}';
+
+  $PetResponse = IMPORT FROM MAPPING MapTest.IMM_SimplePet($Json);
+
+  IF $PetResponse != empty THEN
+    SET $Success = true;
+    LOG INFO NODE 'MapTest' 'Imported pet: ' + $PetResponse/Name;
+  END IF;
+
+  RETURN $Success;
+END;
+/
+
+-- ============================================================================
+-- Level 5.2: Export to mapping (entity → JSON string)
+-- ============================================================================
+
+CREATE MICROFLOW MapTest.ACT_ExportPet ($PetResponse: MapTest.PetResponse)
+RETURNS String AS $JsonOutput
+BEGIN
+  $JsonOutput = EXPORT TO MAPPING MapTest.EMM_Pet($PetResponse);
+  LOG INFO NODE 'MapTest' 'Exported: ' + $JsonOutput;
+  RETURN $JsonOutput;
+END;
+/
+
+-- ============================================================================
+-- Level 5.3: Import → Process → Export pipeline
+-- ============================================================================
+
+CREATE MICROFLOW MapTest.ACT_RoundTrip ()
+BEGIN
+  DECLARE $Json String = '{{\"id\": 42, \"name\": \"Rex\", \"status\": \"pending\"}';
+  $Pet = IMPORT FROM MAPPING MapTest.IMM_SimplePet($Json);
+  $Output = EXPORT TO MAPPING MapTest.EMM_Pet($Pet);
+  LOG INFO NODE 'MapTest' 'Round-trip result: ' + $Output;
+END;
+/
+
+-- ============================================================================
+-- END OF IMPORT/EXPORT MAPPING EXAMPLES
+-- ============================================================================

@@ -744,6 +744,39 @@ func (c *Catalog) createTables() error {
 			SnapshotSource TEXT
 		)`,
 
+		`CREATE TABLE IF NOT EXISTS import_mappings (
+			Id INTEGER PRIMARY KEY AUTOINCREMENT,
+			Name TEXT NOT NULL,
+			QualifiedName TEXT NOT NULL,
+			ModuleName TEXT NOT NULL,
+			SchemaSource TEXT,
+			ElementCount INTEGER DEFAULT 0,
+			Documentation TEXT,
+			Folder TEXT,
+			ProjectId TEXT,
+			ProjectName TEXT,
+			SnapshotId TEXT,
+			SnapshotDate TEXT,
+			SnapshotSource TEXT
+		)`,
+
+		`CREATE TABLE IF NOT EXISTS export_mappings (
+			Id INTEGER PRIMARY KEY AUTOINCREMENT,
+			Name TEXT NOT NULL,
+			QualifiedName TEXT NOT NULL,
+			ModuleName TEXT NOT NULL,
+			SchemaSource TEXT,
+			NullValueOption TEXT,
+			ElementCount INTEGER DEFAULT 0,
+			Documentation TEXT,
+			Folder TEXT,
+			ProjectId TEXT,
+			ProjectName TEXT,
+			SnapshotId TEXT,
+			SnapshotDate TEXT,
+			SnapshotSource TEXT
+		)`,
+
 		// Objects view - union of all object types
 		`CREATE VIEW IF NOT EXISTS objects AS
 			SELECT Id, 'MODULE' as ObjectType, Name, QualifiedName, '' as ModuleName, Folder, Description,

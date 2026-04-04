@@ -720,3 +720,108 @@ func (b *Builder) buildJsonStructures() error {
 	b.report("JSON Structures", len(structures))
 	return nil
 }
+
+func (b *Builder) buildImportMappings() error {
+	mappings, err := b.reader.ListImportMappings()
+	if err != nil {
+		return err
+	}
+
+	stmt, err := b.tx.Prepare(`
+		INSERT INTO import_mappings (Name, QualifiedName, ModuleName,
+			SchemaSource, ElementCount, Documentation, Folder,
+			ProjectId, ProjectName, SnapshotId, SnapshotDate, SnapshotSource)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	projectID, projectName, snapshotID, snapshotDate, snapshotSource, _, _, _ := b.snapshotMeta()
+
+	for _, im := range mappings {
+		moduleID := b.hierarchy.findModuleID(im.ContainerID)
+		moduleName := b.hierarchy.getModuleName(moduleID)
+		qualifiedName := moduleName + "." + im.Name
+		folderPath := b.hierarchy.buildFolderPath(im.ContainerID)
+
+		src := im.JsonStructure
+		if src == "" {
+			src = im.XmlSchema
+		}
+		if src == "" {
+			src = im.MessageDefinition
+		}
+
+		_, err := stmt.Exec(
+			im.Name,
+			qualifiedName,
+			moduleName,
+			src,
+			len(im.Elements),
+			im.Documentation,
+			folderPath,
+			projectID, projectName, snapshotID, snapshotDate, snapshotSource,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	b.report("Import Mappings", len(mappings))
+	return nil
+}
+
+func (b *Builder) buildExportMappings() error {
+	mappings, err := b.reader.ListExportMappings()
+	if err != nil {
+		return err
+	}
+
+	stmt, err := b.tx.Prepare(`
+		INSERT INTO export_mappings (Name, QualifiedName, ModuleName,
+			SchemaSource, NullValueOption, ElementCount, Documentation, Folder,
+			ProjectId, ProjectName, SnapshotId, SnapshotDate, SnapshotSource)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	projectID, projectName, snapshotID, snapshotDate, snapshotSource, _, _, _ := b.snapshotMeta()
+
+	for _, em := range mappings {
+		moduleID := b.hierarchy.findModuleID(em.ContainerID)
+		moduleName := b.hierarchy.getModuleName(moduleID)
+		qualifiedName := moduleName + "." + em.Name
+		folderPath := b.hierarchy.buildFolderPath(em.ContainerID)
+
+		src := em.JsonStructure
+		if src == "" {
+			src = em.XmlSchema
+		}
+		if src == "" {
+			src = em.MessageDefinition
+		}
+
+		_, err := stmt.Exec(
+			em.Name,
+			qualifiedName,
+			moduleName,
+			src,
+			em.NullValueOption,
+			len(em.Elements),
+			em.Documentation,
+			folderPath,
+			projectID, projectName, snapshotID, snapshotDate, snapshotSource,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	b.report("Export Mappings", len(mappings))
+	return nil
+}

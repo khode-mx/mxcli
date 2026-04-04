@@ -146,11 +146,26 @@ func printImportMappingElement(e *Executor, elem *model.ImportMappingElement, de
 	if elem.Kind == "Object" {
 		handling := handlingKeyword(elem.ObjectHandling)
 		if isRoot {
-			// Root: CREATE Module.Entity {
-			fmt.Fprintf(e.output, "%s%s %s {\n", indent, handling, elem.Entity)
+			// Root: CREATE Module.Entity { — use "." if entity is empty
+			entity := elem.Entity
+			if entity == "" {
+				entity = "."
+			}
+			fmt.Fprintf(e.output, "%s%s %s {\n", indent, handling, entity)
 		} else {
-			// Nested: CREATE Assoc/Entity = jsonKey {
-			fmt.Fprintf(e.output, "%s%s %s/%s = %s", indent, handling, elem.Association, elem.Entity, elem.ExposedName)
+			// Nested object element:
+			//   CREATE Assoc/Entity = jsonKey   — normal association path
+			//   CREATE ./Entity = jsonKey       — self-reference (no association)
+			//   CREATE . = jsonKey              — structural grouping (no association, no entity)
+			assoc := elem.Association
+			entity := elem.Entity
+			if assoc == "" && entity == "" {
+				fmt.Fprintf(e.output, "%s%s . = %s", indent, handling, elem.ExposedName)
+			} else if assoc == "" {
+				fmt.Fprintf(e.output, "%s%s ./%s = %s", indent, handling, entity, elem.ExposedName)
+			} else {
+				fmt.Fprintf(e.output, "%s%s %s/%s = %s", indent, handling, assoc, entity, elem.ExposedName)
+			}
 			if len(elem.Children) > 0 {
 				fmt.Fprintln(e.output, " {")
 			}

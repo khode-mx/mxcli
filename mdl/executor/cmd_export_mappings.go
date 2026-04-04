@@ -137,11 +137,26 @@ func printExportMappingElement(e *Executor, elem *model.ExportMappingElement, de
 	indent := strings.Repeat("  ", depth)
 	if elem.Kind == "Object" {
 		if isRoot {
-			// Root: Module.Entity {
-			fmt.Fprintf(e.output, "%s%s {\n", indent, elem.Entity)
+			// Root: Module.Entity { — use "." if entity is empty (parameter mapping)
+			entity := elem.Entity
+			if entity == "" {
+				entity = "."
+			}
+			fmt.Fprintf(e.output, "%s%s {\n", indent, entity)
 		} else {
-			// Nested: Assoc/Entity AS jsonKey {
-			fmt.Fprintf(e.output, "%s%s/%s AS %s", indent, elem.Association, elem.Entity, elem.ExposedName)
+			// Nested object element. Several cases:
+			//   Assoc/Entity AS jsonKey  — normal association path
+			//   ./Entity AS jsonKey      — self-reference (no association, entity set)
+			//   . AS jsonKey             — structural grouping (no association, no entity)
+			assoc := elem.Association
+			entity := elem.Entity
+			if assoc == "" && entity == "" {
+				fmt.Fprintf(e.output, "%s. AS %s", indent, elem.ExposedName)
+			} else if assoc == "" {
+				fmt.Fprintf(e.output, "%s./%s AS %s", indent, entity, elem.ExposedName)
+			} else {
+				fmt.Fprintf(e.output, "%s%s/%s AS %s", indent, assoc, entity, elem.ExposedName)
+			}
 			if len(elem.Children) > 0 {
 				fmt.Fprintln(e.output, " {")
 			}

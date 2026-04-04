@@ -597,6 +597,8 @@ func convertCatalogTableNames(query string) string {
 		"catalog.contract_actions":          "contract_actions",
 		"catalog.contract_messages":         "contract_messages",
 		"catalog.json_structures":           "json_structures",
+		"catalog.import_mappings":           "import_mappings",
+		"catalog.export_mappings":           "export_mappings",
 	}
 
 	result := query
