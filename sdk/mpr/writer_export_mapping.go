@@ -165,7 +165,7 @@ func serializeExportValueElement(id string, elem *model.ExportMappingElement, pa
 		"XmlPath":          "",
 		"Type":             dataType,
 		"MinOccurs":        int32(0),
-		"MaxOccurs":        int32(1),
+		"MaxOccurs":        int32(0),
 		"Nillable":         true,
 		"IsDefaultType":    false,
 		"ElementType":      "Value",

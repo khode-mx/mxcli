@@ -287,17 +287,14 @@ func buildImportMappingElementModel(moduleName string, def *ast.ImportMappingEle
 			}
 			elem.JsonPath = jsonPath
 		} else {
-			// Look up by original JSON key, then use ExposedName for the mapping's JsonPath
+			// Look up by original JSON key — JsonPath always uses original key
 			lookupPath := parentPath + "|" + def.JsonName
+			jsonPath = lookupPath
 			if info, ok := jsElements[lookupPath]; ok {
 				elem.ExposedName = info.ExposedName
-				jsonPath = parentPath + "|" + info.ExposedName
 				if info.ElementType == "Array" {
 					elem.Kind = "Array"
-					jsonPath = lookupPath // array container keeps original path
 				}
-			} else {
-				jsonPath = lookupPath
 			}
 			elem.JsonPath = jsonPath
 			// Array children use the item path for recursion
@@ -321,12 +318,11 @@ func buildImportMappingElementModel(moduleName string, def *ast.ImportMappingEle
 		}
 		elem.Attribute = attr
 
-		// Compute JsonPath and align ExposedName with JSON structure
-		// Look up by original JSON key path, then use ExposedName for the mapping's JsonPath
+		// Compute JsonPath (always original key) and align ExposedName with JSON structure
 		lookupPath := parentPath + "|" + def.JsonName
 		if info, ok := jsElements[lookupPath]; ok {
 			elem.ExposedName = info.ExposedName
-			elem.JsonPath = parentPath + "|" + info.ExposedName
+			elem.JsonPath = lookupPath
 		} else {
 			elem.JsonPath = lookupPath
 		}
