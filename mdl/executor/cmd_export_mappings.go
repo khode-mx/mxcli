@@ -287,32 +287,62 @@ func buildExportMappingElementModel(moduleName string, def *ast.ExportMappingEle
 
 		// Check if this is an array element in the JSON structure
 		if jsElem, ok := jsElems[lookupPath]; ok && jsElem.ElementType == "Array" {
-			// Array: container has no entity binding; create intermediate item element
+			// Export arrays have two levels:
+			// 1. Array container: Kind=Array, entity=container entity, assoc to parent
+			// 2. Item object: Kind=Object, entity=item entity, assoc to container
+			//
+			// MDL syntax: Assoc/Entity AS items { ItemAssoc/ItemEntity AS ItemsItem { values } }
+			// The outer Assoc/Entity is for the container, the nested child provides the item.
 			elem.Kind = "Array"
-			elem.Entity = ""
 			elem.Association = assoc
 			elem.ObjectHandling = handling
+			elem.Entity = entity
 
 			itemPath := lookupPath + "|(Object)"
-			itemElem := &model.ExportMappingElement{
-				BaseElement: model.BaseElement{
-					ID:       model.ID(mpr.GenerateID()),
-					TypeName: "ExportMappings$ObjectMappingElement",
-				},
-				Kind:           "Object",
-				Entity:         entity,
-				ObjectHandling: "Find",
-				ExposedName:    "ItemsItem",
-				JsonPath:       itemPath,
+
+			// The first (and typically only) child of the array in the MDL is the item definition.
+			// Its children become the item element's value children.
+			if len(def.Children) == 1 && def.Children[0].Entity != "" {
+				itemDef := def.Children[0]
+				itemEntity := itemDef.Entity
+				if !strings.Contains(itemEntity, ".") {
+					itemEntity = moduleName + "." + itemEntity
+				}
+				itemAssoc := itemDef.Association
+				if itemAssoc != "" && !strings.Contains(itemAssoc, ".") {
+					itemAssoc = moduleName + "." + itemAssoc
+				}
+
+				itemElem := &model.ExportMappingElement{
+					BaseElement: model.BaseElement{
+						ID:       model.ID(mpr.GenerateID()),
+						TypeName: "ExportMappings$ObjectMappingElement",
+					},
+					Kind:           "Object",
+					Entity:         itemEntity,
+					Association:    itemAssoc,
+					ObjectHandling: "Find",
+				}
+				if jsItem, ok2 := jsElems[itemPath]; ok2 {
+					itemElem.ExposedName = jsItem.ExposedName
+					itemElem.JsonPath = jsItem.Path
+					itemElem.MaxOccurs = jsItem.MaxOccurs
+				} else {
+					itemElem.ExposedName = elem.ExposedName + "Item"
+					itemElem.JsonPath = itemPath
+					itemElem.MaxOccurs = -1
+				}
+				// Item's children are the value elements
+				for _, valChild := range itemDef.Children {
+					itemElem.Children = append(itemElem.Children, buildExportMappingElementModel(moduleName, valChild, itemEntity, itemPath, jsElems, reader, false))
+				}
+				elem.Children = append(elem.Children, itemElem)
+			} else {
+				// Fallback: treat children as direct item children (no intermediate entity)
+				for _, child := range def.Children {
+					elem.Children = append(elem.Children, buildExportMappingElementModel(moduleName, child, entity, itemPath, jsElems, reader, false))
+				}
 			}
-			if jsItem, ok2 := jsElems[itemPath]; ok2 {
-				itemElem.ExposedName = jsItem.ExposedName
-				itemElem.MaxOccurs = jsItem.MaxOccurs
-			}
-			for _, child := range def.Children {
-				itemElem.Children = append(itemElem.Children, buildExportMappingElementModel(moduleName, child, entity, itemPath, jsElems, reader, false))
-			}
-			elem.Children = append(elem.Children, itemElem)
 		} else {
 			// Regular object element
 			elem.Entity = entity

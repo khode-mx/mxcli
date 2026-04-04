@@ -63,6 +63,8 @@ CREATE ASSOCIATION Module.MyRootObject_MyNestedObject
 
 ## Step 3 — Import Mapping
 
+> **Full reference**: See [json-structures-and-mappings.md](json-structures-and-mappings.md) for complete import/export mapping syntax, domain model patterns, and common mistakes.
+
 ```sql
 CREATE IMPORT MAPPING Module.IMM_MyMapping
   WITH JSON STRUCTURE Module.JSON_MyStructure

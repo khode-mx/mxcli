@@ -2,32 +2,25 @@
 -- Import & Export Mapping Examples
 -- ============================================================================
 --
--- This file demonstrates import and export mapping features supported by
--- the Mendix REPL, organized by increasing complexity.
+-- This file demonstrates import and export mapping features.
 --
--- Prerequisites:
---   - JSON structures must exist before creating mappings
---   - Entities and associations must exist before referencing them
+-- IMPORTANT: Import and export mappings require different domain models
+-- when dealing with nested JSON. The association direction and entity
+-- structure must match what Mendix expects for each mapping type:
 --
--- Usage:
---   1. Connect to your project
---   2. Execute: EXECUTE SCRIPT 'examples/21-import-export-mapping-examples.mdl';
---   3. Verify: DESCRIBE IMPORT MAPPING MapTest.IMM_SimplePet;
+--   Import: The child entity owns the FK to the parent (FROM child TO parent).
+--           Arrays are represented as a single object at the item path.
 --
--- Features demonstrated:
---   - Simple import mapping (flat JSON → single entity)
---   - Nested import mapping with association paths
---   - Object handling: CREATE, FIND OR CREATE
---   - Simple export mapping (entity → JSON)
---   - Nested export mapping with association paths
---   - NULL VALUES option for export mappings
---   - SHOW / DESCRIBE / DROP commands
---   - IMPORT FROM MAPPING / EXPORT TO MAPPING microflow actions
+--   Export: Studio Pro generates entities that mirror the JSON structure,
+--           with an intermediate entity for array containers.
+--           Arrays have two levels: container + item.
+--
+-- This file shows both patterns with separate domain models.
 --
 -- ============================================================================
 
 -- ############################################################################
--- PART 0: MODULE AND ENTITY SETUP
+-- PART 0: MODULE SETUP
 -- ############################################################################
 
 CREATE MODULE MapTest;
@@ -42,8 +35,12 @@ SNIPPET '{"id": 1, "name": "Fido", "status": "available"}';
 CREATE JSON STRUCTURE MapTest.JSON_Order
 SNIPPET '{"orderId": 100, "customer": {"name": "Alice", "email": "alice@example.com"}, "items": [{"sku": "A1", "quantity": 2, "price": 9.99}]}';
 
+-- ############################################################################
+-- PART 1: SIMPLE MAPPINGS (flat JSON, shared domain model)
+-- ############################################################################
+
 -- ============================================================================
--- Entities
+-- Entities for flat JSON (used by both import and export)
 -- ============================================================================
 
 CREATE NON-PERSISTENT ENTITY MapTest.PetResponse (
@@ -53,40 +50,8 @@ CREATE NON-PERSISTENT ENTITY MapTest.PetResponse (
 );
 /
 
-CREATE NON-PERSISTENT ENTITY MapTest.OrderResponse (
-  OrderId: Integer
-);
-/
-
-CREATE NON-PERSISTENT ENTITY MapTest.CustomerInfo (
-  Name: String,
-  Email: String
-);
-/
-
-CREATE NON-PERSISTENT ENTITY MapTest.OrderItem (
-  Sku: String,
-  Quantity: Integer,
-  Price: Decimal
-);
-/
-
-CREATE ASSOCIATION MapTest.OrderResponse_CustomerInfo
-  FROM MapTest.OrderResponse
-  TO MapTest.CustomerInfo;
-/
-
-CREATE ASSOCIATION MapTest.OrderResponse_OrderItem
-  FROM MapTest.OrderResponse
-  TO MapTest.OrderItem;
-/
-
--- ############################################################################
--- PART 1: IMPORT MAPPINGS
--- ############################################################################
-
 -- ============================================================================
--- Level 1.1: Simple Import Mapping (flat JSON → single entity)
+-- Level 1.1: Simple Import Mapping
 -- ============================================================================
 
 CREATE IMPORT MAPPING MapTest.IMM_SimplePet
@@ -102,27 +67,20 @@ CREATE IMPORT MAPPING MapTest.IMM_SimplePet
 DESCRIBE IMPORT MAPPING MapTest.IMM_SimplePet;
 
 -- ============================================================================
--- Level 1.2: Nested Import Mapping with Associations
+-- Level 1.2: Simple Export Mapping
 -- ============================================================================
 
-CREATE IMPORT MAPPING MapTest.IMM_Order
-  WITH JSON STRUCTURE MapTest.JSON_Order
+CREATE EXPORT MAPPING MapTest.EMM_Pet
+  WITH JSON STRUCTURE MapTest.JSON_Pet
 {
-  CREATE MapTest.OrderResponse {
-    OrderId = orderId,
-    CREATE MapTest.OrderResponse_CustomerInfo/MapTest.CustomerInfo = customer {
-      Email = email,
-      Name = name
-    },
-    CREATE MapTest.OrderResponse_OrderItem/MapTest.OrderItem = items {
-      Sku = sku,
-      Quantity = quantity,
-      Price = price
-    }
+  MapTest.PetResponse {
+    id = PetId,
+    name = Name,
+    status = Status
   }
 };
 
-DESCRIBE IMPORT MAPPING MapTest.IMM_Order;
+DESCRIBE EXPORT MAPPING MapTest.EMM_Pet;
 
 -- ============================================================================
 -- Level 1.3: Find Or Create (upsert pattern)
@@ -143,51 +101,8 @@ CREATE IMPORT MAPPING MapTest.IMM_UpsertPet
 
 DESCRIBE IMPORT MAPPING MapTest.IMM_UpsertPet;
 
--- ############################################################################
--- PART 2: EXPORT MAPPINGS
--- ############################################################################
-
 -- ============================================================================
--- Level 2.1: Simple Export Mapping (entity → JSON)
--- ============================================================================
-
-CREATE EXPORT MAPPING MapTest.EMM_Pet
-  WITH JSON STRUCTURE MapTest.JSON_Pet
-{
-  MapTest.PetResponse {
-    id = PetId,
-    name = Name,
-    status = Status
-  }
-};
-
-DESCRIBE EXPORT MAPPING MapTest.EMM_Pet;
-
--- ============================================================================
--- Level 2.2: Nested Export Mapping with Associations
--- ============================================================================
-
-CREATE EXPORT MAPPING MapTest.EMM_Order
-  WITH JSON STRUCTURE MapTest.JSON_Order
-{
-  MapTest.OrderResponse {
-    orderId = OrderId,
-    MapTest.OrderResponse_CustomerInfo/MapTest.CustomerInfo AS customer {
-      email = Email,
-      name = Name
-    },
-    MapTest.OrderResponse_OrderItem/MapTest.OrderItem AS items {
-      sku = Sku,
-      quantity = Quantity,
-      price = Price
-    }
-  }
-};
-
-DESCRIBE EXPORT MAPPING MapTest.EMM_Order;
-
--- ============================================================================
--- Level 2.3: Export Mapping with NULL VALUES option
+-- Level 1.4: Export with NULL VALUES option
 -- ============================================================================
 --
 -- NULL VALUES controls how null attributes are serialized:
@@ -208,7 +123,156 @@ CREATE EXPORT MAPPING MapTest.EMM_PetNullable
 DESCRIBE EXPORT MAPPING MapTest.EMM_PetNullable;
 
 -- ############################################################################
--- PART 3: SHOW AND LIST COMMANDS
+-- PART 2: NESTED IMPORT MAPPING
+-- ############################################################################
+--
+-- For import mappings with nested JSON objects and arrays:
+--   - The child entity owns the FK (FROM child TO parent)
+--   - Arrays map directly to the item entity (no intermediate container)
+--   - Association name format: ChildEntity_ParentEntity
+--
+-- JSON_Order has: { orderId, customer: { name, email }, items: [{ sku, quantity, price }] }
+
+-- ============================================================================
+-- Import Domain Model
+-- ============================================================================
+
+CREATE NON-PERSISTENT ENTITY MapTest.OrderResponse (
+  OrderId: Integer
+);
+/
+
+CREATE NON-PERSISTENT ENTITY MapTest.CustomerInfo (
+  Name: String,
+  Email: String
+);
+/
+
+CREATE NON-PERSISTENT ENTITY MapTest.OrderItem (
+  Sku: String,
+  Quantity: Integer,
+  Price: Decimal
+);
+/
+
+-- Associations: child entity FROM, parent entity TO
+CREATE ASSOCIATION MapTest.CustomerInfo_OrderResponse
+  FROM MapTest.CustomerInfo
+  TO MapTest.OrderResponse;
+/
+
+CREATE ASSOCIATION MapTest.OrderItem_OrderResponse
+  FROM MapTest.OrderItem
+  TO MapTest.OrderResponse;
+/
+
+-- ============================================================================
+-- Level 2.1: Nested Import Mapping
+-- ============================================================================
+
+CREATE IMPORT MAPPING MapTest.IMM_Order
+  WITH JSON STRUCTURE MapTest.JSON_Order
+{
+  CREATE MapTest.OrderResponse {
+    OrderId = orderId,
+    CREATE MapTest.CustomerInfo_OrderResponse/MapTest.CustomerInfo = customer {
+      Name = name,
+      Email = email
+    },
+    CREATE MapTest.OrderItem_OrderResponse/MapTest.OrderItem = items {
+      Sku = sku,
+      Quantity = quantity,
+      Price = price
+    }
+  }
+};
+
+DESCRIBE IMPORT MAPPING MapTest.IMM_Order;
+
+-- ############################################################################
+-- PART 3: NESTED EXPORT MAPPING
+-- ############################################################################
+--
+-- For export mappings, Studio Pro generates a domain model that mirrors
+-- the JSON structure. Key differences from import:
+--   - A root entity matches the top-level JSON object
+--   - Array fields need an intermediate container entity (e.g., Items)
+--     plus an item entity (e.g., ItemsItem)
+--   - Associations: child entity FROM, parent entity TO (same direction)
+--
+-- This means import and export of the same JSON typically use DIFFERENT
+-- entity structures. You cannot reuse the import domain model for export.
+
+-- ============================================================================
+-- Export Domain Model (mirrors JSON_Order structure)
+-- ============================================================================
+
+CREATE NON-PERSISTENT ENTITY MapTest.ExRoot (
+  OrderId: Integer
+);
+/
+
+CREATE NON-PERSISTENT ENTITY MapTest.ExCustomer (
+  Name: String,
+  Email: String
+);
+/
+
+-- Container entity for the "items" array (no attributes)
+CREATE NON-PERSISTENT ENTITY MapTest.ExItems;
+/
+
+-- Item entity for each element in the "items" array
+CREATE NON-PERSISTENT ENTITY MapTest.ExItemsItem (
+  Sku: String,
+  Quantity: Integer,
+  Price: Decimal
+);
+/
+
+CREATE ASSOCIATION MapTest.ExCustomer_ExRoot
+  FROM MapTest.ExCustomer
+  TO MapTest.ExRoot
+  OWNER Both;
+/
+
+CREATE ASSOCIATION MapTest.ExItems_ExRoot
+  FROM MapTest.ExItems
+  TO MapTest.ExRoot;
+/
+
+CREATE ASSOCIATION MapTest.ExItemsItem_ExItems
+  FROM MapTest.ExItemsItem
+  TO MapTest.ExItems;
+/
+
+-- ============================================================================
+-- Level 3.1: Nested Export Mapping
+-- ============================================================================
+
+CREATE EXPORT MAPPING MapTest.EMM_Order
+  WITH JSON STRUCTURE MapTest.JSON_Order
+{
+  MapTest.ExRoot {
+    orderId = OrderId,
+    MapTest.ExCustomer_ExRoot/MapTest.ExCustomer AS customer {
+      name = Name,
+      email = Email
+    },
+    MapTest.ExItems_ExRoot/MapTest.ExItems AS items {
+      MapTest.ExItemsItem_ExItems/MapTest.ExItemsItem AS ItemsItem {
+        sku = Sku,
+        quantity = Quantity,
+        price = Price
+      }
+    }
+  }
+};
+
+DESCRIBE EXPORT MAPPING MapTest.EMM_Order;
+
+-- ############################################################################
+-- PART 4: SHOW AND LIST COMMANDS
 -- ############################################################################
 
 SHOW IMPORT MAPPINGS;
@@ -217,23 +281,21 @@ SHOW EXPORT MAPPINGS;
 SHOW EXPORT MAPPINGS IN MapTest;
 
 -- ############################################################################
--- PART 4: DROP COMMANDS
+-- PART 5: DROP COMMANDS
 -- ############################################################################
 
--- Drop a mapping
 DROP IMPORT MAPPING MapTest.IMM_UpsertPet;
 DROP EXPORT MAPPING MapTest.EMM_PetNullable;
 
--- Verify they're gone
 SHOW IMPORT MAPPINGS IN MapTest;
 SHOW EXPORT MAPPINGS IN MapTest;
 
 -- ############################################################################
--- PART 5: MICROFLOW ACTIONS (IMPORT FROM / EXPORT TO MAPPING)
+-- PART 6: MICROFLOW ACTIONS (IMPORT FROM / EXPORT TO MAPPING)
 -- ############################################################################
 
 -- ============================================================================
--- Level 5.1: Import from mapping (JSON string → entity)
+-- Level 6.1: Import from mapping (JSON string → entity)
 -- ============================================================================
 
 CREATE MICROFLOW MapTest.ACT_ImportPet ()
@@ -254,7 +316,7 @@ END;
 /
 
 -- ============================================================================
--- Level 5.2: Export to mapping (entity → JSON string)
+-- Level 6.2: Export to mapping (entity → JSON string)
 -- ============================================================================
 
 CREATE MICROFLOW MapTest.ACT_ExportPet ($PetResponse: MapTest.PetResponse)
@@ -267,7 +329,7 @@ END;
 /
 
 -- ============================================================================
--- Level 5.3: Import → Process → Export pipeline
+-- Level 6.3: Import → Process → Export pipeline
 -- ============================================================================
 
 CREATE MICROFLOW MapTest.ACT_RoundTrip ()

@@ -304,47 +304,27 @@ func buildImportMappingElementModel(moduleName string, def *ast.ImportMappingEle
 			handling = "Create"
 		}
 
-		// Check if this is an array element in the JSON structure
-		if jsElem, ok := jsElems[lookupPath]; ok && jsElem.ElementType == "Array" {
-			// Array: the container element has no entity binding.
-			// Create an intermediate Object element for the array item with the entity binding.
-			elem.Kind = "Array"
-			elem.Entity = ""
-			elem.Association = assoc
-			elem.ObjectHandling = handling
+		elem.Entity = entity
+		elem.Association = assoc
+		elem.ObjectHandling = handling
 
+		// For arrays: skip the container, use the item path directly.
+		// Studio Pro represents arrays as a single ObjectMappingElement at the |(Object) item path.
+		childPath := lookupPath
+		if jsElem, ok := jsElems[lookupPath]; ok && jsElem.ElementType == "Array" {
 			itemPath := lookupPath + "|(Object)"
-			itemElem := &model.ImportMappingElement{
-				BaseElement: model.BaseElement{
-					ID:       model.ID(mpr.GenerateID()),
-					TypeName: "ImportMappings$ObjectMappingElement",
-				},
-				Kind:           "Object",
-				Entity:         entity,
-				ObjectHandling: handling,
-				ExposedName:    "ItemsItem", // default
-				JsonPath:       itemPath,
-				Nillable:       true,
-			}
-			// Clone from JSON structure item element if available
 			if jsItem, ok2 := jsElems[itemPath]; ok2 {
-				itemElem.ExposedName = jsItem.ExposedName
-				itemElem.MinOccurs = jsItem.MinOccurs
-				itemElem.MaxOccurs = jsItem.MaxOccurs
-				itemElem.Nillable = jsItem.Nillable
+				elem.ExposedName = jsItem.ExposedName
+				elem.JsonPath = jsItem.Path
+				elem.MinOccurs = jsItem.MinOccurs
+				elem.MaxOccurs = jsItem.MaxOccurs
+				elem.Nillable = jsItem.Nillable
 			}
-			for _, child := range def.Children {
-				itemElem.Children = append(itemElem.Children, buildImportMappingElementModel(moduleName, child, entity, itemPath, reader, jsElems, false))
-			}
-			elem.Children = append(elem.Children, itemElem)
-		} else {
-			// Regular object element
-			elem.Entity = entity
-			elem.Association = assoc
-			elem.ObjectHandling = handling
-			for _, child := range def.Children {
-				elem.Children = append(elem.Children, buildImportMappingElementModel(moduleName, child, entity, lookupPath, reader, jsElems, false))
-			}
+			childPath = itemPath
+		}
+
+		for _, child := range def.Children {
+			elem.Children = append(elem.Children, buildImportMappingElementModel(moduleName, child, entity, childPath, reader, jsElems, false))
 		}
 	} else {
 		// Value mapping — bind to attribute

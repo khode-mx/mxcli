@@ -43,6 +43,7 @@ External system integration:
 | [demo-data.md](demo-data.md) | Demo data & IMPORT | Seeding data, `IMPORT FROM` bulk import from external DB |
 | [rest-client.md](rest-client.md) | REST API consumption | Calling external REST APIs via consumed REST client documents |
 | [rest-call-from-json.md](rest-call-from-json.md) | REST CALL end-to-end | JSON Structure → Entities → Import Mapping → REST CALL microflow |
+| [json-structures-and-mappings.md](json-structures-and-mappings.md) | JSON structures & mappings | CREATE/DESCRIBE JSON structures, import/export mappings, domain model patterns |
 | [java-actions.md](java-actions.md) | Custom Java actions | Extending with Java code |
 
 ## Page Patterns
@@ -81,7 +82,9 @@ Load skills based on the task:
 | "Fix MDL error" | `cheatsheet-errors.md` |
 | "Import data from database" | `demo-data.md` |
 | "Call a REST API / integrate JSON endpoint" | `rest-call-from-json.md` |
-| "Create JSON structure / import mapping" | `rest-call-from-json.md` |
+| "Create JSON structure / import mapping" | `json-structures-and-mappings.md` |
+| "Create export mapping" | `json-structures-and-mappings.md` |
+| "Map JSON to entities" | `json-structures-and-mappings.md` |
 | "Seed/populate test data" | `demo-data.md` |
 | "Update widget properties" | `bulk-widget-updates.md` |
 | "Change widgets in bulk" | `bulk-widget-updates.md` |
