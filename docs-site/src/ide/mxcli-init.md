@@ -1,8 +1,28 @@
-# mxcli init
+# mxcli init & mxcli new
 
-The `mxcli init` command prepares a Mendix project for AI-assisted development. It creates configuration files, installs skills, sets up a dev container, and optionally installs the VS Code extension.
+## mxcli new — Create a project from scratch
 
-## Basic Usage
+If you don't have a Mendix project yet, `mxcli new` creates one with everything configured in a single command:
+
+```bash
+mxcli new MyApp --version 11.8.0
+mxcli new MyApp --version 10.24.0 --output-dir ./projects/my-app
+mxcli new MyApp --version 11.8.0 --skip-init   # Skip AI tooling setup
+```
+
+This downloads MxBuild, creates a blank Mendix project via `mx create-project`, runs `mxcli init` to set up AI tooling and Dev Container, and downloads the correct Linux mxcli binary for the container. The result is a ready-to-open folder.
+
+| Flag | Description |
+|------|-------------|
+| `--version` | Mendix version (required, e.g., `11.8.0`) |
+| `--output-dir` | Output directory (default: `./<app-name>`) |
+| `--skip-init` | Skip AI tooling initialization |
+
+## mxcli init — Add tooling to an existing project
+
+The `mxcli init` command prepares an existing Mendix project for AI-assisted development. It creates configuration files, installs skills, sets up a dev container, and optionally installs the VS Code extension.
+
+### Basic Usage
 
 ```bash
 # Initialize with Claude Code (default)

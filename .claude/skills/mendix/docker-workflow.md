@@ -61,7 +61,15 @@ mxcli docker run -p app.mpr --fresh --wait
 
 ## Creating an Empty Mendix App
 
-To create a new blank Mendix project for testing (requires mxbuild to be downloaded first):
+**Recommended:** Use `mxcli new` to create a project with all tooling in one step:
+
+```bash
+mxcli new MyApp --version 11.8.0
+```
+
+This downloads MxBuild, creates a blank project, sets up AI tooling and Dev Container, and installs the correct Linux mxcli binary. Open the resulting folder in VS Code and reopen in Dev Container.
+
+**Manual approach** (if you need more control):
 
 ```bash
 # Download mxbuild if not already cached
@@ -70,6 +78,9 @@ mxcli setup mxbuild --version 11.6.4
 # Create a blank project
 mkdir -p /path/to/my-app
 ~/.mxcli/mxbuild/{version}/modeler/mx create-project --app-name MyApp --output-dir /path/to/my-app
+
+# Initialize AI tooling
+mxcli init /path/to/my-app
 ```
 
 The `mx create-project` command creates an MPR v2 project with the standard Mendix module structure. You can then use the Docker workflow to build and run it.

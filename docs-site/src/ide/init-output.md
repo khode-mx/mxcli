@@ -1,6 +1,6 @@
 # What Gets Created
 
-Running `mxcli init` creates the following directory structure in your Mendix project.
+Running `mxcli init` (or `mxcli new`, which runs `init` automatically) creates the following directory structure in your Mendix project.
 
 ## Universal Files (All Tools)
 

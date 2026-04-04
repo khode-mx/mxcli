@@ -56,9 +56,32 @@ The binary lands at `./bin/mxcli`. You can copy it to a directory on your PATH o
 ./bin/mxcli --version
 ```
 
-## Dev Container (recommended)
+## New project from scratch
 
-The Dev Container approach is the recommended way to work with mxcli, particularly when using AI coding assistants. It creates a sandboxed environment so that agents can only access your project files, not the rest of your system.
+If you don't have a Mendix project yet, `mxcli new` creates one with everything configured:
+
+```bash
+mxcli new MyApp --version 11.8.0
+```
+
+This single command:
+1. Downloads MxBuild for the specified Mendix version
+2. Creates a blank Mendix project (`App.mpr`)
+3. Sets up AI tooling (`.claude/`, skills, `AGENTS.md`)
+4. Configures a Dev Container (`.devcontainer/`)
+5. Downloads the correct Linux mxcli binary for the container
+
+Open the resulting `MyApp/` folder in VS Code and click **"Reopen in Container"** — you're ready to go.
+
+Options:
+```bash
+mxcli new MyApp --version 10.24.0 --output-dir ./projects/my-app
+mxcli new MyApp --version 11.8.0 --skip-init   # Skip AI tooling setup
+```
+
+## Dev Container for existing projects
+
+For an existing Mendix project, `mxcli init` adds AI tooling and a Dev Container configuration.
 
 Here's how to set it up:
 

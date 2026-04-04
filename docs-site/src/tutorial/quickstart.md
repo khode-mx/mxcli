@@ -43,7 +43,7 @@ MDL REPL - Mendix Definition Language
 mdl>
 ```
 
-> **Don't have a Mendix project?** Create one in Studio Pro first, or use `mx create-project --app-name test-app`.
+> **Don't have a Mendix project?** Create one with `mxcli new test-app --version 11.8.0` — this downloads MxBuild, creates a blank project, and sets up all tooling automatically.
 
 ## 3. Explore what's there
 

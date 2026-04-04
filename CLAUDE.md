@@ -340,6 +340,19 @@ go build -o bin/mxcli ./cmd/mxcli
 | **Data import** | `IMPORT FROM <alias> QUERY '...' INTO Module.Entity MAP (...)` | Import from external DB into Mendix app PostgreSQL (batch insert with ID generation) |
 | **Connector gen** | `SQL <alias> GENERATE CONNECTOR INTO <module> [TABLES (...)] [VIEWS (...)] [EXEC]` | Auto-generate Database Connector MDL from discovered schema |
 | **Diagnostics** | `mxcli diag [--bundle]` | Session logs, version info, bug report bundles |
+| **New project** | `mxcli new <name> --version X.Y.Z [--output-dir dir]` | Downloads mxbuild, creates blank project, runs init, installs Linux mxcli for devcontainer |
+| **Setup mxcli** | `mxcli setup mxcli [--os linux] [--arch amd64] [--output ./mxcli]` | Download platform-specific mxcli binary from GitHub releases |
+
+### mxcli new
+
+`mxcli new` creates a complete Mendix project from scratch in one step:
+
+```bash
+mxcli new MyApp --version 11.8.0
+mxcli new MyApp --version 10.24.0 --output-dir ./projects/my-app
+```
+
+Steps performed: downloads MxBuild → `mx create-project` → `mxcli init` → downloads correct Linux mxcli binary for devcontainer. The result is a ready-to-open project with `.devcontainer/`, AI tooling, and a working `./mxcli` binary.
 
 ### mxcli init
 

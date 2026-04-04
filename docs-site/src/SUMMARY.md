@@ -170,7 +170,7 @@
   - [Protocol](ide/lsp-protocol.md)
   - [Capabilities](ide/lsp-capabilities.md)
   - [Integration with Other Editors](ide/lsp-editors.md)
-- [mxcli init](ide/mxcli-init.md)
+- [mxcli init & mxcli new](ide/mxcli-init.md)
   - [What Gets Created](ide/init-output.md)
   - [Customizing Skills](ide/customizing-skills.md)
   - [Syncing with Updates](ide/syncing.md)

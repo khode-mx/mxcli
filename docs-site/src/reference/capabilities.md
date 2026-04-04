@@ -126,7 +126,9 @@ Everything mxcli can do, organized by use case.
 | Docker check | `mxcli docker check -p app.mpr` | Validate in container |
 | Testing | `mxcli test tests/ -p app.mpr` | `.test.mdl` / `.test.md` |
 | SARIF output | `mxcli lint --format sarif` | For CI integration |
+| New project | `mxcli new <name> --version X.Y.Z` | Create project from scratch with all tooling |
 | Init project | `mxcli init` | Set up `.claude/` with skills |
+| Setup mxcli | `mxcli setup mxcli [--os linux]` | Download platform-specific mxcli binary |
 
 ## Known Limitations
 

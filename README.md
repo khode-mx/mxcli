@@ -100,23 +100,31 @@ Claude code can migrate existing data, or generate demo data in the postgres con
 
 ## Quick Start
 
-The recommended way to use mxcli is inside a **Dev Container**. This sandboxes the AI agent so it can only access your project files, preventing unintended changes to your system. `mxcli init` sets up a `.devcontainer/` configuration automatically.
+### Starting from scratch
+
+Create a new Mendix project with everything configured in one command:
 
 ```bash
-# Initialize a Mendix project for your AI assistant
+mxcli new MyApp --version 11.8.0
+```
+
+This downloads MxBuild, creates a blank Mendix project, sets up AI tooling and a Dev Container, and installs the correct mxcli binary. Open the resulting folder in VS Code and reopen in the Dev Container — you're ready to go.
+
+### Existing project
+
+For an existing Mendix project, use `mxcli init` to add AI tooling and a Dev Container:
+
+```bash
 mxcli init /path/to/my-mendix-project
 
 # Or specify your tool(s)
 mxcli init --tool cursor /path/to/my-mendix-project
 mxcli init --tool claude --tool cursor /path/to/my-mendix-project
+```
 
-# This creates:
-#   AGENTS.md and .ai-context/ with universal skills
-#   .devcontainer/ for sandboxed development
-#   Tool-specific config files (.cursorrules, .continue/config.json, etc.)
+Both approaches create `AGENTS.md`, `.ai-context/` with skills, `.devcontainer/` for sandboxed development, and tool-specific config files. Open the project in VS Code / Cursor and reopen in Dev Container, then start your AI assistant:
 
-# Open the project in VS Code / Cursor and reopen in Dev Container,
-# then start your AI assistant:
+```bash
 claude  # or use Cursor, Continue.dev, etc.
 ```
 
