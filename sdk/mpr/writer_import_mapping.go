@@ -99,15 +99,15 @@ func serializeImportMappingElement(elem *model.ImportMappingElement, parentPath 
 }
 
 func serializeImportObjectElement(id string, elem *model.ImportMappingElement, parentPath string) bson.M {
-	// Compute JsonPath: root element (empty ExposedName) stays at parentPath;
-	// named elements append |key to navigate into the nested JSON object.
-	// Note: the |(Object) suffix is only used for array item elements (empty ExposedName
-	// inside an array container), not for regular named nested objects.
-	var jsonPath string
-	if elem.ExposedName == "" {
-		jsonPath = parentPath
-	} else {
-		jsonPath = parentPath + "|" + elem.ExposedName
+	// Use pre-computed JsonPath from the executor when available.
+	// The executor aligns JsonPath with the JSON structure element paths.
+	jsonPath := elem.JsonPath
+	if jsonPath == "" {
+		if elem.ExposedName == "" {
+			jsonPath = parentPath
+		} else {
+			jsonPath = parentPath + "|" + elem.ExposedName
+		}
 	}
 
 	children := bson.A{int32(2)}
@@ -148,7 +148,10 @@ func serializeImportObjectElement(id string, elem *model.ImportMappingElement, p
 
 func serializeImportValueElement(id string, elem *model.ImportMappingElement, parentPath string) bson.M {
 	dataType := serializeImportValueDataType(elem.DataType)
-	jsonPath := parentPath + "|" + elem.ExposedName
+	jsonPath := elem.JsonPath
+	if jsonPath == "" {
+		jsonPath = parentPath + "|" + elem.ExposedName
+	}
 
 	return bson.M{
 		"$ID":              idToBsonBinary(id),
