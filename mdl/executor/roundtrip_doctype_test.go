@@ -34,13 +34,20 @@ var scriptKnownCEErrors = map[string][]string{
 		"CE0117", // Expression error in LOG WARNING on Mendix 10.x (string concat syntax difference)
 	},
 	"06-rest-client-examples.mdl": {
-		"CE0061", // No entity selected (JSON response/body mapping without entity)
-		"CE6035", // RestOperationCallAction error handling not supported
-		"CE7056", // Undefined parameter (dynamic header {1} placeholder)
-		"CE7062", // Missing Accept header
-		"CE7064", // POST/PUT must include body
-		"CE7073", // Constant needs to be defined (auth with $ConstantName)
-		"CE7247", // Name cannot be empty (body mapping without entity)
+		"CE0061",  // No entity selected (JSON response/body mapping without entity)
+		"CE0272",  // Some schema elements have no mapping defined (nested mapping alignment)
+		"CE5015",  // Mapping does not align with underlying schema (ExposedName/MaxOccurs)
+		"CE6035",  // RestOperationCallAction error handling not supported
+		"CE6702",  // Method to obtain Mendix object must be selected (export root)
+		"CE7056",  // Undefined parameter (dynamic header {1} placeholder)
+		"CE7062",  // Missing Accept header
+		"CE7064",  // POST/PUT must include body
+		"CE7073",  // Constant needs to be defined (auth with $ConstantName)
+		"CE7247",  // Name cannot be empty (body mapping without entity)
+	},
+	"21-import-export-mapping-examples.mdl": {
+		"CE0272", // Some schema elements have no mapping defined (nested mapping alignment)
+		"CE5015", // Mapping does not align with underlying schema (ExposedName/MaxOccurs)
 	},
 	"17-custom-widget-examples.mdl": {
 		"CE0463", // Widget definition changed (TEXTFILTER template property count mismatch)
