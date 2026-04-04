@@ -92,7 +92,7 @@ func serializeImportMappingElement(elem *model.ImportMappingElement, parentPath 
 		id = generateUUID()
 	}
 
-	if elem.Kind == "Object" {
+	if elem.Kind == "Object" || elem.Kind == "Array" {
 		return serializeImportObjectElement(id, elem, parentPath)
 	}
 	return serializeImportValueElement(id, elem, parentPath)

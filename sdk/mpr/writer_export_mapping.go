@@ -91,7 +91,7 @@ func serializeExportMappingElement(elem *model.ExportMappingElement, parentPath 
 		id = generateUUID()
 	}
 
-	if elem.Kind == "Object" {
+	if elem.Kind == "Object" || elem.Kind == "Array" {
 		return serializeExportObjectElement(id, elem, parentPath)
 	}
 	return serializeExportValueElement(id, elem, parentPath)
