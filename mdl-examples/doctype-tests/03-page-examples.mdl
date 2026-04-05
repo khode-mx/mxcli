@@ -2332,13 +2332,13 @@ MOVE PAGE PgTest.P034_ComboBox_Enum TO PgTest2;
 -- Move a page to a folder in another module
 MOVE PAGE PgTest2.P034_ComboBox_Enum TO FOLDER 'Imported' IN PgTest2;
 
--- @version: any
-
--- Move a snippet to another module
+-- Move a snippet to another module (QuickActions created under 11.0+ gate)
 MOVE SNIPPET PgTest.QuickActions TO PgTest2;
 
--- Move a snippet to a folder in another module
+-- Move a snippet to a folder in another module (CustomerSidebar created under 11.0+ gate)
 MOVE SNIPPET PgTest.CustomerSidebar TO FOLDER 'Shared' IN PgTest2;
+
+-- @version: any
 
 -- ============================================================================
 -- Summary - MDL Page Syntax Features
