@@ -87,7 +87,7 @@ func AugmentTemplate(tmpl *WidgetTemplate, def *mpk.WidgetDefinition) error {
 		}
 	}
 
-	// Nothing to do
+	// Nothing to add/remove
 	if len(missing) == 0 && len(stale) == 0 {
 		return nil
 	}
@@ -112,8 +112,14 @@ func AugmentTemplate(tmpl *WidgetTemplate, def *mpk.WidgetDefinition) error {
 		exemplarIdx, hasExemplar := typeExemplars[bsonType]
 		var newPropType, newProp map[string]any
 		if hasExemplar {
-			newPropType, newProp = clonePropertyPair(propTypes, objProps, exemplarIdx, p)
-		} else {
+			var err error
+			newPropType, newProp, err = clonePropertyPair(propTypes, objProps, exemplarIdx, p)
+			if err != nil {
+				return fmt.Errorf("augment %s: %w", tmpl.WidgetID, err)
+			}
+		}
+		// Fall back to createPropertyPair if cloning failed (no exemplar or no matching property)
+		if newPropType == nil || newProp == nil {
 			newPropType, newProp = createPropertyPair(p, bsonType)
 		}
 
@@ -173,14 +179,17 @@ func removeProperties(propTypes []any, objProps []any, staleKeys map[string]bool
 }
 
 // clonePropertyPair deep-clones an existing PropertyType/Property pair and updates keys/IDs.
-func clonePropertyPair(propTypes []any, objProps []any, exemplarIdx int, p mpk.PropertyDef) (map[string]any, map[string]any) {
+func clonePropertyPair(propTypes []any, objProps []any, exemplarIdx int, p mpk.PropertyDef) (map[string]any, map[string]any, error) {
 	exemplar, ok := propTypes[exemplarIdx].(map[string]any)
 	if !ok {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	// Deep-clone the PropertyType
-	newPT := deepCloneMap(exemplar)
+	newPT, err := deepCloneMap(exemplar)
+	if err != nil {
+		return nil, nil, fmt.Errorf("clone property type %q: %w", p.Key, err)
+	}
 	newPTID := placeholderID()
 	newPT["$ID"] = newPTID
 	newPT["PropertyKey"] = p.Key
@@ -254,11 +263,14 @@ func clonePropertyPair(propTypes []any, objProps []any, exemplarIdx int, p mpk.P
 	}
 
 	if exemplarProp == nil {
-		return newPT, nil
+		return newPT, nil, nil
 	}
 
 	// Deep-clone the Property
-	newProp := deepCloneMap(exemplarProp)
+	newProp, err := deepCloneMap(exemplarProp)
+	if err != nil {
+		return nil, nil, fmt.Errorf("clone property %q: %w", p.Key, err)
+	}
 	newProp["$ID"] = placeholderID()
 	newProp["TypePointer"] = newPTID
 
@@ -283,7 +295,7 @@ func clonePropertyPair(propTypes []any, objProps []any, exemplarIdx int, p mpk.P
 		}
 	}
 
-	return newPT, newProp
+	return newPT, newProp, nil
 }
 
 // createPropertyPair creates a new PropertyType/Property pair from scratch.
@@ -603,16 +615,16 @@ func setArrayField(m map[string]any, key string, arr []any) {
 }
 
 // deepCloneMap deep-clones a map[string]interface{} via JSON round-trip.
-func deepCloneMap(m map[string]any) map[string]any {
+func deepCloneMap(m map[string]any) (map[string]any, error) {
 	data, err := json.Marshal(m)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("deep clone marshal: %w", err)
 	}
 	var result map[string]any
 	if err := json.Unmarshal(data, &result); err != nil {
-		return nil
+		return nil, fmt.Errorf("deep clone unmarshal: %w", err)
 	}
-	return result
+	return result, nil
 }
 
 // regenerateNestedIDs walks a structure and replaces all $ID fields with new placeholders.
@@ -636,7 +648,7 @@ func regenerateNestedIDs(m map[string]any) {
 }
 
 // deepCloneTemplate deep-clones a WidgetTemplate so augmentation doesn't mutate the cache.
-func deepCloneTemplate(tmpl *WidgetTemplate) *WidgetTemplate {
+func deepCloneTemplate(tmpl *WidgetTemplate) (*WidgetTemplate, error) {
 	clone := &WidgetTemplate{
 		WidgetID:      tmpl.WidgetID,
 		Name:          tmpl.Name,
@@ -645,11 +657,118 @@ func deepCloneTemplate(tmpl *WidgetTemplate) *WidgetTemplate {
 	}
 
 	if tmpl.Type != nil {
-		clone.Type = deepCloneMap(tmpl.Type)
+		var err error
+		clone.Type, err = deepCloneMap(tmpl.Type)
+		if err != nil {
+			return nil, fmt.Errorf("clone template type %s: %w", tmpl.WidgetID, err)
+		}
 	}
 	if tmpl.Object != nil {
-		clone.Object = deepCloneMap(tmpl.Object)
+		var err error
+		clone.Object, err = deepCloneMap(tmpl.Object)
+		if err != nil {
+			return nil, fmt.Errorf("clone template object %s: %w", tmpl.WidgetID, err)
+		}
 	}
 
-	return clone
+	return clone, nil
+}
+
+// collectNestedPropertyTypeIDs extracts PropertyKey→$ID mappings from a ValueType's ObjectType.
+func collectNestedPropertyTypeIDs(vt map[string]any) map[string]string {
+	result := make(map[string]string)
+	objType, ok := getMapField(vt, "ObjectType")
+	if !ok {
+		return result
+	}
+	propTypes, ok := getArrayField(objType, "PropertyTypes")
+	if !ok {
+		return result
+	}
+	for _, pt := range propTypes {
+		ptMap, ok := pt.(map[string]any)
+		if !ok {
+			continue
+		}
+		key, _ := ptMap["PropertyKey"].(string)
+		id, _ := ptMap["$ID"].(string)
+		if key != "" && id != "" {
+			result[key] = id
+		}
+	}
+	return result
+}
+
+// collectNestedPropertyTypeIDsByKey extracts PropertyKey→$ID from a rebuilt ObjectType map.
+func collectNestedPropertyTypeIDsByKey(objType map[string]any) map[string]string {
+	result := make(map[string]string)
+	propTypes, ok := getArrayField(objType, "PropertyTypes")
+	if !ok {
+		return result
+	}
+	for _, pt := range propTypes {
+		ptMap, ok := pt.(map[string]any)
+		if !ok {
+			continue
+		}
+		key, _ := ptMap["PropertyKey"].(string)
+		id, _ := ptMap["$ID"].(string)
+		if key != "" && id != "" {
+			result[key] = id
+		}
+	}
+	return result
+}
+
+// remapObjectTypePointers walks the Object Properties array and updates TypePointers
+// that reference old PropertyType IDs from a rebuilt ObjectType.
+func remapObjectTypePointers(objProps []any, idRemap map[string]string) {
+	if len(idRemap) == 0 {
+		return
+	}
+	for _, prop := range objProps {
+		propMap, ok := prop.(map[string]any)
+		if !ok {
+			continue
+		}
+		// Check Value.Objects for nested WidgetObjects with TypePointers
+		val, ok := getMapField(propMap, "Value")
+		if !ok {
+			continue
+		}
+		objects, ok := getArrayField(val, "Objects")
+		if !ok {
+			continue
+		}
+		for _, obj := range objects {
+			objMap, ok := obj.(map[string]any)
+			if !ok {
+				continue
+			}
+			// Remap the object's nested properties' TypePointers
+			nestedProps, ok := getArrayField(objMap, "Properties")
+			if !ok {
+				continue
+			}
+			for _, nestedProp := range nestedProps {
+				npMap, ok := nestedProp.(map[string]any)
+				if !ok {
+					continue
+				}
+				if tp, ok := npMap["TypePointer"].(string); ok {
+					if newTP, exists := idRemap[tp]; exists {
+						npMap["TypePointer"] = newTP
+					}
+				}
+				// Also remap Value.TypePointer (references ValueType $ID)
+				if nestedVal, ok := getMapField(npMap, "Value"); ok {
+					if tp, ok := nestedVal["TypePointer"].(string); ok {
+						if newTP, exists := idRemap[tp]; exists {
+							nestedVal["TypePointer"] = newTP
+						}
+					}
+				}
+			}
+		}
+	}
 }

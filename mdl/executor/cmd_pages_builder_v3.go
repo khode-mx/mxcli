@@ -311,14 +311,6 @@ func (pb *pageBuilder) buildWidgetV3(w *ast.WidgetV3) (pages.Widget, error) {
 		widget, err = pb.buildTemplateV3(w)
 	case "FILTER":
 		widget, err = pb.buildFilterV3(w)
-	case "TEXTFILTER":
-		widget, err = pb.buildTextFilterV3(w)
-	case "NUMBERFILTER":
-		widget, err = pb.buildNumberFilterV3(w)
-	case "DROPDOWNFILTER":
-		widget, err = pb.buildDropdownFilterV3(w)
-	case "DATEFILTER":
-		widget, err = pb.buildDateFilterV3(w)
 	case "STATICIMAGE":
 		widget, err = pb.buildStaticImageV3(w)
 	case "DYNAMICIMAGE":
@@ -334,17 +326,26 @@ func (pb *pageBuilder) buildWidgetV3(w *ast.WidgetV3) (pages.Widget, error) {
 		// Fallback to static image if pluggable engine unavailable
 		widget, err = pb.buildStaticImageV3(w)
 	default:
-		// Try pluggable widget engine for registered widget types
 		pb.initPluggableEngine()
 		if pb.widgetRegistry != nil {
+			// Try by MDL name first
 			if def, ok := pb.widgetRegistry.Get(strings.ToUpper(w.Type)); ok {
 				return pb.pluggableEngine.Build(def, w)
 			}
+			// PLUGGABLEWIDGET/CUSTOMWIDGET 'widget.id' name — lookup by widget ID
+			if w.Type == "PLUGGABLEWIDGET" || w.Type == "CUSTOMWIDGET" {
+				if widgetType, ok := w.Properties["WidgetType"].(string); ok {
+					if def, ok := pb.widgetRegistry.GetByWidgetID(widgetType); ok {
+						return pb.pluggableEngine.Build(def, w)
+					}
+					return nil, fmt.Errorf("no definition for widget %s (run 'mxcli widget init -p app.mpr')", widgetType)
+				}
+			}
 		}
 		if pb.pluggableEngineErr != nil {
-			return nil, fmt.Errorf("unsupported V3 widget type: %s (%v)", w.Type, pb.pluggableEngineErr)
+			return nil, fmt.Errorf("unsupported widget type: %s (%v)", w.Type, pb.pluggableEngineErr)
 		}
-		return nil, fmt.Errorf("unsupported V3 widget type: %s", w.Type)
+		return nil, fmt.Errorf("unsupported widget type: %s", w.Type)
 	}
 
 	if err != nil {

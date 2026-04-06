@@ -36,6 +36,17 @@ func runMxCheck(t *testing.T, projectPath string) (string, error) {
 	return string(output), err
 }
 
+// runMxUpdateWidgets synchronizes widget definitions with mpk files.
+// Call before runMxCheck on tests that create pluggable widgets.
+func runMxUpdateWidgets(t *testing.T, projectPath string) {
+	t.Helper()
+	mxPath := findMxBinary()
+	if mxPath == "" {
+		return
+	}
+	exec.Command(mxPath, "update-widgets", projectPath).CombinedOutput()
+}
+
 // TestMxCheck_Entity creates an entity and verifies mx check passes.
 func TestMxCheck_Entity(t *testing.T) {
 	if !mxCheckAvailable() {
@@ -829,6 +840,8 @@ END;`
 
 	// Disconnect to flush changes
 	env.executor.Execute(&ast.DisconnectStmt{})
+
+	runMxUpdateWidgets(t, env.projectPath)
 
 	// Run mx check
 	output, err := runMxCheck(t, env.projectPath)

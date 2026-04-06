@@ -76,6 +76,8 @@ func (e *Executor) extractCustomWidgetType(w map[string]any) string {
 			return "DROPDOWNFILTER"
 		case "com.mendix.widget.web.datagriddatefilter.DatagridDateFilter":
 			return "DATEFILTER"
+		case "com.mendix.widget.web.dropdownsort.DropdownSort":
+			return "DROPDOWNSORT"
 		case "com.mendix.widget.web.image.Image":
 			return "IMAGE"
 		default:
@@ -997,6 +999,86 @@ func (e *Executor) extractCustomWidgetPropertyAttributes(w map[string]any, prope
 		return result
 	}
 	return nil
+}
+
+// extractCustomWidgetID extracts the full widget ID from a CustomWidget (e.g. "com.mendix.widget.custom.switch.Switch").
+func (e *Executor) extractCustomWidgetID(w map[string]any) string {
+	typeObj, ok := w["Type"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	if widgetID, ok := typeObj["WidgetId"].(string); ok {
+		return widgetID
+	}
+	return ""
+}
+
+// isKnownCustomWidgetType returns true for widget types that have dedicated DESCRIBE extractors.
+func isKnownCustomWidgetType(widgetType string) bool {
+	switch widgetType {
+	case "COMBOBOX", "DATAGRID2", "GALLERY", "IMAGE",
+		"TEXTFILTER", "NUMBERFILTER", "DROPDOWNFILTER", "DATEFILTER",
+		"DROPDOWNSORT":
+		return true
+	}
+	return false
+}
+
+// extractExplicitProperties extracts non-default property values from a CustomWidget BSON.
+// Returns attribute references and primitive values for properties that differ from defaults.
+func (e *Executor) extractExplicitProperties(w map[string]any) []rawExplicitProp {
+	obj, ok := w["Object"].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	propTypeKeyMap := buildPropertyTypeKeyMap(w, false)
+	if len(propTypeKeyMap) == 0 {
+		return nil
+	}
+
+	var result []rawExplicitProp
+	props := getBsonArrayElements(obj["Properties"])
+	for _, prop := range props {
+		propMap, ok := prop.(map[string]any)
+		if !ok {
+			continue
+		}
+		typePointerID := extractBinaryID(propMap["TypePointer"])
+		propKey := propTypeKeyMap[typePointerID]
+		if propKey == "" {
+			continue
+		}
+		value, ok := propMap["Value"].(map[string]any)
+		if !ok {
+			continue
+		}
+
+		// Check for AttributeRef (attribute binding)
+		if attrRef, ok := value["AttributeRef"].(map[string]any); ok && attrRef != nil {
+			if attr := extractString(attrRef["Attribute"]); attr != "" {
+				result = append(result, rawExplicitProp{
+					Key:   propKey,
+					Value: shortAttributeName(attr),
+					IsRef: true,
+				})
+				continue
+			}
+		}
+
+		// Check for non-default PrimitiveValue
+		if pv := extractString(value["PrimitiveValue"]); pv != "" {
+			// Skip common defaults
+			if pv == "true" || pv == "false" {
+				continue
+			}
+			result = append(result, rawExplicitProp{
+				Key:   propKey,
+				Value: pv,
+			})
+		}
+	}
+	return result
 }
 
 // extractImageProperties extracts properties from a pluggable Image CustomWidget.

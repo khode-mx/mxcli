@@ -157,6 +157,12 @@ func (r *WidgetRegistry) loadDefinitionsFromDir(dir string) error {
 
 		upperName := strings.ToUpper(def.MDLName)
 		if existing, ok := r.byMDLName[upperName]; ok {
+			// Skip user skeleton definitions (no mappings/modes) when built-in has mappings
+			if len(def.PropertyMappings) == 0 && len(def.Modes) == 0 &&
+				(len(existing.PropertyMappings) > 0 || len(existing.Modes) > 0) {
+				log.Printf("info: skipping user skeleton %q — built-in %s has mappings", entry.Name(), def.MDLName)
+				continue
+			}
 			log.Printf("info: user definition %q overrides built-in %s (widgetId: %s → %s)",
 				entry.Name(), def.MDLName, existing.WidgetID, def.WidgetID)
 		}
@@ -195,6 +201,7 @@ func validateDefinitionOperations(def *WidgetDefinition, source string, opReg *O
 // sourceOperationCompatible checks that a mapping's Source and Operation are compatible.
 var incompatibleSourceOps = map[string]map[string]bool{
 	"Attribute":   {"association": true, "datasource": true},
+	"Attributes":  {"association": true, "datasource": true, "attribute": true},
 	"Association": {"attribute": true, "datasource": true},
 	"DataSource":  {"attribute": true, "association": true},
 }

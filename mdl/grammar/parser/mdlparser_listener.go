@@ -1,4 +1,4 @@
-// Code generated from MDLParser.g4 by ANTLR 4.13.2. DO NOT EDIT.
+// Code generated from MDLParser.g4 by ANTLR 4.13.1. DO NOT EDIT.
 
 package parser // MDLParser
 import "github.com/antlr4-go/antlr/v4"
@@ -1032,9 +1032,6 @@ type MDLParserListener interface {
 
 	// EnterSqlConnect is called when entering the sqlConnect production.
 	EnterSqlConnect(c *SqlConnectContext)
-
-	// EnterSqlConnectAlias is called when entering the sqlConnectAlias production.
-	EnterSqlConnectAlias(c *SqlConnectAliasContext)
 
 	// EnterSqlDisconnect is called when entering the sqlDisconnect production.
 	EnterSqlDisconnect(c *SqlDisconnectContext)
@@ -2199,9 +2196,6 @@ type MDLParserListener interface {
 
 	// ExitSqlConnect is called when exiting the sqlConnect production.
 	ExitSqlConnect(c *SqlConnectContext)
-
-	// ExitSqlConnectAlias is called when exiting the sqlConnectAlias production.
-	ExitSqlConnectAlias(c *SqlConnectAliasContext)
 
 	// ExitSqlDisconnect is called when exiting the sqlDisconnect production.
 	ExitSqlDisconnect(c *SqlDisconnectContext)
