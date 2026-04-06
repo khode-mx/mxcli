@@ -4,6 +4,50 @@ All notable changes to mxcli will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0] - 2026-04-06
+
+### Added
+
+- **Import/Export Mappings** — CREATE/DESCRIBE/DROP IMPORT MAPPING and EXPORT MAPPING with JSON Structure integration, array mapping, and BSON roundtrip
+- **IMPORT FROM MAPPING / EXPORT TO MAPPING** — Microflow actions for mapping-based data transformation
+- **JSON Structure FOLDER** — FOLDER clause for organizing JSON Structures into folders
+- **DESCRIBE NANOFLOW** — Display nanoflow activities, control flows, and return type
+- **Pluggable Widget Engine v2** — Redesigned widget engine with 25+ new widget templates (accordion, maps, charts, timeline, etc.), filter widget migration, and `generateDefJSON` property mapping
+- **WidgetDemo** — Baseline scripts and widget analysis tools for widget testing
+- **mxcli new** — Create Mendix projects from scratch (downloads MxBuild, creates project, runs init, installs Linux mxcli binary)
+- **setup mxcli** — Download platform-specific mxcli binary from GitHub releases
+- **Podman Support** — Podman as Docker alternative with devcontainer configuration (#34)
+- **Catalog Tables** — Import/export mapping catalog tables for project metadata queries
+- **Project Tree** — Missing document types added to project tree and syntax highlighting
+- **GRANT Additive** — GRANT is now additive with partial REVOKE for entity access
+- **Version Pre-checks** — Executor commands validate Mendix version before BSON writes
+- **SHOW FEATURES** — Display version registry feature availability
+- **SHOW LANGUAGES** — Language listing and QUAL005 missing translations linter rule
+- **Proposals** — Design proposals for i18n, workflow improvements, and multi-project tree view
+- **BSON Tooling Guide** — Contributor documentation for BSON debugging workflow
+- **CONTRIBUTING.md** — Rewritten with accurate project references
+
+### Fixed
+
+- CE1613 and Studio Pro crash from invalid CrossAssociation BSON (ParentConnection/ChildConnection fields) (#50)
+- Import/export mapping BSON alignment with Studio Pro (JsonPath, ExposedName, ObjectHandling, array elements)
+- Sort translation map iteration in all serializers for deterministic output
+- Docker and diaglog tests cross-platform compatibility (macOS Unix socket paths)
+- Roundtrip test stability with idempotency strategy
+- Version gates for Mendix 10.24 nightly test failures and 11.0+-only MOVE commands
+- Nanoflow BSON parsing for activities, flows, and return type
+- mxcli new MPR filename detection from create-project
+- Bun setup in nightly and release workflows for vscode-ext build
+- Replace unreleased Mendix 11.9.0 with 11.8.0 in CI workflows
+
+### Changed
+
+- Redesigned import/export mapping syntax (v2) with comma separators
+- Bumped dependencies: esbuild 0.28.0, typescript 6.0.2, sqlite 1.48.1, go-runewidth 0.0.22, @vscode/vsce 3.7.1
+- Bumped CI actions: checkout v6, deploy-pages v5, upload-pages-artifact v4
+- Bumped mdbook to v0.5.2 with musl for aarch64
+- PR review checklist requires working MDL examples for syntax changes
+
 ## [0.4.0] - 2026-03-31
 
 ### Added
