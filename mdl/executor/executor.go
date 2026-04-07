@@ -285,6 +285,8 @@ func (e *Executor) executeInner(stmt ast.Statement) error {
 		return e.execCreateWorkflow(s)
 	case *ast.DropWorkflowStmt:
 		return e.execDropWorkflow(s)
+	case *ast.AlterWorkflowStmt:
+		return e.execAlterWorkflow(s)
 
 	// Business Event statements
 	case *ast.CreateBusinessEventServiceStmt:

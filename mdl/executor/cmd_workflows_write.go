@@ -296,9 +296,11 @@ func buildCallMicroflowTask(n *ast.WorkflowCallMicroflowNode) *workflows.CallMic
 	}
 
 	// Parameter mappings (Issue #10)
+	// BSON requires fully qualified: Module.Microflow.ParamName
+	mfQN := n.Microflow.Module + "." + n.Microflow.Name
 	for _, pm := range n.ParameterMappings {
 		task.ParameterMappings = append(task.ParameterMappings, &workflows.ParameterMapping{
-			Parameter:  pm.Parameter,
+			Parameter:  mfQN + "." + pm.Parameter,
 			Expression: pm.Expression,
 		})
 	}
@@ -324,9 +326,11 @@ func buildCallWorkflowActivity(n *ast.WorkflowCallWorkflowNode) *workflows.CallW
 	act.ParameterExpression = "$WorkflowContext"
 
 	// Explicit parameter mappings from MDL WITH clause
+	// BSON requires fully qualified: Module.Workflow.ParamName
+	wfQN := n.Workflow.Module + "." + n.Workflow.Name
 	for _, pm := range n.ParameterMappings {
 		mapping := &workflows.ParameterMapping{
-			Parameter:  pm.Parameter,
+			Parameter:  wfQN + "." + pm.Parameter,
 			Expression: pm.Expression,
 		}
 		mapping.BaseElement.ID = model.ID(mpr.GenerateID())

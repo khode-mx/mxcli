@@ -1,4 +1,4 @@
-// Code generated from MDLParser.g4 by ANTLR 4.13.2. DO NOT EDIT.
+// Code generated from MDLParser.g4 by ANTLR 4.13.1. DO NOT EDIT.
 
 package parser // MDLParser
 import "github.com/antlr4-go/antlr/v4"
@@ -1837,6 +1837,30 @@ func (s *BaseMDLParserListener) EnterWorkflowAnnotationStmt(ctx *WorkflowAnnotat
 
 // ExitWorkflowAnnotationStmt is called when production workflowAnnotationStmt is exited.
 func (s *BaseMDLParserListener) ExitWorkflowAnnotationStmt(ctx *WorkflowAnnotationStmtContext) {}
+
+// EnterAlterWorkflowAction is called when production alterWorkflowAction is entered.
+func (s *BaseMDLParserListener) EnterAlterWorkflowAction(ctx *AlterWorkflowActionContext) {}
+
+// ExitAlterWorkflowAction is called when production alterWorkflowAction is exited.
+func (s *BaseMDLParserListener) ExitAlterWorkflowAction(ctx *AlterWorkflowActionContext) {}
+
+// EnterWorkflowSetProperty is called when production workflowSetProperty is entered.
+func (s *BaseMDLParserListener) EnterWorkflowSetProperty(ctx *WorkflowSetPropertyContext) {}
+
+// ExitWorkflowSetProperty is called when production workflowSetProperty is exited.
+func (s *BaseMDLParserListener) ExitWorkflowSetProperty(ctx *WorkflowSetPropertyContext) {}
+
+// EnterActivitySetProperty is called when production activitySetProperty is entered.
+func (s *BaseMDLParserListener) EnterActivitySetProperty(ctx *ActivitySetPropertyContext) {}
+
+// ExitActivitySetProperty is called when production activitySetProperty is exited.
+func (s *BaseMDLParserListener) ExitActivitySetProperty(ctx *ActivitySetPropertyContext) {}
+
+// EnterAlterActivityRef is called when production alterActivityRef is entered.
+func (s *BaseMDLParserListener) EnterAlterActivityRef(ctx *AlterActivityRefContext) {}
+
+// ExitAlterActivityRef is called when production alterActivityRef is exited.
+func (s *BaseMDLParserListener) ExitAlterActivityRef(ctx *AlterActivityRefContext) {}
 
 // EnterAlterSettingsClause is called when production alterSettingsClause is entered.
 func (s *BaseMDLParserListener) EnterAlterSettingsClause(ctx *AlterSettingsClauseContext) {}

@@ -264,6 +264,76 @@ BEGIN
 END WORKFLOW;
 ```
 
+## ALTER WORKFLOW
+
+Modify an existing workflow's properties, activities, outcomes, paths, conditions, and boundary events without full replacement.
+
+| Operation | Syntax | Notes |
+|-----------|--------|-------|
+| Set display name | `SET DISPLAY 'name'` | Workflow-level display name |
+| Set description | `SET DESCRIPTION 'text'` | Workflow-level description |
+| Set export level | `SET EXPORT LEVEL API\|Hidden` | Visibility level |
+| Set due date | `SET DUE DATE 'expr'` | Workflow-level due date expression |
+| Set overview page | `SET OVERVIEW PAGE Module.Page` | Workflow overview page |
+| Set parameter | `SET PARAMETER $Var: Module.Entity` | Workflow context parameter |
+| Set activity page | `SET ACTIVITY name PAGE Module.Page` | Change user task page |
+| Set activity description | `SET ACTIVITY name DESCRIPTION 'text'` | Activity description |
+| Set activity targeting | `SET ACTIVITY name TARGETING MICROFLOW Module.MF` | Target user assignment |
+| Set activity XPath | `SET ACTIVITY name TARGETING XPATH '[expr]'` | XPath targeting |
+| Set activity due date | `SET ACTIVITY name DUE DATE 'expr'` | Activity-level due date |
+| Insert activity | `INSERT AFTER name CALL MICROFLOW Module.MF` | Insert after named activity |
+| Drop activity | `DROP ACTIVITY name` | Remove activity by name |
+| Replace activity | `REPLACE ACTIVITY name WITH activity` | Replace activity in-place |
+| Insert outcome | `INSERT OUTCOME 'name' ON activity { body }` | Add outcome to user task/decision |
+| Drop outcome | `DROP OUTCOME 'name' ON activity` | Remove outcome |
+| Insert path | `INSERT PATH ON activity { body }` | Add path to parallel split |
+| Drop path | `DROP PATH 'name' ON activity` | Remove parallel split path |
+| Insert condition | `INSERT CONDITION 'name' ON activity { body }` | Add decision branch |
+| Drop condition | `DROP CONDITION 'name' ON activity` | Remove decision branch |
+| Insert boundary event | `INSERT BOUNDARY EVENT ON activity INTERRUPTING TIMER ['expr'] { body }` | Add boundary timer |
+| Drop boundary event | `DROP BOUNDARY EVENT ON activity` | Remove boundary event |
+
+**Activity references** can be identifiers (`ReviewOrder`) or string literals (`'Review the order'`). Use `@N` suffix for positional disambiguation when multiple activities share a name (e.g., `ACT_Process@2`).
+
+**Multiple actions** can be combined in a single ALTER statement.
+
+**Example:**
+```sql
+-- Set workflow-level properties
+ALTER WORKFLOW Module.OrderApproval
+  SET DISPLAY 'Updated Order Approval'
+  SET DESCRIPTION 'Updated description';
+
+-- Modify an activity
+ALTER WORKFLOW Module.OrderApproval
+  SET ACTIVITY ReviewOrder PAGE Module.AlternatePage;
+
+-- Insert and drop activities
+ALTER WORKFLOW Module.OrderApproval
+  INSERT AFTER ReviewOrder CALL MICROFLOW Module.ACT_Escalate;
+ALTER WORKFLOW Module.OrderApproval
+  DROP ACTIVITY ACT_Notify@1;
+
+-- Manage outcomes on a user task
+ALTER WORKFLOW Module.OrderApproval
+  INSERT OUTCOME 'Escalate' ON ReviewOrder {
+    CALL MICROFLOW Module.ACT_Review;
+  };
+ALTER WORKFLOW Module.OrderApproval
+  DROP OUTCOME 'Hold' ON ReviewOrder;
+
+-- Boundary events
+ALTER WORKFLOW Module.OrderApproval
+  INSERT BOUNDARY EVENT ON ReviewOrder INTERRUPTING TIMER 'addHours([%CurrentDateTime%], 2)' {
+    CALL MICROFLOW Module.ACT_BoundaryHandler;
+    JUMP TO ReviewOrder;
+  };
+ALTER WORKFLOW Module.OrderApproval
+  DROP BOUNDARY EVENT ON ReviewOrder;
+```
+
+**Tip:** Run `DESCRIBE WORKFLOW Module.Name` first to see activity names.
+
 ## Project Structure
 
 | Statement | Syntax | Notes |

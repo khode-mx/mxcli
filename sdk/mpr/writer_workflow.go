@@ -221,6 +221,12 @@ func serializeWorkflowFlow(flow *workflows.Flow) bson.D {
 	}
 }
 
+// SerializeWorkflowActivity dispatches to the correct activity serializer.
+// Exported for use by the ALTER WORKFLOW executor.
+func SerializeWorkflowActivity(act workflows.WorkflowActivity) bson.D {
+	return serializeWorkflowActivity(act)
+}
+
 // serializeWorkflowActivity dispatches to the correct serializer.
 func serializeWorkflowActivity(act workflows.WorkflowActivity) bson.D {
 	switch a := act.(type) {

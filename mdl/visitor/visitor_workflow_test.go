@@ -575,3 +575,520 @@ END WORKFLOW;`
 		t.Errorf("TaskDescription = %q, want %q", userTask.TaskDescription, "Please review carefully")
 	}
 }
+
+// ============================================================================
+// ALTER WORKFLOW Tests
+// ============================================================================
+
+func TestAlterWorkflow_SetDisplay(t *testing.T) {
+	input := `ALTER WORKFLOW M.MyWF SET DISPLAY 'New Display Name';`
+
+	prog, errs := Build(input)
+	if len(errs) > 0 {
+		for _, e := range errs {
+			t.Errorf("Parse error: %v", e)
+		}
+		t.FailNow()
+	}
+
+	if len(prog.Statements) != 1 {
+		t.Fatalf("Expected 1 statement, got %d", len(prog.Statements))
+	}
+
+	stmt, ok := prog.Statements[0].(*ast.AlterWorkflowStmt)
+	if !ok {
+		t.Fatalf("Expected AlterWorkflowStmt, got %T", prog.Statements[0])
+	}
+
+	if stmt.Name.Module != "M" || stmt.Name.Name != "MyWF" {
+		t.Errorf("Expected M.MyWF, got %s.%s", stmt.Name.Module, stmt.Name.Name)
+	}
+
+	if len(stmt.Operations) != 1 {
+		t.Fatalf("Expected 1 operation, got %d", len(stmt.Operations))
+	}
+
+	op, ok := stmt.Operations[0].(*ast.SetWorkflowPropertyOp)
+	if !ok {
+		t.Fatalf("Expected SetWorkflowPropertyOp, got %T", stmt.Operations[0])
+	}
+	if op.Property != "DISPLAY" {
+		t.Errorf("Expected Property 'DISPLAY', got %q", op.Property)
+	}
+	if op.Value != "New Display Name" {
+		t.Errorf("Expected Value 'New Display Name', got %q", op.Value)
+	}
+}
+
+func TestAlterWorkflow_MultipleOperations(t *testing.T) {
+	input := `ALTER WORKFLOW M.ApprovalWF
+  SET DISPLAY 'Updated Approval'
+  SET DESCRIPTION 'Updated description'
+  SET EXPORT LEVEL Hidden
+  SET DUE DATE 'PT48H';`
+
+	prog, errs := Build(input)
+	if len(errs) > 0 {
+		for _, e := range errs {
+			t.Errorf("Parse error: %v", e)
+		}
+		t.FailNow()
+	}
+
+	stmt := prog.Statements[0].(*ast.AlterWorkflowStmt)
+	if len(stmt.Operations) != 4 {
+		t.Fatalf("Expected 4 operations, got %d", len(stmt.Operations))
+	}
+
+	// Check each operation
+	checks := []struct {
+		prop  string
+		value string
+	}{
+		{"DISPLAY", "Updated Approval"},
+		{"DESCRIPTION", "Updated description"},
+		{"EXPORT_LEVEL", "Hidden"},
+		{"DUE_DATE", "PT48H"},
+	}
+
+	for i, check := range checks {
+		op, ok := stmt.Operations[i].(*ast.SetWorkflowPropertyOp)
+		if !ok {
+			t.Fatalf("Operation %d: expected SetWorkflowPropertyOp, got %T", i, stmt.Operations[i])
+		}
+		if op.Property != check.prop {
+			t.Errorf("Operation %d: expected Property %q, got %q", i, check.prop, op.Property)
+		}
+		if op.Value != check.value {
+			t.Errorf("Operation %d: expected Value %q, got %q", i, check.value, op.Value)
+		}
+	}
+}
+
+func TestAlterWorkflow_SetActivityPage(t *testing.T) {
+	input := `ALTER WORKFLOW M.WF SET ACTIVITY 'Review' PAGE M.NewReviewPage;`
+
+	prog, errs := Build(input)
+	if len(errs) > 0 {
+		for _, e := range errs {
+			t.Errorf("Parse error: %v", e)
+		}
+		t.FailNow()
+	}
+
+	stmt := prog.Statements[0].(*ast.AlterWorkflowStmt)
+	if len(stmt.Operations) != 1 {
+		t.Fatalf("Expected 1 operation, got %d", len(stmt.Operations))
+	}
+
+	op, ok := stmt.Operations[0].(*ast.SetActivityPropertyOp)
+	if !ok {
+		t.Fatalf("Expected SetActivityPropertyOp, got %T", stmt.Operations[0])
+	}
+	if op.Property != "PAGE" {
+		t.Errorf("Expected Property 'PAGE', got %q", op.Property)
+	}
+	if op.ActivityRef != "Review" {
+		t.Errorf("Expected ActivityRef 'Review', got %q", op.ActivityRef)
+	}
+	if op.PageName.Module != "M" || op.PageName.Name != "NewReviewPage" {
+		t.Errorf("Expected PageName M.NewReviewPage, got %s.%s", op.PageName.Module, op.PageName.Name)
+	}
+}
+
+func TestAlterWorkflow_SetActivityWithAtPosition(t *testing.T) {
+	input := `ALTER WORKFLOW M.WF SET ACTIVITY 'Review' @ 2 DESCRIPTION 'Updated desc';`
+
+	prog, errs := Build(input)
+	if len(errs) > 0 {
+		for _, e := range errs {
+			t.Errorf("Parse error: %v", e)
+		}
+		t.FailNow()
+	}
+
+	stmt := prog.Statements[0].(*ast.AlterWorkflowStmt)
+	op := stmt.Operations[0].(*ast.SetActivityPropertyOp)
+
+	if op.ActivityRef != "Review" {
+		t.Errorf("Expected ActivityRef 'Review', got %q", op.ActivityRef)
+	}
+	if op.AtPosition != 2 {
+		t.Errorf("Expected AtPosition 2, got %d", op.AtPosition)
+	}
+	if op.Property != "DESCRIPTION" {
+		t.Errorf("Expected Property 'DESCRIPTION', got %q", op.Property)
+	}
+	if op.Value != "Updated desc" {
+		t.Errorf("Expected Value 'Updated desc', got %q", op.Value)
+	}
+}
+
+func TestAlterWorkflow_InsertAfter(t *testing.T) {
+	input := `ALTER WORKFLOW M.WF INSERT AFTER 'Review' CALL MICROFLOW M.SendNotification;`
+
+	prog, errs := Build(input)
+	if len(errs) > 0 {
+		for _, e := range errs {
+			t.Errorf("Parse error: %v", e)
+		}
+		t.FailNow()
+	}
+
+	stmt := prog.Statements[0].(*ast.AlterWorkflowStmt)
+	op, ok := stmt.Operations[0].(*ast.InsertAfterOp)
+	if !ok {
+		t.Fatalf("Expected InsertAfterOp, got %T", stmt.Operations[0])
+	}
+	if op.ActivityRef != "Review" {
+		t.Errorf("Expected ActivityRef 'Review', got %q", op.ActivityRef)
+	}
+
+	callMf, ok := op.NewActivity.(*ast.WorkflowCallMicroflowNode)
+	if !ok {
+		t.Fatalf("Expected WorkflowCallMicroflowNode, got %T", op.NewActivity)
+	}
+	if callMf.Microflow.Name != "SendNotification" {
+		t.Errorf("Expected Microflow 'SendNotification', got %q", callMf.Microflow.Name)
+	}
+}
+
+func TestAlterWorkflow_DropActivity(t *testing.T) {
+	input := `ALTER WORKFLOW M.WF DROP ACTIVITY 'OldStep';`
+
+	prog, errs := Build(input)
+	if len(errs) > 0 {
+		for _, e := range errs {
+			t.Errorf("Parse error: %v", e)
+		}
+		t.FailNow()
+	}
+
+	stmt := prog.Statements[0].(*ast.AlterWorkflowStmt)
+	op, ok := stmt.Operations[0].(*ast.DropActivityOp)
+	if !ok {
+		t.Fatalf("Expected DropActivityOp, got %T", stmt.Operations[0])
+	}
+	if op.ActivityRef != "OldStep" {
+		t.Errorf("Expected ActivityRef 'OldStep', got %q", op.ActivityRef)
+	}
+}
+
+func TestAlterWorkflow_ReplaceActivity(t *testing.T) {
+	input := `ALTER WORKFLOW M.WF REPLACE ACTIVITY 'OldStep' WITH CALL MICROFLOW M.NewStep;`
+
+	prog, errs := Build(input)
+	if len(errs) > 0 {
+		for _, e := range errs {
+			t.Errorf("Parse error: %v", e)
+		}
+		t.FailNow()
+	}
+
+	stmt := prog.Statements[0].(*ast.AlterWorkflowStmt)
+	op, ok := stmt.Operations[0].(*ast.ReplaceActivityOp)
+	if !ok {
+		t.Fatalf("Expected ReplaceActivityOp, got %T", stmt.Operations[0])
+	}
+	if op.ActivityRef != "OldStep" {
+		t.Errorf("Expected ActivityRef 'OldStep', got %q", op.ActivityRef)
+	}
+
+	_, ok = op.NewActivity.(*ast.WorkflowCallMicroflowNode)
+	if !ok {
+		t.Fatalf("Expected WorkflowCallMicroflowNode, got %T", op.NewActivity)
+	}
+}
+
+func TestAlterWorkflow_InsertOutcome(t *testing.T) {
+	input := `ALTER WORKFLOW M.WF INSERT OUTCOME 'Rejected' ON 'Review' {
+  CALL MICROFLOW M.HandleRejection;
+};`
+
+	prog, errs := Build(input)
+	if len(errs) > 0 {
+		for _, e := range errs {
+			t.Errorf("Parse error: %v", e)
+		}
+		t.FailNow()
+	}
+
+	stmt := prog.Statements[0].(*ast.AlterWorkflowStmt)
+	op, ok := stmt.Operations[0].(*ast.InsertOutcomeOp)
+	if !ok {
+		t.Fatalf("Expected InsertOutcomeOp, got %T", stmt.Operations[0])
+	}
+	if op.OutcomeName != "Rejected" {
+		t.Errorf("Expected OutcomeName 'Rejected', got %q", op.OutcomeName)
+	}
+	if op.ActivityRef != "Review" {
+		t.Errorf("Expected ActivityRef 'Review', got %q", op.ActivityRef)
+	}
+	if len(op.Activities) != 1 {
+		t.Fatalf("Expected 1 activity in outcome body, got %d", len(op.Activities))
+	}
+}
+
+func TestAlterWorkflow_DropOutcome(t *testing.T) {
+	input := `ALTER WORKFLOW M.WF DROP OUTCOME 'Rejected' ON 'Review';`
+
+	prog, errs := Build(input)
+	if len(errs) > 0 {
+		for _, e := range errs {
+			t.Errorf("Parse error: %v", e)
+		}
+		t.FailNow()
+	}
+
+	stmt := prog.Statements[0].(*ast.AlterWorkflowStmt)
+	op, ok := stmt.Operations[0].(*ast.DropOutcomeOp)
+	if !ok {
+		t.Fatalf("Expected DropOutcomeOp, got %T", stmt.Operations[0])
+	}
+	if op.OutcomeName != "Rejected" {
+		t.Errorf("Expected OutcomeName 'Rejected', got %q", op.OutcomeName)
+	}
+	if op.ActivityRef != "Review" {
+		t.Errorf("Expected ActivityRef 'Review', got %q", op.ActivityRef)
+	}
+}
+
+func TestAlterWorkflow_InsertAndDropPath(t *testing.T) {
+	input := `ALTER WORKFLOW M.WF
+  INSERT PATH ON 'Split1' {
+    CALL MICROFLOW M.PathAction;
+  }
+  DROP PATH 'OldPath' ON 'Split1';`
+
+	prog, errs := Build(input)
+	if len(errs) > 0 {
+		for _, e := range errs {
+			t.Errorf("Parse error: %v", e)
+		}
+		t.FailNow()
+	}
+
+	stmt := prog.Statements[0].(*ast.AlterWorkflowStmt)
+	if len(stmt.Operations) != 2 {
+		t.Fatalf("Expected 2 operations, got %d", len(stmt.Operations))
+	}
+
+	insertOp, ok := stmt.Operations[0].(*ast.InsertPathOp)
+	if !ok {
+		t.Fatalf("Expected InsertPathOp, got %T", stmt.Operations[0])
+	}
+	if insertOp.ActivityRef != "Split1" {
+		t.Errorf("Expected ActivityRef 'Split1', got %q", insertOp.ActivityRef)
+	}
+	if len(insertOp.Activities) != 1 {
+		t.Fatalf("Expected 1 activity in path body, got %d", len(insertOp.Activities))
+	}
+
+	dropOp, ok := stmt.Operations[1].(*ast.DropPathOp)
+	if !ok {
+		t.Fatalf("Expected DropPathOp, got %T", stmt.Operations[1])
+	}
+	if dropOp.PathCaption != "OldPath" {
+		t.Errorf("Expected PathCaption 'OldPath', got %q", dropOp.PathCaption)
+	}
+}
+
+func TestAlterWorkflow_InsertBoundaryEvent(t *testing.T) {
+	input := `ALTER WORKFLOW M.WF INSERT BOUNDARY EVENT ON 'task1' INTERRUPTING TIMER '${PT1H}' {
+  CALL MICROFLOW M.HandleTimeout;
+};`
+
+	prog, errs := Build(input)
+	if len(errs) > 0 {
+		for _, e := range errs {
+			t.Errorf("Parse error: %v", e)
+		}
+		t.FailNow()
+	}
+
+	stmt := prog.Statements[0].(*ast.AlterWorkflowStmt)
+	op, ok := stmt.Operations[0].(*ast.InsertBoundaryEventOp)
+	if !ok {
+		t.Fatalf("Expected InsertBoundaryEventOp, got %T", stmt.Operations[0])
+	}
+	if op.ActivityRef != "task1" {
+		t.Errorf("Expected ActivityRef 'task1', got %q", op.ActivityRef)
+	}
+	if op.EventType != "InterruptingTimer" {
+		t.Errorf("Expected EventType 'InterruptingTimer', got %q", op.EventType)
+	}
+	if op.Delay != "${PT1H}" {
+		t.Errorf("Expected Delay '${PT1H}', got %q", op.Delay)
+	}
+	if len(op.Activities) != 1 {
+		t.Fatalf("Expected 1 activity in boundary event body, got %d", len(op.Activities))
+	}
+}
+
+func TestAlterWorkflow_DropBoundaryEvent(t *testing.T) {
+	input := `ALTER WORKFLOW M.WF DROP BOUNDARY EVENT ON 'task1';`
+
+	prog, errs := Build(input)
+	if len(errs) > 0 {
+		for _, e := range errs {
+			t.Errorf("Parse error: %v", e)
+		}
+		t.FailNow()
+	}
+
+	stmt := prog.Statements[0].(*ast.AlterWorkflowStmt)
+	op, ok := stmt.Operations[0].(*ast.DropBoundaryEventOp)
+	if !ok {
+		t.Fatalf("Expected DropBoundaryEventOp, got %T", stmt.Operations[0])
+	}
+	if op.ActivityRef != "task1" {
+		t.Errorf("Expected ActivityRef 'task1', got %q", op.ActivityRef)
+	}
+}
+
+func TestAlterWorkflow_InsertAndDropCondition(t *testing.T) {
+	input := `ALTER WORKFLOW M.WF
+  INSERT CONDITION '$Amount > 1000' ON 'decision1' {
+    CALL MICROFLOW M.HighValueApproval;
+  }
+  DROP CONDITION 'LowValue' ON 'decision1';`
+
+	prog, errs := Build(input)
+	if len(errs) > 0 {
+		for _, e := range errs {
+			t.Errorf("Parse error: %v", e)
+		}
+		t.FailNow()
+	}
+
+	stmt := prog.Statements[0].(*ast.AlterWorkflowStmt)
+	if len(stmt.Operations) != 2 {
+		t.Fatalf("Expected 2 operations, got %d", len(stmt.Operations))
+	}
+
+	insertOp, ok := stmt.Operations[0].(*ast.InsertBranchOp)
+	if !ok {
+		t.Fatalf("Expected InsertBranchOp, got %T", stmt.Operations[0])
+	}
+	if insertOp.Condition != "$Amount > 1000" {
+		t.Errorf("Expected Condition '$Amount > 1000', got %q", insertOp.Condition)
+	}
+	if insertOp.ActivityRef != "decision1" {
+		t.Errorf("Expected ActivityRef 'decision1', got %q", insertOp.ActivityRef)
+	}
+
+	dropOp, ok := stmt.Operations[1].(*ast.DropBranchOp)
+	if !ok {
+		t.Fatalf("Expected DropBranchOp, got %T", stmt.Operations[1])
+	}
+	if dropOp.BranchName != "LowValue" {
+		t.Errorf("Expected BranchName 'LowValue', got %q", dropOp.BranchName)
+	}
+}
+
+func TestAlterWorkflow_SetParameter(t *testing.T) {
+	input := `ALTER WORKFLOW M.WF SET PARAMETER $ctx: M.NewEntity;`
+
+	prog, errs := Build(input)
+	if len(errs) > 0 {
+		for _, e := range errs {
+			t.Errorf("Parse error: %v", e)
+		}
+		t.FailNow()
+	}
+
+	stmt := prog.Statements[0].(*ast.AlterWorkflowStmt)
+	op, ok := stmt.Operations[0].(*ast.SetWorkflowPropertyOp)
+	if !ok {
+		t.Fatalf("Expected SetWorkflowPropertyOp, got %T", stmt.Operations[0])
+	}
+	if op.Property != "PARAMETER" {
+		t.Errorf("Expected Property 'PARAMETER', got %q", op.Property)
+	}
+	if op.Value != "$ctx" {
+		t.Errorf("Expected Value '$ctx', got %q", op.Value)
+	}
+	if op.Entity.Module != "M" || op.Entity.Name != "NewEntity" {
+		t.Errorf("Expected Entity M.NewEntity, got %s.%s", op.Entity.Module, op.Entity.Name)
+	}
+}
+
+func TestAlterWorkflow_SetOverviewPage(t *testing.T) {
+	input := `ALTER WORKFLOW M.WF SET OVERVIEW PAGE M.AdminPage;`
+
+	prog, errs := Build(input)
+	if len(errs) > 0 {
+		for _, e := range errs {
+			t.Errorf("Parse error: %v", e)
+		}
+		t.FailNow()
+	}
+
+	stmt := prog.Statements[0].(*ast.AlterWorkflowStmt)
+	op, ok := stmt.Operations[0].(*ast.SetWorkflowPropertyOp)
+	if !ok {
+		t.Fatalf("Expected SetWorkflowPropertyOp, got %T", stmt.Operations[0])
+	}
+	if op.Property != "OVERVIEW_PAGE" {
+		t.Errorf("Expected Property 'OVERVIEW_PAGE', got %q", op.Property)
+	}
+	if op.Entity.Module != "M" || op.Entity.Name != "AdminPage" {
+		t.Errorf("Expected Entity M.AdminPage, got %s.%s", op.Entity.Module, op.Entity.Name)
+	}
+}
+
+func TestAlterWorkflow_SetActivityTargeting(t *testing.T) {
+	input := `ALTER WORKFLOW M.WF
+  SET ACTIVITY 'Review' TARGETING MICROFLOW M.GetReviewers
+  SET ACTIVITY 'Review' TARGETING XPATH '[Role = ''Manager'']';`
+
+	prog, errs := Build(input)
+	if len(errs) > 0 {
+		for _, e := range errs {
+			t.Errorf("Parse error: %v", e)
+		}
+		t.FailNow()
+	}
+
+	stmt := prog.Statements[0].(*ast.AlterWorkflowStmt)
+	if len(stmt.Operations) != 2 {
+		t.Fatalf("Expected 2 operations, got %d", len(stmt.Operations))
+	}
+
+	mfOp := stmt.Operations[0].(*ast.SetActivityPropertyOp)
+	if mfOp.Property != "TARGETING_MICROFLOW" {
+		t.Errorf("Expected Property 'TARGETING_MICROFLOW', got %q", mfOp.Property)
+	}
+	if mfOp.Microflow.Name != "GetReviewers" {
+		t.Errorf("Expected Microflow 'GetReviewers', got %q", mfOp.Microflow.Name)
+	}
+
+	xpOp := stmt.Operations[1].(*ast.SetActivityPropertyOp)
+	if xpOp.Property != "TARGETING_XPATH" {
+		t.Errorf("Expected Property 'TARGETING_XPATH', got %q", xpOp.Property)
+	}
+	if xpOp.Value != "[Role = 'Manager']" {
+		t.Errorf("Expected Value \"[Role = 'Manager']\", got %q", xpOp.Value)
+	}
+}
+
+func TestAlterWorkflow_SetActivityDueDate(t *testing.T) {
+	input := `ALTER WORKFLOW M.WF SET ACTIVITY 'Review' DUE DATE 'PT72H';`
+
+	prog, errs := Build(input)
+	if len(errs) > 0 {
+		for _, e := range errs {
+			t.Errorf("Parse error: %v", e)
+		}
+		t.FailNow()
+	}
+
+	stmt := prog.Statements[0].(*ast.AlterWorkflowStmt)
+	op := stmt.Operations[0].(*ast.SetActivityPropertyOp)
+	if op.Property != "DUE_DATE" {
+		t.Errorf("Expected Property 'DUE_DATE', got %q", op.Property)
+	}
+	if op.Value != "PT72H" {
+		t.Errorf("Expected Value 'PT72H', got %q", op.Value)
+	}
+}

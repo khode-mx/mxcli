@@ -92,6 +92,265 @@ func (b *Builder) ExitCreateWorkflowStatement(ctx *parser.CreateWorkflowStatemen
 	b.statements = append(b.statements, stmt)
 }
 
+// exitAlterWorkflowStatement handles ALTER WORKFLOW Module.Name { actions }.
+func (b *Builder) exitAlterWorkflowStatement(ctx *parser.AlterStatementContext) {
+	qn := ctx.QualifiedName()
+	if qn == nil {
+		return
+	}
+
+	stmt := &ast.AlterWorkflowStmt{
+		Name: buildQualifiedName(qn),
+	}
+
+	for _, actionCtx := range ctx.AllAlterWorkflowAction() {
+		op := buildAlterWorkflowAction(actionCtx.(*parser.AlterWorkflowActionContext))
+		if op != nil {
+			stmt.Operations = append(stmt.Operations, op)
+		}
+	}
+
+	b.statements = append(b.statements, stmt)
+}
+
+// buildAlterWorkflowAction converts a single ALTER WORKFLOW action to an AST operation.
+func buildAlterWorkflowAction(ctx *parser.AlterWorkflowActionContext) ast.AlterWorkflowOp {
+	// SET workflowSetProperty
+	if ctx.SET() != nil && ctx.WorkflowSetProperty() != nil {
+		return buildWorkflowSetPropertyOp(ctx.WorkflowSetProperty().(*parser.WorkflowSetPropertyContext))
+	}
+
+	// SET ACTIVITY alterActivityRef activitySetProperty
+	if ctx.SET() != nil && ctx.ACTIVITY() != nil && ctx.ActivitySetProperty() != nil {
+		ref, atPos := parseAlterActivityRef(ctx.AlterActivityRef().(*parser.AlterActivityRefContext))
+		return buildActivitySetPropertyOp(ctx.ActivitySetProperty().(*parser.ActivitySetPropertyContext), ref, atPos)
+	}
+
+	// INSERT AFTER alterActivityRef workflowActivityStmt
+	if ctx.INSERT() != nil && ctx.AFTER() != nil && ctx.WorkflowActivityStmt() != nil {
+		ref, atPos := parseAlterActivityRef(ctx.AlterActivityRef().(*parser.AlterActivityRefContext))
+		act := buildWorkflowActivityStmt(ctx.WorkflowActivityStmt())
+		if act == nil {
+			return nil
+		}
+		return &ast.InsertAfterOp{
+			ActivityRef: ref,
+			AtPosition:  atPos,
+			NewActivity: act,
+		}
+	}
+
+	// DROP ACTIVITY alterActivityRef
+	if ctx.DROP() != nil && ctx.ACTIVITY() != nil {
+		ref, atPos := parseAlterActivityRef(ctx.AlterActivityRef().(*parser.AlterActivityRefContext))
+		return &ast.DropActivityOp{
+			ActivityRef: ref,
+			AtPosition:  atPos,
+		}
+	}
+
+	// REPLACE ACTIVITY alterActivityRef WITH workflowActivityStmt
+	if ctx.REPLACE() != nil && ctx.ACTIVITY() != nil && ctx.WorkflowActivityStmt() != nil {
+		ref, atPos := parseAlterActivityRef(ctx.AlterActivityRef().(*parser.AlterActivityRefContext))
+		act := buildWorkflowActivityStmt(ctx.WorkflowActivityStmt())
+		if act == nil {
+			return nil
+		}
+		return &ast.ReplaceActivityOp{
+			ActivityRef: ref,
+			AtPosition:  atPos,
+			NewActivity: act,
+		}
+	}
+
+	// INSERT OUTCOME 'name' ON alterActivityRef { workflowBody }
+	if ctx.INSERT() != nil && ctx.OUTCOME() != nil {
+		ref, atPos := parseAlterActivityRef(ctx.AlterActivityRef().(*parser.AlterActivityRefContext))
+		outcomeName := unquoteString(ctx.STRING_LITERAL().GetText())
+		var activities []ast.WorkflowActivityNode
+		if body := ctx.WorkflowBody(); body != nil {
+			activities = buildWorkflowBody(body)
+		}
+		return &ast.InsertOutcomeOp{
+			OutcomeName: outcomeName,
+			ActivityRef: ref,
+			AtPosition:  atPos,
+			Activities:  activities,
+		}
+	}
+
+	// INSERT PATH ON alterActivityRef { workflowBody }
+	if ctx.INSERT() != nil && ctx.PATH() != nil && ctx.BOUNDARY() == nil {
+		ref, atPos := parseAlterActivityRef(ctx.AlterActivityRef().(*parser.AlterActivityRefContext))
+		var activities []ast.WorkflowActivityNode
+		if body := ctx.WorkflowBody(); body != nil {
+			activities = buildWorkflowBody(body)
+		}
+		return &ast.InsertPathOp{
+			ActivityRef: ref,
+			AtPosition:  atPos,
+			Activities:  activities,
+		}
+	}
+
+	// DROP OUTCOME 'name' ON alterActivityRef
+	if ctx.DROP() != nil && ctx.OUTCOME() != nil {
+		ref, atPos := parseAlterActivityRef(ctx.AlterActivityRef().(*parser.AlterActivityRefContext))
+		outcomeName := unquoteString(ctx.STRING_LITERAL().GetText())
+		return &ast.DropOutcomeOp{
+			OutcomeName: outcomeName,
+			ActivityRef: ref,
+			AtPosition:  atPos,
+		}
+	}
+
+	// DROP PATH 'caption' ON alterActivityRef
+	if ctx.DROP() != nil && ctx.PATH() != nil && ctx.BOUNDARY() == nil {
+		ref, atPos := parseAlterActivityRef(ctx.AlterActivityRef().(*parser.AlterActivityRefContext))
+		pathCaption := unquoteString(ctx.STRING_LITERAL().GetText())
+		return &ast.DropPathOp{
+			PathCaption: pathCaption,
+			ActivityRef: ref,
+			AtPosition:  atPos,
+		}
+	}
+
+	// INSERT BOUNDARY EVENT workflowBoundaryEventClause ON alterActivityRef
+	if ctx.INSERT() != nil && ctx.BOUNDARY() != nil {
+		ref, atPos := parseAlterActivityRef(ctx.AlterActivityRef().(*parser.AlterActivityRefContext))
+		be := buildBoundaryEventNode(ctx.WorkflowBoundaryEventClause())
+		return &ast.InsertBoundaryEventOp{
+			ActivityRef: ref,
+			AtPosition:  atPos,
+			EventType:   be.EventType,
+			Delay:       be.Delay,
+			Activities:  be.Activities,
+		}
+	}
+
+	// DROP BOUNDARY EVENT ON alterActivityRef
+	if ctx.DROP() != nil && ctx.BOUNDARY() != nil {
+		ref, atPos := parseAlterActivityRef(ctx.AlterActivityRef().(*parser.AlterActivityRefContext))
+		return &ast.DropBoundaryEventOp{
+			ActivityRef: ref,
+			AtPosition:  atPos,
+		}
+	}
+
+	// INSERT CONDITION 'value' ON alterActivityRef { workflowBody }
+	if ctx.INSERT() != nil && ctx.CONDITION() != nil {
+		ref, atPos := parseAlterActivityRef(ctx.AlterActivityRef().(*parser.AlterActivityRefContext))
+		condition := unquoteString(ctx.STRING_LITERAL().GetText())
+		var activities []ast.WorkflowActivityNode
+		if body := ctx.WorkflowBody(); body != nil {
+			activities = buildWorkflowBody(body)
+		}
+		return &ast.InsertBranchOp{
+			Condition:   condition,
+			ActivityRef: ref,
+			AtPosition:  atPos,
+			Activities:  activities,
+		}
+	}
+
+	// DROP CONDITION 'value' ON alterActivityRef
+	if ctx.DROP() != nil && ctx.CONDITION() != nil {
+		ref, atPos := parseAlterActivityRef(ctx.AlterActivityRef().(*parser.AlterActivityRefContext))
+		branchName := unquoteString(ctx.STRING_LITERAL().GetText())
+		return &ast.DropBranchOp{
+			BranchName:  branchName,
+			ActivityRef: ref,
+			AtPosition:  atPos,
+		}
+	}
+
+	return nil
+}
+
+// buildWorkflowSetPropertyOp converts a workflowSetProperty context to AST.
+func buildWorkflowSetPropertyOp(ctx *parser.WorkflowSetPropertyContext) *ast.SetWorkflowPropertyOp {
+	op := &ast.SetWorkflowPropertyOp{}
+
+	if ctx.DISPLAY() != nil {
+		op.Property = "DISPLAY"
+		op.Value = unquoteString(ctx.STRING_LITERAL().GetText())
+	} else if ctx.DESCRIPTION() != nil {
+		op.Property = "DESCRIPTION"
+		op.Value = unquoteString(ctx.STRING_LITERAL().GetText())
+	} else if ctx.EXPORT() != nil {
+		op.Property = "EXPORT_LEVEL"
+		if ctx.API() != nil {
+			op.Value = "API"
+		} else if ctx.IDENTIFIER() != nil {
+			op.Value = ctx.IDENTIFIER().GetText()
+		}
+	} else if ctx.DUE() != nil {
+		op.Property = "DUE_DATE"
+		op.Value = unquoteString(ctx.STRING_LITERAL().GetText())
+	} else if ctx.OVERVIEW() != nil {
+		op.Property = "OVERVIEW_PAGE"
+		if qn := ctx.QualifiedName(); qn != nil {
+			op.Entity = buildQualifiedName(qn)
+		}
+	} else if ctx.PARAMETER() != nil {
+		op.Property = "PARAMETER"
+		op.Value = ctx.VARIABLE().GetText()
+		if qn := ctx.QualifiedName(); qn != nil {
+			op.Entity = buildQualifiedName(qn)
+		}
+	}
+
+	return op
+}
+
+// buildActivitySetPropertyOp converts an activitySetProperty context to AST.
+func buildActivitySetPropertyOp(ctx *parser.ActivitySetPropertyContext, ref string, atPos int) *ast.SetActivityPropertyOp {
+	op := &ast.SetActivityPropertyOp{
+		ActivityRef: ref,
+		AtPosition:  atPos,
+	}
+
+	if ctx.PAGE() != nil {
+		op.Property = "PAGE"
+		if qn := ctx.QualifiedName(); qn != nil {
+			op.PageName = buildQualifiedName(qn)
+		}
+	} else if ctx.DESCRIPTION() != nil {
+		op.Property = "DESCRIPTION"
+		op.Value = unquoteString(ctx.STRING_LITERAL().GetText())
+	} else if ctx.TARGETING() != nil && ctx.MICROFLOW() != nil {
+		op.Property = "TARGETING_MICROFLOW"
+		if qn := ctx.QualifiedName(); qn != nil {
+			op.Microflow = buildQualifiedName(qn)
+		}
+	} else if ctx.TARGETING() != nil && ctx.XPATH() != nil {
+		op.Property = "TARGETING_XPATH"
+		op.Value = unquoteString(ctx.STRING_LITERAL().GetText())
+	} else if ctx.DUE() != nil {
+		op.Property = "DUE_DATE"
+		op.Value = unquoteString(ctx.STRING_LITERAL().GetText())
+	}
+
+	return op
+}
+
+// parseAlterActivityRef extracts the activity reference name and optional position.
+func parseAlterActivityRef(ctx *parser.AlterActivityRefContext) (string, int) {
+	name := ""
+	if ctx.IDENTIFIER() != nil {
+		name = ctx.IDENTIFIER().GetText()
+	} else if ctx.STRING_LITERAL() != nil {
+		name = unquoteString(ctx.STRING_LITERAL().GetText())
+	}
+
+	atPos := 0
+	if ctx.AT() != nil && ctx.NUMBER_LITERAL() != nil {
+		atPos = parseInt(ctx.NUMBER_LITERAL().GetText())
+	}
+
+	return name, atPos
+}
+
 // buildWorkflowBody converts a workflow body context to activity nodes.
 func buildWorkflowBody(ctx parser.IWorkflowBodyContext) []ast.WorkflowActivityNode {
 	if ctx == nil {

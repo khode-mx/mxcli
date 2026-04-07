@@ -62,6 +62,7 @@ type Flow struct {
 type WorkflowActivity interface {
 	GetID() model.ID
 	GetName() string
+	SetName(string)
 	GetCaption() string
 	ActivityType() string
 }
@@ -82,6 +83,11 @@ func (a *BaseWorkflowActivity) GetID() model.ID {
 // GetName returns the activity's name.
 func (a *BaseWorkflowActivity) GetName() string {
 	return a.Name
+}
+
+// SetName sets the activity's name.
+func (a *BaseWorkflowActivity) SetName(name string) {
+	a.Name = name
 }
 
 // GetCaption returns the activity's caption.

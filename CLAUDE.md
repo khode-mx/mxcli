@@ -436,6 +436,7 @@ Full syntax tables for all MDL statements (microflows, pages, security, navigati
 - Database Connector generation from external schema (`SQL <alias> GENERATE CONNECTOR INTO <module>`)
 - EXECUTE DATABASE QUERY microflow action (static, dynamic SQL, parameterized, runtime connection override)
 - CREATE/DROP WORKFLOW with user tasks, decisions, parallel splits, and other activity types
+- ALTER WORKFLOW (SET properties, INSERT/DROP/REPLACE activities, outcomes, paths, conditions, boundary events)
 - CALCULATED BY microflow syntax for calculated attributes
 - Image collections (SHOW/DESCRIBE/CREATE/DROP)
 - OData contract browsing (SHOW/DESCRIBE CONTRACT ENTITIES/ACTIONS FROM cached $metadata)

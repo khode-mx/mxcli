@@ -1,4 +1,4 @@
-// Code generated from MDLParser.g4 by ANTLR 4.13.2. DO NOT EDIT.
+// Code generated from MDLParser.g4 by ANTLR 4.13.1. DO NOT EDIT.
 
 package parser // MDLParser
 import "github.com/antlr4-go/antlr/v4"
@@ -876,6 +876,18 @@ type MDLParserListener interface {
 
 	// EnterWorkflowAnnotationStmt is called when entering the workflowAnnotationStmt production.
 	EnterWorkflowAnnotationStmt(c *WorkflowAnnotationStmtContext)
+
+	// EnterAlterWorkflowAction is called when entering the alterWorkflowAction production.
+	EnterAlterWorkflowAction(c *AlterWorkflowActionContext)
+
+	// EnterWorkflowSetProperty is called when entering the workflowSetProperty production.
+	EnterWorkflowSetProperty(c *WorkflowSetPropertyContext)
+
+	// EnterActivitySetProperty is called when entering the activitySetProperty production.
+	EnterActivitySetProperty(c *ActivitySetPropertyContext)
+
+	// EnterAlterActivityRef is called when entering the alterActivityRef production.
+	EnterAlterActivityRef(c *AlterActivityRefContext)
 
 	// EnterAlterSettingsClause is called when entering the alterSettingsClause production.
 	EnterAlterSettingsClause(c *AlterSettingsClauseContext)
@@ -2040,6 +2052,18 @@ type MDLParserListener interface {
 
 	// ExitWorkflowAnnotationStmt is called when exiting the workflowAnnotationStmt production.
 	ExitWorkflowAnnotationStmt(c *WorkflowAnnotationStmtContext)
+
+	// ExitAlterWorkflowAction is called when exiting the alterWorkflowAction production.
+	ExitAlterWorkflowAction(c *AlterWorkflowActionContext)
+
+	// ExitWorkflowSetProperty is called when exiting the workflowSetProperty production.
+	ExitWorkflowSetProperty(c *WorkflowSetPropertyContext)
+
+	// ExitActivitySetProperty is called when exiting the activitySetProperty production.
+	ExitActivitySetProperty(c *ActivitySetPropertyContext)
+
+	// ExitAlterActivityRef is called when exiting the alterActivityRef production.
+	ExitAlterActivityRef(c *AlterActivityRefContext)
 
 	// ExitAlterSettingsClause is called when exiting the alterSettingsClause production.
 	ExitAlterSettingsClause(c *AlterSettingsClauseContext)

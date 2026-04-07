@@ -198,57 +198,6 @@ func (b *Builder) ExitCreateExternalEntityStatement(ctx *parser.CreateExternalEn
 }
 
 // ============================================================================
-// OData ALTER / DROP Statements
-// ============================================================================
-
-// ExitAlterStatement handles ALTER statements that include OData alternatives.
-// Other ALTER alternatives (ENTITY, ASSOCIATION, etc.) are handled by sub-rule listeners.
-func (b *Builder) ExitAlterStatement(ctx *parser.AlterStatementContext) {
-	// Handle ALTER PAGE / ALTER SNIPPET
-	if (ctx.PAGE() != nil || ctx.SNIPPET() != nil) && len(ctx.AllAlterPageOperation()) > 0 {
-		b.exitAlterPageStatement(ctx)
-		return
-	}
-
-	// Handle ALTER STYLING
-	if ctx.STYLING() != nil {
-		b.exitAlterStylingStatement(ctx)
-		return
-	}
-
-	if ctx.ODATA() == nil {
-		return // Not an OData alter - handled elsewhere
-	}
-
-	qn := ctx.QualifiedName()
-	if qn == nil {
-		return
-	}
-
-	changes := make(map[string]any)
-	for _, propCtx := range ctx.AllOdataAlterAssignment() {
-		prop := propCtx.(*parser.OdataAlterAssignmentContext)
-		name := identifierOrKeywordText(prop.IdentifierOrKeyword())
-		val := prop.OdataPropertyValue()
-		if val != nil {
-			changes[name] = odataValueText(val.(*parser.OdataPropertyValueContext))
-		}
-	}
-
-	if ctx.CLIENT() != nil {
-		b.statements = append(b.statements, &ast.AlterODataClientStmt{
-			Name:    buildQualifiedName(qn),
-			Changes: changes,
-		})
-	} else if ctx.SERVICE() != nil {
-		b.statements = append(b.statements, &ast.AlterODataServiceStmt{
-			Name:    buildQualifiedName(qn),
-			Changes: changes,
-		})
-	}
-}
-
-// ============================================================================
 // Helpers
 // ============================================================================
 

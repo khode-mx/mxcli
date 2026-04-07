@@ -116,6 +116,7 @@ alterStatement
     | ALTER SETTINGS alterSettingsClause
     | ALTER PAGE qualifiedName LBRACE alterPageOperation+ RBRACE
     | ALTER SNIPPET qualifiedName LBRACE alterPageOperation+ RBRACE
+    | ALTER WORKFLOW qualifiedName alterWorkflowAction+ SEMICOLON?
     ;
 
 /**
@@ -2567,6 +2568,48 @@ workflowAnnotationStmt
     ;
 
 // workflowEndStmt removed - END activities are implicit and conflict with END WORKFLOW
+
+// =============================================================================
+// ALTER WORKFLOW
+// =============================================================================
+
+alterWorkflowAction
+    : SET workflowSetProperty
+    | SET ACTIVITY alterActivityRef activitySetProperty
+    | INSERT AFTER alterActivityRef workflowActivityStmt
+    | DROP ACTIVITY alterActivityRef
+    | REPLACE ACTIVITY alterActivityRef WITH workflowActivityStmt
+    | INSERT OUTCOME STRING_LITERAL ON alterActivityRef LBRACE workflowBody RBRACE
+    | INSERT PATH ON alterActivityRef LBRACE workflowBody RBRACE
+    | DROP OUTCOME STRING_LITERAL ON alterActivityRef
+    | DROP PATH STRING_LITERAL ON alterActivityRef
+    | INSERT BOUNDARY EVENT ON alterActivityRef workflowBoundaryEventClause
+    | DROP BOUNDARY EVENT ON alterActivityRef
+    | INSERT CONDITION STRING_LITERAL ON alterActivityRef LBRACE workflowBody RBRACE
+    | DROP CONDITION STRING_LITERAL ON alterActivityRef
+    ;
+
+workflowSetProperty
+    : DISPLAY STRING_LITERAL
+    | DESCRIPTION STRING_LITERAL
+    | EXPORT LEVEL (IDENTIFIER | API)
+    | DUE DATE_TYPE STRING_LITERAL
+    | OVERVIEW PAGE qualifiedName
+    | PARAMETER VARIABLE COLON qualifiedName
+    ;
+
+activitySetProperty
+    : PAGE qualifiedName
+    | DESCRIPTION STRING_LITERAL
+    | TARGETING MICROFLOW qualifiedName
+    | TARGETING XPATH STRING_LITERAL
+    | DUE DATE_TYPE STRING_LITERAL
+    ;
+
+alterActivityRef
+    : IDENTIFIER (AT NUMBER_LITERAL)?
+    | STRING_LITERAL (AT NUMBER_LITERAL)?
+    ;
 
 // =============================================================================
 // ALTER SETTINGS

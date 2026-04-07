@@ -289,14 +289,16 @@ func dGetString(doc bson.D, key string) string {
 	return ""
 }
 
-// dSet sets a field value in a bson.D in place. If the key exists, it's updated.
-func dSet(doc bson.D, key string, value any) {
+// dSet sets a field value in a bson.D in place. If the key exists, it's updated
+// and returns true. If the key is not found, returns false.
+func dSet(doc bson.D, key string, value any) bool {
 	for i := range doc {
 		if doc[i].Key == key {
 			doc[i].Value = value
-			return
+			return true
 		}
 	}
+	return false
 }
 
 // dGetArrayElements extracts Mendix array elements from a bson.D field value.

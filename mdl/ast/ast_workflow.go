@@ -170,3 +170,138 @@ type WorkflowParameterMappingNode struct {
 	Parameter  string // parameter name (by-name reference)
 	Expression string // Mendix expression string
 }
+
+// AlterWorkflowStmt represents: ALTER WORKFLOW Module.Name operations...
+type AlterWorkflowStmt struct {
+	Name       QualifiedName
+	Operations []AlterWorkflowOp
+}
+
+func (s *AlterWorkflowStmt) isStatement() {}
+
+// AlterWorkflowOp is the interface for ALTER WORKFLOW operations.
+type AlterWorkflowOp interface {
+	alterWorkflowOp()
+}
+
+// SetWorkflowPropertyOp sets a workflow-level property.
+type SetWorkflowPropertyOp struct {
+	Property string        // "DISPLAY", "DESCRIPTION", "EXPORT_LEVEL", "DUE_DATE", "OVERVIEW_PAGE", "PARAMETER"
+	Value    string        // string value
+	Entity   QualifiedName // for OVERVIEW_PAGE / PARAMETER: the qualified name
+}
+
+func (o *SetWorkflowPropertyOp) alterWorkflowOp() {}
+
+// SetActivityPropertyOp sets a property on a named activity.
+type SetActivityPropertyOp struct {
+	ActivityRef string        // activity caption
+	AtPosition  int           // positional disambiguation (0 = no disambiguation)
+	Property    string        // "PAGE", "DESCRIPTION", "TARGETING_MICROFLOW", "TARGETING_XPATH", "DUE_DATE"
+	Value       string        // string value
+	PageName    QualifiedName // for PAGE property
+	Microflow   QualifiedName // for TARGETING MICROFLOW
+}
+
+func (o *SetActivityPropertyOp) alterWorkflowOp() {}
+
+// InsertAfterOp inserts an activity after a named activity (linear position).
+type InsertAfterOp struct {
+	ActivityRef string
+	AtPosition  int
+	NewActivity WorkflowActivityNode
+}
+
+func (o *InsertAfterOp) alterWorkflowOp() {}
+
+// DropActivityOp removes a linear activity from the flow graph.
+type DropActivityOp struct {
+	ActivityRef string
+	AtPosition  int
+}
+
+func (o *DropActivityOp) alterWorkflowOp() {}
+
+// ReplaceActivityOp swaps an activity in place, preserving edges.
+type ReplaceActivityOp struct {
+	ActivityRef string
+	AtPosition  int
+	NewActivity WorkflowActivityNode
+}
+
+func (o *ReplaceActivityOp) alterWorkflowOp() {}
+
+// InsertOutcomeOp adds a new outcome to a UserTask.
+type InsertOutcomeOp struct {
+	OutcomeName string
+	ActivityRef string
+	AtPosition  int
+	Activities  []WorkflowActivityNode
+}
+
+func (o *InsertOutcomeOp) alterWorkflowOp() {}
+
+// DropOutcomeOp removes an outcome from a UserTask.
+type DropOutcomeOp struct {
+	OutcomeName string
+	ActivityRef string
+	AtPosition  int
+}
+
+func (o *DropOutcomeOp) alterWorkflowOp() {}
+
+// InsertPathOp adds a new path to a ParallelSplit.
+type InsertPathOp struct {
+	ActivityRef string
+	AtPosition  int
+	Activities  []WorkflowActivityNode
+}
+
+func (o *InsertPathOp) alterWorkflowOp() {}
+
+// DropPathOp removes a path from a ParallelSplit.
+type DropPathOp struct {
+	PathCaption string
+	ActivityRef string
+	AtPosition  int
+}
+
+func (o *DropPathOp) alterWorkflowOp() {}
+
+// InsertBranchOp adds a new branch to a Decision.
+type InsertBranchOp struct {
+	Condition   string
+	ActivityRef string
+	AtPosition  int
+	Activities  []WorkflowActivityNode
+}
+
+func (o *InsertBranchOp) alterWorkflowOp() {}
+
+// DropBranchOp removes a branch from a Decision.
+type DropBranchOp struct {
+	BranchName  string
+	ActivityRef string
+	AtPosition  int
+}
+
+func (o *DropBranchOp) alterWorkflowOp() {}
+
+// InsertBoundaryEventOp adds a boundary event to an activity.
+type InsertBoundaryEventOp struct {
+	ActivityRef string
+	AtPosition  int
+	EventType   string // "InterruptingTimer", "NonInterruptingTimer"
+	Delay       string
+	Activities  []WorkflowActivityNode
+}
+
+func (o *InsertBoundaryEventOp) alterWorkflowOp() {}
+
+// DropBoundaryEventOp removes a boundary event from an activity.
+type DropBoundaryEventOp struct {
+	ActivityRef string
+	AtPosition  int
+}
+
+func (o *DropBoundaryEventOp) alterWorkflowOp() {}
