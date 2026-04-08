@@ -28,7 +28,7 @@ CREATE PERSISTENT ENTITY Module.Photo (
 | Create external entity | `CREATE EXTERNAL ENTITY Module.Name FROM ODATA CLIENT Module.Client (...) (attrs);` | From consumed OData |
 | Drop entity | `DROP ENTITY Module.Name;` | |
 | Describe entity | `DESCRIBE ENTITY Module.Name;` | Full MDL output |
-| Show entities | `SHOW ENTITIES [IN Module];` | List all or filter by module |
+| List entities | `LIST ENTITIES [IN Module];` | List all or filter by module |
 | Create enumeration | `CREATE [OR MODIFY] ENUMERATION Module.Name (Value1 'Caption', ...);` | |
 | Drop enumeration | `DROP ENUMERATION Module.Name;` | |
 | Create association | `CREATE ASSOCIATION Module.Name FROM Parent TO Child TYPE Reference\|ReferenceSet [OWNER Default\|Both] [DELETE_BEHAVIOR ...];` | |
@@ -65,7 +65,7 @@ ALTER ENTITY Sales.Customer
 
 | Statement | Syntax | Notes |
 |-----------|--------|-------|
-| Show constants | `SHOW CONSTANTS [IN Module];` | List all or filter by module |
+| List constants | `LIST CONSTANTS [IN Module];` | List all or filter by module |
 | Describe constant | `DESCRIBE CONSTANT Module.Name;` | Full MDL output |
 | Create constant | `CREATE [OR MODIFY] CONSTANT Module.Name TYPE DataType DEFAULT 'value';` | String, Integer, Boolean, etc. |
 | Drop constant | `DROP CONSTANT Module.Name;` | |
@@ -81,27 +81,27 @@ CREATE CONSTANT MyModule.EnableLogging TYPE Boolean DEFAULT true;
 
 | Statement | Syntax | Notes |
 |-----------|--------|-------|
-| Show OData clients | `SHOW ODATA CLIENTS [IN Module];` | Consumed OData services |
+| List OData clients | `LIST ODATA CLIENTS [IN Module];` | Consumed OData services |
 | Describe OData client | `DESCRIBE ODATA CLIENT Module.Name;` | Full MDL output |
 | Create OData client | `CREATE [OR MODIFY] ODATA CLIENT Module.Name (...);` | Version, MetadataUrl, Timeout, etc. |
 | Alter OData client | `ALTER ODATA CLIENT Module.Name SET Key = Value;` | |
 | Drop OData client | `DROP ODATA CLIENT Module.Name;` | |
-| Show OData services | `SHOW ODATA SERVICES [IN Module];` | Published OData services |
+| List OData services | `LIST ODATA SERVICES [IN Module];` | Published OData services |
 | Describe OData service | `DESCRIBE ODATA SERVICE Module.Name;` | Full MDL output |
 | Create OData service | `CREATE [OR MODIFY] ODATA SERVICE Module.Name (...) AUTHENTICATION ... { PUBLISH ENTITY ... };` | |
 | Alter OData service | `ALTER ODATA SERVICE Module.Name SET Key = Value;` | |
 | Drop OData service | `DROP ODATA SERVICE Module.Name;` | |
-| Show external entities | `SHOW EXTERNAL ENTITIES [IN Module];` | OData-backed entities |
-| Show external actions | `SHOW EXTERNAL ACTIONS [IN Module];` | Actions used in microflows |
+| List external entities | `LIST EXTERNAL ENTITIES [IN Module];` | OData-backed entities |
+| List external actions | `LIST EXTERNAL ACTIONS [IN Module];` | Actions used in microflows |
 | Create external entity | `CREATE [OR MODIFY] EXTERNAL ENTITY Module.Name FROM ODATA CLIENT Module.Client (...) (attrs);` | |
 | Grant OData access | `GRANT ACCESS ON ODATA SERVICE Module.Name TO Module.Role, ...;` | |
 | Revoke OData access | `REVOKE ACCESS ON ODATA SERVICE Module.Name FROM Module.Role, ...;` | |
-| Show contract entities | `SHOW CONTRACT ENTITIES FROM Module.Client;` | Browse cached $metadata |
-| Show contract actions | `SHOW CONTRACT ACTIONS FROM Module.Client;` | Browse cached $metadata |
+| List contract entities | `LIST CONTRACT ENTITIES FROM Module.Client;` | Browse cached $metadata |
+| List contract actions | `LIST CONTRACT ACTIONS FROM Module.Client;` | Browse cached $metadata |
 | Describe contract entity | `DESCRIBE CONTRACT ENTITY Module.Client.Entity [FORMAT mdl];` | Properties, types, keys |
 | Describe contract action | `DESCRIBE CONTRACT ACTION Module.Client.Action [FORMAT mdl];` | Parameters, return type |
-| Show contract channels | `SHOW CONTRACT CHANNELS FROM Module.Service;` | Browse cached AsyncAPI |
-| Show contract messages | `SHOW CONTRACT MESSAGES FROM Module.Service;` | Browse cached AsyncAPI |
+| List contract channels | `LIST CONTRACT CHANNELS FROM Module.Service;` | Browse cached AsyncAPI |
+| List contract messages | `LIST CONTRACT MESSAGES FROM Module.Service;` | Browse cached AsyncAPI |
 | Describe contract message | `DESCRIBE CONTRACT MESSAGE Module.Service.Message;` | Message payload properties |
 | Query contract entities | `SELECT * FROM CATALOG.CONTRACT_ENTITIES;` | Requires REFRESH CATALOG |
 | Query contract actions | `SELECT * FROM CATALOG.CONTRACT_ACTIONS;` | Requires REFRESH CATALOG |
@@ -156,7 +156,7 @@ AUTHENTICATION Basic, Session
 | Retrieve (Assoc) | `RETRIEVE $List FROM $Parent/Module.AssocName;` | Retrieve by association |
 | Call microflow | `$Result = CALL MICROFLOW Module.Name (Param = $value);` | |
 | Call nanoflow | `$Result = CALL NANOFLOW Module.Name (Param = $value);` | |
-| Show page | `SHOW PAGE Module.PageName ($Param = $value);` | Also accepts `(Param: $value)` |
+| Show page | `LIST PAGE Module.PageName ($Param = $value);` | Also accepts `(Param: $value)` |
 | Close page | `CLOSE PAGE;` | |
 | Validation | `VALIDATION FEEDBACK $Entity/Attribute MESSAGE 'message';` | Requires attribute path + MESSAGE |
 | Log | `LOG INFO\|WARNING\|ERROR [NODE 'name'] 'message';` | |
@@ -190,7 +190,7 @@ AUTHENTICATION Basic, Session
 | Page folder | `Folder: 'path'` (in properties) | `CREATE PAGE ... (Folder: 'Pages/Detail') { ... }` |
 | Move to folder | `MOVE PAGE\|MICROFLOW\|SNIPPET\|NANOFLOW\|ENUMERATION Module.Name TO FOLDER 'path';` | Folders created automatically |
 | Move to module root | `MOVE PAGE Module.Name TO Module;` | Removes from folder |
-| Move across modules | `MOVE PAGE Old.Name TO NewModule;` | **Breaks by-name references** -- use `SHOW IMPACT OF` first |
+| Move across modules | `MOVE PAGE Old.Name TO NewModule;` | **Breaks by-name references** -- use `LIST IMPACT OF` first |
 | Move to folder in other module | `MOVE PAGE Old.Name TO FOLDER 'path' IN NewModule;` | |
 | Move entity to module | `MOVE ENTITY Old.Name TO NewModule;` | Entities don't support folders |
 
@@ -200,12 +200,12 @@ Nested folders use `/` separator: `'Parent/Child/Grandchild'`. Missing folders a
 
 | Statement | Syntax | Notes |
 |-----------|--------|-------|
-| Show project security | `SHOW PROJECT SECURITY;` | Displays security level, admin, demo users |
-| Show module roles | `SHOW MODULE ROLES [IN Module];` | All roles or filtered by module |
-| Show user roles | `SHOW USER ROLES;` | Project-level user roles |
-| Show demo users | `SHOW DEMO USERS;` | Configured demo users |
-| Show access on element | `SHOW ACCESS ON MICROFLOW\|PAGE\|Entity Mod.Name;` | Which roles can access |
-| Show security matrix | `SHOW SECURITY MATRIX [IN Module];` | Full access overview |
+| List project security | `LIST PROJECT SECURITY;` | Displays security level, admin, demo users |
+| List module roles | `LIST MODULE ROLES [IN Module];` | All roles or filtered by module |
+| List user roles | `LIST USER ROLES;` | Project-level user roles |
+| List demo users | `LIST DEMO USERS;` | Configured demo users |
+| List access on element | `LIST ACCESS ON MICROFLOW\|PAGE\|Entity Mod.Name;` | Which roles can access |
+| List security matrix | `LIST SECURITY MATRIX [IN Module];` | Full access overview |
 | Create module role | `CREATE MODULE ROLE Mod.Role [DESCRIPTION 'text'];` | |
 | Drop module role | `DROP MODULE ROLE Mod.Role;` | |
 | Create user role | `CREATE USER ROLE Name (Mod.Role, ...) [MANAGE ALL ROLES];` | Aggregates module roles |
@@ -226,7 +226,7 @@ Nested folders use `/` separator: `'Parent/Child/Grandchild'`. Missing folders a
 
 | Statement | Syntax | Notes |
 |-----------|--------|-------|
-| Show workflows | `SHOW WORKFLOWS [IN Module];` | List all or filter by module |
+| List workflows | `LIST WORKFLOWS [IN Module];` | List all or filter by module |
 | Describe workflow | `DESCRIBE WORKFLOW Module.Name;` | Full MDL output |
 | Create workflow | `CREATE [OR MODIFY] WORKFLOW Module.Name PARAMETER $Ctx: Module.Entity BEGIN ... END WORKFLOW;` | See activity types below |
 | Drop workflow | `DROP WORKFLOW Module.Name;` | |
@@ -260,19 +260,19 @@ END WORKFLOW;
 
 | Statement | Syntax | Notes |
 |-----------|--------|-------|
-| Structure overview | `SHOW STRUCTURE;` | Depth 2 (elements with signatures), user modules only |
-| Module counts | `SHOW STRUCTURE DEPTH 1;` | One line per module with element counts |
-| Full types | `SHOW STRUCTURE DEPTH 3;` | Typed attributes, named parameters |
-| Filter by module | `SHOW STRUCTURE IN ModuleName;` | Single module only |
-| Include all modules | `SHOW STRUCTURE DEPTH 1 ALL;` | Include system/marketplace modules |
+| Structure overview | `LIST STRUCTURE;` | Depth 2 (elements with signatures), user modules only |
+| Module counts | `LIST STRUCTURE DEPTH 1;` | One line per module with element counts |
+| Full types | `LIST STRUCTURE DEPTH 3;` | Typed attributes, named parameters |
+| Filter by module | `LIST STRUCTURE IN ModuleName;` | Single module only |
+| Include all modules | `LIST STRUCTURE DEPTH 1 ALL;` | Include system/marketplace modules |
 
 ## Navigation
 
 | Statement | Syntax | Notes |
 |-----------|--------|-------|
-| Show navigation | `SHOW NAVIGATION;` | Summary of all profiles |
-| Show menu tree | `SHOW NAVIGATION MENU [Profile];` | Menu tree for profile or all |
-| Show home pages | `SHOW NAVIGATION HOMES;` | Home page assignments across profiles |
+| List navigation | `LIST NAVIGATION;` | Summary of all profiles |
+| List menu tree | `LIST NAVIGATION MENU [Profile];` | Menu tree for profile or all |
+| List home pages | `LIST NAVIGATION HOMES;` | Home page assignments across profiles |
 | Describe navigation | `DESCRIBE NAVIGATION [Profile];` | Full MDL output (round-trippable) |
 | Create/replace navigation | `CREATE OR REPLACE NAVIGATION Profile ...;` | Full replacement of profile |
 
@@ -295,7 +295,7 @@ CREATE OR REPLACE NAVIGATION Responsive
 
 | Statement | Syntax | Notes |
 |-----------|--------|-------|
-| Show settings | `SHOW SETTINGS;` | Overview of all settings parts |
+| List settings | `LIST SETTINGS;` | Overview of all settings parts |
 | Describe settings | `DESCRIBE SETTINGS;` | Full MDL output (round-trippable) |
 | Alter model settings | `ALTER SETTINGS MODEL Key = Value;` | AfterStartupMicroflow, HashAlgorithm, JavaVersion, etc. |
 | Alter configuration | `ALTER SETTINGS CONFIGURATION 'Name' Key = Value;` | DatabaseType, DatabaseUrl, HttpPortNumber, etc. |
@@ -307,8 +307,8 @@ CREATE OR REPLACE NAVIGATION Responsive
 
 | Statement | Syntax | Notes |
 |-----------|--------|-------|
-| Show services | `SHOW BUSINESS EVENTS;` | List all business event services |
-| Show in module | `SHOW BUSINESS EVENTS IN Module;` | Filter by module |
+| List services | `LIST BUSINESS EVENTS;` | List all business event services |
+| List in module | `LIST BUSINESS EVENTS IN Module;` | Filter by module |
 | Describe service | `DESCRIBE BUSINESS EVENT SERVICE Module.Name;` | Full MDL output |
 | Create service | `CREATE BUSINESS EVENT SERVICE Module.Name (...) { MESSAGE ... };` | See help topic for full syntax |
 | Drop service | `DROP BUSINESS EVENT SERVICE Module.Name;` | Delete a service |
@@ -317,7 +317,7 @@ CREATE OR REPLACE NAVIGATION Responsive
 
 | Statement | Syntax | Notes |
 |-----------|--------|-------|
-| Show Java actions | `SHOW JAVA ACTIONS [IN Module];` | List all or filtered by module |
+| List Java actions | `LIST JAVA ACTIONS [IN Module];` | List all or filtered by module |
 | Describe Java action | `DESCRIBE JAVA ACTION Module.Name;` | Full MDL output with signature |
 | Create Java action | `CREATE JAVA ACTION Module.Name(params) RETURNS type AS $$ ... $$;` | Inline Java code |
 | Create with type params | `CREATE JAVA ACTION Module.Name(EntityType: ENTITY <pEntity>, Obj: pEntity) ...;` | Generic type parameters |
@@ -503,13 +503,13 @@ CLI subcommand: `mxcli sql --driver postgres --dsn '...' "SELECT 1"` (see `mxcli
 |-----------|--------|-------|
 | Refresh catalog | `REFRESH CATALOG;` | Rebuild basic metadata tables |
 | Refresh with refs | `REFRESH CATALOG FULL;` | Include cross-references and source |
-| Show catalog tables | `SHOW CATALOG TABLES;` | List available queryable tables |
+| List catalog tables | `LIST CATALOG TABLES;` | List available queryable tables |
 | Query catalog | `SELECT ... FROM CATALOG.<table> [WHERE ...];` | SQL against project metadata |
-| Show callers | `SHOW CALLERS OF Module.Name;` | What calls this element |
-| Show callees | `SHOW CALLEES OF Module.Name;` | What this element calls |
-| Show references | `SHOW REFERENCES OF Module.Name;` | All references to/from |
-| Show impact | `SHOW IMPACT OF Module.Name;` | Impact analysis |
-| Show context | `SHOW CONTEXT OF Module.Name;` | Surrounding context |
+| List callers | `LIST CALLERS OF Module.Name;` | What calls this element |
+| List callees | `LIST CALLEES OF Module.Name;` | What this element calls |
+| List references | `LIST REFERENCES OF Module.Name;` | All references to/from |
+| List impact | `LIST IMPACT OF Module.Name;` | Impact analysis |
+| List context | `LIST CONTEXT OF Module.Name;` | Surrounding context |
 | Full-text search | `SEARCH '<keyword>';` | Search across all strings and source |
 
 Cross-reference commands require `REFRESH CATALOG FULL` to populate reference data.

@@ -6,23 +6,23 @@ Everything mxcli can do, organized by use case.
 
 | Capability | Command | Notes |
 |---|---|---|
-| List modules | `SHOW MODULES` | With marketplace version info |
-| List entities | `SHOW ENTITIES [IN Module]` | With attribute/association counts |
-| List microflows | `SHOW MICROFLOWS [IN Module]` | With parameter/activity counts |
-| List pages | `SHOW PAGES [IN Module]` | With widget counts |
-| List enumerations | `SHOW ENUMERATIONS [IN Module]` | |
-| List constants | `SHOW CONSTANTS [IN Module]` | |
-| List workflows | `SHOW WORKFLOWS [IN Module]` | |
-| List nanoflows | `SHOW NANOFLOWS [IN Module]` | |
-| List layouts | `SHOW LAYOUTS [IN Module]` | |
-| List snippets | `SHOW SNIPPETS [IN Module]` | |
-| Compact overview | `SHOW STRUCTURE [DEPTH 1\|2\|3]` | Tree view of entire project |
+| List modules | `LIST MODULES` | With marketplace version info |
+| List entities | `LIST ENTITIES [IN Module]` | With attribute/association counts |
+| List microflows | `LIST MICROFLOWS [IN Module]` | With parameter/activity counts |
+| List pages | `LIST PAGES [IN Module]` | With widget counts |
+| List enumerations | `LIST ENUMERATIONS [IN Module]` | |
+| List constants | `LIST CONSTANTS [IN Module]` | |
+| List workflows | `LIST WORKFLOWS [IN Module]` | |
+| List nanoflows | `LIST NANOFLOWS [IN Module]` | |
+| List layouts | `LIST LAYOUTS [IN Module]` | |
+| List snippets | `LIST SNIPPETS [IN Module]` | |
+| Compact overview | `LIST STRUCTURE [DEPTH 1\|2\|3]` | Tree view of entire project |
 | Describe any document | `DESCRIBE ENTITY\|MICROFLOW\|PAGE ...` | Full MDL output (re-executable) |
 | Full-text search | `SEARCH 'keyword'` | Across all strings and source |
-| Show languages | `SHOW LANGUAGES` | All languages in the project |
-| Show project security | `SHOW PROJECT SECURITY` | Security overview |
-| Show access rules | `SHOW ACCESS ON Module.Entity` | Entity/microflow/page access |
-| Show settings | `SHOW SETTINGS` | Project-level settings |
+| Show languages | `LIST LANGUAGES` | All languages in the project |
+| Show project security | `LIST PROJECT SECURITY` | Security overview |
+| Show access rules | `LIST ACCESS ON Module.Entity` | Entity/microflow/page access |
+| Show settings | `LIST SETTINGS` | Project-level settings |
 
 ## Write: Create and modify documents
 
@@ -48,7 +48,7 @@ Everything mxcli can do, organized by use case.
 | Retrieve | `RETRIEVE ... FROM ... WHERE` | Database/association queries |
 | Control flow | `IF/THEN/ELSE`, `LOOP`, `WHILE` | Including nested |
 | Call flows | `CALL MICROFLOW`, `CALL NANOFLOW` | With parameters |
-| Show page | `SHOW PAGE Module.Page(...)` | With page parameters (11.0+) |
+| Show page | `LIST PAGE Module.Page(...)` | With page parameters (11.0+) |
 | REST requests | `SEND REST REQUEST` | GET/POST/PUT/DELETE |
 | Database queries | `EXECUTE DATABASE QUERY` | External databases |
 | Log messages | `LOG INFO\|WARNING\|ERROR` | With templates |
@@ -86,7 +86,7 @@ Everything mxcli can do, organized by use case.
 | REST clients | `CREATE REST CLIENT` | Consumed REST services |
 | Business events | `CREATE BUSINESS EVENT SERVICE` | Event definitions |
 | Database connections | `CREATE DATABASE CONNECTION` | External SQL |
-| OData services | `SHOW ODATA CLIENTS/SERVICES` | Read-only browsing |
+| OData services | `LIST ODATA CLIENTS/SERVICES` | Read-only browsing |
 
 ### Navigation and Settings
 
@@ -106,9 +106,9 @@ Everything mxcli can do, organized by use case.
 
 | Capability | Command | Notes |
 |---|---|---|
-| Cross-references | `SHOW CALLERS/CALLEES OF` | Who calls what |
-| Impact analysis | `SHOW IMPACT OF Module.Entity` | What breaks if I change this |
-| Transitive callers | `SHOW CALLERS OF ... TRANSITIVE` | Full call chain |
+| Cross-references | `LIST CALLERS/CALLEES OF` | Who calls what |
+| Impact analysis | `LIST IMPACT OF Module.Entity` | What breaks if I change this |
+| Transitive callers | `LIST CALLERS OF ... TRANSITIVE` | Full call chain |
 | Linting | `mxcli lint -p app.mpr` | 14 built-in + 27 Starlark rules |
 | Best practices report | `mxcli report -p app.mpr` | Scored report with categories |
 | Missing translations | QUAL005 linter rule | Detects incomplete translations |

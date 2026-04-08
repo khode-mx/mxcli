@@ -55,10 +55,10 @@ Pass one or more semicolon-separated commands with the `-c` flag:
 
 ```bash
 # Single command
-mxcli -p app.mpr -c "SHOW ENTITIES"
+mxcli -p app.mpr -c "LIST ENTITIES"
 
 # Multiple commands in one connection
-mxcli -p app.mpr -c "DESCRIBE ENTITY Sales.Customer; DESCRIBE ENTITY Sales.Order; SHOW MICROFLOWS IN Sales"
+mxcli -p app.mpr -c "DESCRIBE ENTITY Sales.Customer; DESCRIBE ENTITY Sales.Order; LIST MICROFLOWS IN Sales"
 ```
 
 This is the fastest way for AI agents to batch multiple queries — all commands share a single connection.
@@ -69,7 +69,7 @@ When stdin is a pipe (not a terminal), mxcli reads commands from it in quiet mod
 
 ```bash
 # Pipe from echo
-echo "SHOW ENTITIES; SHOW MICROFLOWS" | mxcli -p app.mpr
+echo "LIST ENTITIES; LIST MICROFLOWS" | mxcli -p app.mpr
 
 # Pipe from file
 mxcli -p app.mpr < commands.mdl
@@ -78,7 +78,7 @@ mxcli -p app.mpr < commands.mdl
 mxcli -p app.mpr <<'EOF'
 DESCRIBE ENTITY Sales.Customer;
 DESCRIBE ENTITY Sales.Order;
-SHOW MICROFLOWS IN Sales;
+LIST MICROFLOWS IN Sales;
 EOF
 ```
 

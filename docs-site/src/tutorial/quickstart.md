@@ -49,13 +49,13 @@ mdl>
 
 ```sql
 -- List all modules
-SHOW MODULES;
+LIST MODULES;
 
 -- List entities in a module
-SHOW ENTITIES IN MyFirstModule;
+LIST ENTITIES IN MyFirstModule;
 
 -- See the full structure at a glance
-SHOW STRUCTURE;
+LIST STRUCTURE;
 ```
 
 ## 4. Create something
