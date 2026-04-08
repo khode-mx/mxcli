@@ -14,10 +14,10 @@ Basic syntax:
     -- widgets
   }
 
-With parameters (for detail pages):
+With parameters (entity or primitive types):
   CREATE PAGE Module.Name
   (
-    Params: { $Param: Module.Entity },
+    Params: { $Param: Module.Entity, $Qty: Integer },
     Title: 'Title',
     Layout: Module.Layout
   )

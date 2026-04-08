@@ -10,9 +10,9 @@ Basic syntax (no parameters):
     -- widgets
   }
 
-With parameters:
+With parameters (entity or primitive types):
   CREATE SNIPPET Module.Name (
-    Params: { $Param: Module.Entity }
+    Params: { $Param: Module.Entity, $Label: String }
   )
   {
     DATAVIEW dv (DataSource: $Param) {

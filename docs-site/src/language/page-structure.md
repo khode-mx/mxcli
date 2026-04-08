@@ -7,7 +7,7 @@ Every MDL page has three main parts: page properties (title, layout, parameters)
 ```sql
 CREATE [OR REPLACE] PAGE <Module>.<Name>
 (
-  [Params: { $Param: Module.Entity [, ...] },]
+  [Params: { $Param: Module.Entity | Type [, ...] },]
   Title: '<title>',
   Layout: <Module.LayoutName>
   [, Folder: '<path>']
@@ -59,7 +59,7 @@ CREATE PAGE MyModule.Customer_Edit
 
 ## Page Parameters
 
-Page parameters define entity objects that must be passed when the page is opened. Parameters use the `$` prefix:
+Page parameters define values that must be passed when the page is opened. Parameters use the `$` prefix and can be entity types or primitive types (String, Integer, Decimal, Boolean, DateTime):
 
 ```sql
 (
@@ -68,11 +68,11 @@ Page parameters define entity objects that must be passed when the page is opene
 )
 ```
 
-Multiple parameters are comma-separated:
+Multiple parameters are comma-separated, and can mix entity and primitive types:
 
 ```sql
 (
-  Params: { $Order: Sales.Order, $Customer: Sales.Customer },
+  Params: { $Order: Sales.Order, $Quantity: Integer, $IsNew: Boolean },
   ...
 )
 ```

@@ -5,7 +5,7 @@
 ```sql
 CREATE [ OR REPLACE ] SNIPPET module.Name
 (
-    [ Params: { $param : Module.Entity [, ...] } ]
+    [ Params: { $param : Module.Entity | Type [, ...] } ]
     [, Folder: 'path' ]
 )
 {
@@ -35,7 +35,7 @@ The optional `Folder` property places the snippet in a subfolder within the modu
 :   The qualified name of the snippet (`Module.SnippetName`). The module must already exist.
 
 `Params: { ... }`
-:   Optional snippet parameters. Each parameter has a `$`-prefixed name and an entity type.
+:   Optional snippet parameters. Each parameter has a `$`-prefixed name and a type (entity or primitive).
 
 `Folder: 'path'`
 :   Optional folder path within the module.

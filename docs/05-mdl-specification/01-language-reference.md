@@ -719,7 +719,7 @@ Creates a page with a widget tree.
 ```sql
 CREATE [OR REPLACE] PAGE <qualified-name>
 (
-  [Params: { $Param: Module.Entity [, ...] },]
+  [Params: { $Param: Module.Entity | Type [, ...] },]
   Title: '<title>',
   Layout: <Module.LayoutName>
   [, Folder: '<path>']

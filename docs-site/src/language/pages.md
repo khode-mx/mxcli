@@ -18,7 +18,7 @@ The basic syntax for creating a page:
 ```sql
 CREATE [OR REPLACE] PAGE <Module>.<Name>
 (
-  [Params: { $Param: Module.Entity [, ...] },]
+  [Params: { $Param: Module.Entity | Type [, ...] },]
   Title: '<title>',
   Layout: <Module.LayoutName>
   [, Folder: '<path>']
@@ -45,7 +45,7 @@ CREATE PAGE MyModule.Home
 
 ### Page with Parameters
 
-Pages can receive entity objects as parameters from the calling context:
+Pages can receive entity objects or primitive values as parameters from the calling context:
 
 ```sql
 CREATE PAGE MyModule.Customer_Edit
@@ -70,7 +70,7 @@ CREATE PAGE MyModule.Customer_Edit
 
 | Property | Description | Example |
 |----------|-------------|---------|
-| `Params` | Page parameters (entity objects passed in) | `Params: { $Order: Sales.Order }` |
+| `Params` | Page parameters (entity objects or primitives) | `Params: { $Order: Sales.Order, $Qty: Integer }` |
 | `Title` | Page title shown in the browser/tab | `Title: 'Edit Customer'` |
 | `Layout` | Layout to use for the page | `Layout: Atlas_Core.PopupLayout` |
 | `Folder` | Organizational folder within the module | `Folder: 'Pages/Customers'` |

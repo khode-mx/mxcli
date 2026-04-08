@@ -5,7 +5,7 @@
 ```sql
 CREATE [ OR REPLACE ] PAGE module.Name
 (
-    [ Params: { $param : Module.Entity [, ...] }, ]
+    [ Params: { $param : Module.Entity | Type [, ...] }, ]
     Title: 'title',
     Layout: Module.LayoutName
     [, Folder: 'path' ]
@@ -26,7 +26,7 @@ If `OR REPLACE` is specified and a page with the same qualified name already exi
 
 The page declaration block `( ... )` contains comma-separated key-value properties:
 
-- **Params** -- Page parameters. Each parameter has a `$`-prefixed name and an entity type. Parameters are passed when the page is opened (e.g., from a microflow `SHOW PAGE` or from a data view).
+- **Params** -- Page parameters. Each parameter has a `$`-prefixed name and a type — either an entity (`Module.Entity`) or a primitive (`String`, `Integer`, `Decimal`, `Boolean`, `DateTime`). Parameters are passed when the page is opened (e.g., from a microflow `SHOW PAGE` or from a data view). Primitive parameters require Mendix 11.6+.
 - **Title** -- The page title displayed in the browser tab or page header.
 - **Layout** -- The layout the page is based on. Must be a qualified name referring to an existing layout (e.g., `Atlas_Core.Atlas_Default`, `Atlas_Core.PopupLayout`).
 - **Folder** -- Optional folder path within the module. Nested folders use `/` separator.

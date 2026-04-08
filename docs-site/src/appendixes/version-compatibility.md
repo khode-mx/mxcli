@@ -69,7 +69,8 @@ The tables below show exactly which features are available on each Mendix versio
 | Conditional visibility | `Visible: [xpath]` | -- | -- | -- | Yes |
 | Conditional editability | `Editable: [xpath]` | -- | -- | -- | Yes |
 | Responsive column widths | `TabletWidth: 6, PhoneWidth: 12` | -- | -- | -- | Yes |
-| Page parameters | `Params: { $Item: Module.Entity }` | -- | -- | -- | Yes |
+| Page parameters (entity) | `Params: { $Item: Module.Entity }` | -- | -- | -- | Yes |
+| Page parameters (primitive) | `Params: { $Qty: Integer }` | -- | -- | -- | 11.6+ |
 | Page variables | `Variables: { ... }` | -- | -- | -- | Yes |
 | Design properties (Atlas v3) | `DesignProperties: [...]` | -- | -- | -- | Yes |
 

@@ -8,7 +8,7 @@ Guide for writing CREATE PAGE statements in Mendix Definition Language (MDL).
 ```sql
 CREATE [OR REPLACE] PAGE Module.PageName
 (
-  [Params: { $ParamName: Module.EntityType, ... },]
+  [Params: { $ParamName: Module.EntityType | PrimitiveType, ... },]
   [Variables: { $varName: DataType = 'defaultExpression', ... },]
   Title: 'Page Title',
   Layout: Module.LayoutName,
