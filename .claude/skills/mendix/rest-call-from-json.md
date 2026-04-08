@@ -16,7 +16,7 @@ JSON Structure → Non-persistent entities → Import Mapping → REST CALL micr
 
 ```sql
 CREATE JSON STRUCTURE Module.JSON_MyStructure
-  SNIPPET '{"key": "value", "count": 1}';
+  FROM '{"key": "value", "count": 1}';
 ```
 
 - The executor **formats** the snippet (pretty-print) then **refreshes** (derives element tree) automatically.
@@ -37,15 +37,17 @@ DESCRIBE JSON STRUCTURE Module.JSON_MyStructure;
 Derive one entity per JSON object type. Name them after what they represent (not after JSON keys).
 
 ```sql
-CREATE ENTITY Module.MyRootObject (NON_PERSISTENT)
-  stringField   : String
-  intField      : Integer
-  decimalField  : Decimal
-  boolField     : Boolean DEFAULT false;
+CREATE OR REPLACE NON-PERSISTENT ENTITY Module.MyRootObject (
+  stringField: String(0),
+  intField: Integer,
+  decimalField: Decimal,
+  boolField: Boolean DEFAULT false
+);
 
-CREATE ENTITY Module.MyNestedObject (NON_PERSISTENT)
-  name : String
-  code : String;
+CREATE OR REPLACE NON-PERSISTENT ENTITY Module.MyNestedObject (
+  name: String(0),
+  code: String(0)
+);
 
 CREATE ASSOCIATION Module.MyRootObject_MyNestedObject
   FROM Module.MyRootObject
@@ -53,10 +55,11 @@ CREATE ASSOCIATION Module.MyRootObject_MyNestedObject
 ```
 
 **Rules:**
-- All string fields: bare `String` (no length — unlimited)
+- All string fields: `String(0)` (unlimited). **Do NOT write `String(unlimited)`** — the grammar only accepts number literals. `String(0)` stores as unlimited and DESCRIBE outputs `String(unlimited)`.
 - All number fields: `Integer`, `Decimal`, or `Long` — remove defaults for optional fields
 - Boolean fields **require** `DEFAULT true|false`
-- `NON_PERSISTENT` — these entities are not stored in the database
+- `NON-PERSISTENT` (hyphen) before `ENTITY` — not `(NON_PERSISTENT)` after the name
+- Attributes go inside `(...)` comma-separated with colon separator: `name: Type`
 - One association per parent→child relationship; name it `Parent_Child`
 
 ---
@@ -145,10 +148,10 @@ Applies an import mapping to a string variable (JSON content) to produce entity 
 
 ```sql
 -- With assignment (non-persistent entities, need the result in the flow)
-$PetResponse = IMPORT FROM MAPPING Module.IMM_Pet($JsonContent);
+$OrderResponse = IMPORT FROM MAPPING Module.IMM_Order($JsonContent);
 
 -- Without assignment (persistent entities, just stores to DB)
-IMPORT FROM MAPPING Module.IMM_Pet($JsonContent);
+IMPORT FROM MAPPING Module.IMM_Order($JsonContent);
 ```
 
 ### Export to mapping
@@ -156,18 +159,18 @@ IMPORT FROM MAPPING Module.IMM_Pet($JsonContent);
 Applies an export mapping to an entity object to produce a JSON string:
 
 ```sql
-$JsonOutput = EXPORT TO MAPPING Module.EMM_Pet($PetResponse);
+$JsonOutput = EXPORT TO MAPPING Module.EMM_Order($OrderResponse);
 ```
 
 ### Complete import → process → export microflow
 
 ```sql
-CREATE MICROFLOW Module.ProcessPetData ()
+CREATE MICROFLOW Module.ProcessOrderData ()
 BEGIN
   DECLARE $ResponseContent String = $latestHttpResponse/Content;
-  $PetResponse = IMPORT FROM MAPPING Module.IMM_Pet($ResponseContent);
+  $OrderResponse = IMPORT FROM MAPPING Module.IMM_Order($ResponseContent);
   -- Process the imported data...
-  $JsonOutput = EXPORT TO MAPPING Module.EMM_Pet($PetResponse);
+  $JsonOutput = EXPORT TO MAPPING Module.EMM_Order($OrderResponse);
   LOG INFO NODE 'Integration' 'Exported: ' + $JsonOutput;
 END;
 /
@@ -175,77 +178,68 @@ END;
 
 ---
 
-## Complete Example — Bible Verse API
+## Complete Example — Generic Nested API
+
+JSON shape: a root object containing metadata fields and a nested `item` object.
 
 ```sql
 -- Step 1: JSON Structure
-CREATE JSON STRUCTURE Integrations.JSON_BibleVerse
-  SNIPPET '{"translation":{"identifier":"web","name":"World English Bible","language":"English","language_code":"eng","license":"Public Domain"},"random_verse":{"book_id":"1SA","book":"1 Samuel","chapter":17,"verse":49,"text":"David put his hand in his bag, took a stone, and slung it."}}';
+CREATE JSON STRUCTURE MyModule.JSON_MyApi
+  FROM '{"item":{"code":"ABC","label":"Example","count":42},"status":"OK","version":"1.0"}';
 
 -- Step 2: Entities
-CREATE ENTITY Integrations.BibleApiResponse (NON_PERSISTENT);
+CREATE OR REPLACE NON-PERSISTENT ENTITY MyModule.MyApiResponse (
+  ApiStatus: String(0),
+  Version: String(0)
+);
 
-CREATE ENTITY Integrations.BibleTranslation (NON_PERSISTENT)
-  identifier    : String
-  name          : String
-  language      : String
-  language_code : String
-  license       : String;
+CREATE OR REPLACE NON-PERSISTENT ENTITY MyModule.MyApiItem (
+  Code: String(0),
+  Label: String(0),
+  Count: Integer
+);
 
-CREATE ENTITY Integrations.BibleVerse (NON_PERSISTENT)
-  book_id : String
-  book    : String
-  chapter : Integer
-  verse   : Integer
-  text    : String;
-
-CREATE ASSOCIATION Integrations.BibleApiResponse_BibleTranslation
-  FROM Integrations.BibleApiResponse
-  TO Integrations.BibleTranslation;
-
-CREATE ASSOCIATION Integrations.BibleApiResponse_BibleVerse
-  FROM Integrations.BibleApiResponse
-  TO Integrations.BibleVerse;
+CREATE ASSOCIATION MyModule.MyApiResponse_MyApiItem
+  FROM MyModule.MyApiResponse
+  TO MyModule.MyApiItem;
 
 -- Step 3: Import Mapping
-CREATE IMPORT MAPPING Integrations.IMM_BibleVerse
-  WITH JSON STRUCTURE Integrations.JSON_BibleVerse
+CREATE IMPORT MAPPING MyModule.IMM_MyApi
+  WITH JSON STRUCTURE MyModule.JSON_MyApi
 {
-  CREATE Integrations.BibleApiResponse {
-    CREATE Integrations.BibleApiResponse_BibleTranslation/Integrations.BibleTranslation = translation {
-      identifier    = identifier,
-      language      = language,
-      language_code = language_code,
-      license       = license,
-      name          = name
-    },
-    CREATE Integrations.BibleApiResponse_BibleVerse/Integrations.BibleVerse = random_verse {
-      book    = book,
-      book_id = book_id,
-      chapter = chapter,
-      text    = text,
-      verse   = verse
+  CREATE MyModule.MyApiResponse {
+    ApiStatus = status,
+    Version = version,
+    CREATE MyModule.MyApiResponse_MyApiItem/MyModule.MyApiItem = item {
+      Code  = code,
+      Label = label,
+      Count = count
     }
   }
 };
 
 -- Step 4: Microflow
-CREATE MICROFLOW Integrations.GET_BibleVerse_Random ()
+CREATE MICROFLOW MyModule.GET_MyApi_Item ()
 BEGIN
   @position(-5, 200)
-  DECLARE $baseUrl String = 'https://bible-api.com';
+  DECLARE $url String = 'https://api.example.com/item';
   @position(185, 200)
-  DECLARE $endpoint String = $baseUrl + '/data/web/random';
-  @position(375, 200)
-  $Result = REST CALL GET '{1}' WITH ({1} = $endpoint)
+  $MyApiResponse = REST CALL GET '{1}' WITH ({1} = $url)
     HEADER 'Accept' = 'application/json'
     TIMEOUT 300
-    RETURNS MAPPING Integrations.IMM_BibleVerse AS Integrations.BibleApiResponse ON ERROR ROLLBACK;
+    RETURNS MAPPING MyModule.IMM_MyApi AS MyModule.MyApiResponse ON ERROR ROLLBACK;
+  @position(375, 200)
+  RETRIEVE $MyApiItem FROM $MyApiResponse/MyModule.MyApiResponse_MyApiItem;
   @position(565, 200)
-  LOG INFO NODE 'Integration' 'Retrieved Bible verse' WITH ();
+  LOG INFO NODE 'Integration' 'Status={1} Code={2} Count={3}'
+    WITH ({1} = $MyApiResponse/ApiStatus,
+          {2} = $MyApiItem/Code,
+          {3} = toString($MyApiItem/Count));
 END;
 /
 ```
+
+> **Note on association retrieve:** `RETRIEVE $Child FROM $Parent/Module.Assoc` on a Reference-type association traversed forward (from FK-owner to referenced entity) returns a **single entity**, not a list. `LIMIT 1` is redundant and will be dropped from the BSON roundtrip.
 
 ---
 
@@ -259,6 +253,9 @@ END;
 | Studio Pro shows "List of X" but mapping returns single X | `ForceSingleOccurrence` not set | Executor auto-detects from JSON structure root element type |
 | StartEvent behind first activities | Default posX=200 vs @position(-5,...) | Fixed: executor pre-scans for first @position and shifts StartEvent left |
 | `TypeCacheUnknownTypeException` | Wrong BSON `$Type` names | `ImportMappings$ObjectMappingElement` / `ImportMappings$ValueMappingElement` (no `Import` prefix) |
+| `mxcli check` rejects `WITH JSON STRUCTURE` | Stale binary | Rebuild: `go build -o ./bin/mxcli ./cmd/mxcli` then retry |
+| `mismatched input 'unlimited'` | `String(unlimited)` in CREATE | Use `String(0)` for unlimited strings; `unlimited` is DESCRIBE output only |
+| `mismatched input ')'` on entity | Wrong entity form `CREATE ENTITY X (NON_PERSISTENT)` | Use `CREATE OR REPLACE NON-PERSISTENT ENTITY X (attrs)` |
 | Attribute not found in Studio Pro | Attribute not fully qualified | Must be `Module.Entity.AttributeName` in the BSON |
 
 ---
@@ -267,9 +264,9 @@ END;
 
 | Artifact | Pattern | Example |
 |----------|---------|---------|
-| JSON Structure | `JSON_<ApiName>` | `JSON_BibleVerse` |
-| Import Mapping | `IMM_<ApiName>` | `IMM_BibleVerse` |
-| Root entity | Describes the API response | `BibleApiResponse` |
-| Nested entities | Describes the domain concept | `BibleVerse`, `BibleTranslation` |
-| Microflow | `METHOD_Resource_Operation` | `GET_BibleVerse_Random` |
+| JSON Structure | `JSON_<ApiName>` | `JSON_OrderApi` |
+| Import Mapping | `IMM_<ApiName>` | `IMM_OrderApi` |
+| Root entity | Describes the API response | `OrderApiResponse` |
+| Nested entities | Describes the domain concept | `OrderItem`, `OrderAddress` |
+| Microflow | `METHOD_Resource_Operation` | `GET_Order_ById` |
 | Folder | `Private/` for mappings/structures, `Operations/` for public microflows | — |
