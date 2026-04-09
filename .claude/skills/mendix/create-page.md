@@ -566,18 +566,50 @@ SNIPPETCALL actions (Snippet: Module.EntityActions, Params: {Entity: $currentObj
 Display images on pages:
 
 ```sql
--- Static image (from image gallery) - IMAGE and STATICIMAGE are equivalent
+-- Image with dimensions (responsive by default)
 IMAGE imgLogo (Width: 200, Height: 100)
 STATICIMAGE imgBanner (Width: 400, Height: 120)
 
 -- Dynamic image (from entity data source, e.g. inside a DataView)
 DYNAMICIMAGE imgProduct (Width: 300, Height: 200)
 
--- Image without explicit dimensions (responsive by default)
+-- Image without explicit dimensions
 IMAGE imgIcon
 ```
 
-**Properties:** `Width: integer`, `Height: integer`, `Class: 'css'`, `Style: 'css'`
+**Properties:** `Width: integer`, `Height: integer`, `AlternativeText: 'text'`, `WidthUnit: pixels | percentage | auto`, `HeightUnit: pixels | percentage | auto`, `Responsive: true | false`, `DisplayAs: fullImage | thumbnail | icon`, `Class: 'css'`, `Style: 'css'`
+
+#### Setting Image Source (PLUGGABLEWIDGET syntax)
+
+The IMAGE shorthand creates a pluggable Image widget. For advanced properties like image source, use PLUGGABLEWIDGET syntax:
+
+| Mode | Property | Use Case |
+|------|----------|----------|
+| `datasource: image` | `imageObject` | Dynamic image from entity (default) |
+| `datasource: imageUrl` | `imageUrl: 'path'` | Static image from URL or file path |
+| `datasource: icon` | `imageIcon` | Icon-based image |
+
+```sql
+-- Static image from file (logos, branding)
+PLUGGABLEWIDGET 'com.mendix.widget.web.image.Image' imgLogo (
+  datasource: imageUrl,
+  imageUrl: 'img/logo.svg',
+  widthUnit: pixels, width: 48,
+  heightUnit: pixels, height: 48
+)
+
+-- Update existing IMAGE via ALTER PAGE
+ALTER PAGE Mod.Home {
+  REPLACE imgLogo WITH {
+    PLUGGABLEWIDGET 'com.mendix.widget.web.image.Image' imgLogo (
+      datasource: imageUrl, imageUrl: 'img/logo_dark.svg',
+      widthUnit: pixels, width: 48, heightUnit: pixels, height: 48
+    )
+  }
+};
+```
+
+For theme images, use paths relative to `theme/web/` (e.g., `img/logo.svg` → `theme/web/img/logo.svg`).
 
 ### CONTAINER / CUSTOMCONTAINER Widgets
 
@@ -835,6 +867,23 @@ UPDATE WIDGETS SET 'showLabel' = false WHERE WidgetType LIKE '%combobox%';
 -- Multiple properties
 UPDATE WIDGETS SET 'Class' = 'btn-lg', 'Style' = 'margin-top: 8px;' WHERE WidgetType LIKE '%ActionButton%';
 ```
+
+## PLUGGABLEWIDGET Escape Hatch
+
+All shorthand widgets (IMAGE, COMBOBOX, GALLERY, DATAGRID, etc.) are pluggable widgets under the hood. When the shorthand doesn't expose a property you need, use `PLUGGABLEWIDGET 'widget.id' name (properties)` for full access to all widget properties.
+
+```sql
+-- Shorthand (common properties only)
+IMAGE imgLogo (Width: 48, Height: 48)
+
+-- Full PLUGGABLEWIDGET syntax (all properties available)
+PLUGGABLEWIDGET 'com.mendix.widget.web.image.Image' imgLogo (
+  datasource: imageUrl, imageUrl: 'img/logo.svg',
+  widthUnit: pixels, width: 48, heightUnit: pixels, height: 48
+)
+```
+
+Run `mxcli widget docs -p app.mpr` to generate complete property documentation for all pluggable widgets in the project. Output is saved to `.ai-context/skills/widgets/`.
 
 ## See Also
 
