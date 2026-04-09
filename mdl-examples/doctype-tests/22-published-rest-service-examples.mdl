@@ -1,0 +1,136 @@
+-- ============================================================================
+-- Published REST Service Examples
+-- ============================================================================
+--
+-- Demonstrates creating, describing, and dropping published REST services.
+--
+-- Prerequisites:
+--   - Microflows backing the operations must exist
+--
+-- ============================================================================
+
+CREATE MODULE PrsTest;
+
+-- ############################################################################
+-- PART 1: BACKING MICROFLOWS
+-- ############################################################################
+
+CREATE MICROFLOW PrsTest.PRS_GetAllOrders ($httpResponse: System.HttpResponse)
+RETURNS String AS $Result
+BEGIN
+  DECLARE $Result String = '[]';
+  RETURN $Result;
+END;
+/
+
+CREATE MICROFLOW PrsTest.PRS_GetOrderById ($httpResponse: System.HttpResponse, $Id: String)
+RETURNS String AS $Result
+BEGIN
+  DECLARE $Result String = '{}';
+  RETURN $Result;
+END;
+/
+
+CREATE MICROFLOW PrsTest.PRS_CreateOrder ($httpResponse: System.HttpResponse)
+RETURNS String AS $Result
+BEGIN
+  DECLARE $Result String = '{"status": "created"}';
+  RETURN $Result;
+END;
+/
+
+CREATE MICROFLOW PrsTest.PRS_DeleteOrder ($httpResponse: System.HttpResponse, $Id: String)
+RETURNS String AS $Result
+BEGIN
+  DECLARE $Result String = '{"status": "deleted"}';
+  RETURN $Result;
+END;
+/
+
+CREATE MICROFLOW PrsTest.PRS_GetCustomers ($httpResponse: System.HttpResponse)
+RETURNS String AS $Result
+BEGIN
+  DECLARE $Result String = '[]';
+  RETURN $Result;
+END;
+/
+
+-- ############################################################################
+-- PART 2: SIMPLE PUBLISHED REST SERVICE
+-- ############################################################################
+
+CREATE PUBLISHED REST SERVICE PrsTest.OrderAPI (
+  Path: 'rest/orders/v1',
+  Version: '1.0.0',
+  ServiceName: 'Order API'
+)
+{
+  RESOURCE 'orders' {
+    GET '/' MICROFLOW PrsTest.PRS_GetAllOrders;
+    GET '/{id}' MICROFLOW PrsTest.PRS_GetOrderById;
+    POST '/' MICROFLOW PrsTest.PRS_CreateOrder;
+    DELETE '/{id}' MICROFLOW PrsTest.PRS_DeleteOrder;
+  }
+};
+
+DESCRIBE PUBLISHED REST SERVICE PrsTest.OrderAPI;
+
+-- ############################################################################
+-- PART 3: MULTI-RESOURCE SERVICE
+-- ############################################################################
+
+CREATE PUBLISHED REST SERVICE PrsTest.CrmAPI (
+  Path: 'rest/crm/v1',
+  Version: '1.0.0',
+  ServiceName: 'CRM API'
+)
+{
+  RESOURCE 'orders' {
+    GET '/' MICROFLOW PrsTest.PRS_GetAllOrders;
+  }
+  RESOURCE 'customers' {
+    GET '/' MICROFLOW PrsTest.PRS_GetCustomers;
+  }
+};
+
+DESCRIBE PUBLISHED REST SERVICE PrsTest.CrmAPI;
+
+-- ############################################################################
+-- PART 4: CREATE OR REPLACE
+-- ############################################################################
+
+CREATE OR REPLACE PUBLISHED REST SERVICE PrsTest.CrmAPI (
+  Path: 'rest/crm/v2',
+  Version: '2.0.0',
+  ServiceName: 'CRM API v2'
+)
+{
+  RESOURCE 'orders' {
+    GET '/' MICROFLOW PrsTest.PRS_GetAllOrders;
+    GET '/{id}' MICROFLOW PrsTest.PRS_GetOrderById;
+  }
+  RESOURCE 'customers' {
+    GET '/' MICROFLOW PrsTest.PRS_GetCustomers;
+  }
+};
+
+DESCRIBE PUBLISHED REST SERVICE PrsTest.CrmAPI;
+
+-- ############################################################################
+-- PART 5: SHOW AND LIST
+-- ############################################################################
+
+SHOW PUBLISHED REST SERVICES;
+SHOW PUBLISHED REST SERVICES IN PrsTest;
+
+-- ############################################################################
+-- PART 6: DROP
+-- ############################################################################
+
+DROP PUBLISHED REST SERVICE PrsTest.OrderAPI;
+
+SHOW PUBLISHED REST SERVICES IN PrsTest;
+
+-- ============================================================================
+-- END OF PUBLISHED REST SERVICE EXAMPLES
+-- ============================================================================

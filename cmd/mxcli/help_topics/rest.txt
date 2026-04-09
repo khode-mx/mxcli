@@ -15,6 +15,30 @@ DESCRIBE COMMANDS
   DESCRIBE REST CLIENT MyModule.PetStoreAPI;      -- Full MDL definition
   DESCRIBE PUBLISHED REST SERVICE MyModule.MyAPI; -- Full MDL definition
 
+CREATE / DROP PUBLISHED REST SERVICE
+-------------------------------------
+
+  CREATE PUBLISHED REST SERVICE Module.MyAPI (
+    Path: 'rest/api/v1',
+    Version: '1.0.0',
+    ServiceName: 'My API'
+  )
+  {
+    RESOURCE 'orders' {
+      GET '/' MICROFLOW Module.GetAllOrders;
+      GET '/{id}' MICROFLOW Module.GetOrderById;
+      POST '/' MICROFLOW Module.CreateOrder;
+      DELETE '/{id}' MICROFLOW Module.DeleteOrder;
+    }
+  };
+
+  CREATE OR REPLACE PUBLISHED REST SERVICE ...;   -- Replaces existing
+  DROP PUBLISHED REST SERVICE Module.MyAPI;        -- Delete service
+
+  Properties: Path (required), Version, ServiceName, Folder
+  HTTP methods: GET, POST, PUT, DELETE, PATCH
+  Modifiers: DEPRECATED, IMPORT MAPPING, EXPORT MAPPING, COMMIT
+
 JSON STRUCTURES & MAPPINGS
 --------------------------
 

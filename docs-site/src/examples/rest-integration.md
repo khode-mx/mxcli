@@ -179,3 +179,59 @@ CREATE IMPORT MAPPING Integration.IMM_Order
   }
 };
 ```
+
+## Publishing a REST API
+
+Create a published REST service with CRUD operations backed by microflows.
+
+```sql
+CREATE PUBLISHED REST SERVICE Module.OrderAPI (
+  Path: 'rest/orders/v1',
+  Version: '1.0.0',
+  ServiceName: 'Order API'
+)
+{
+  RESOURCE 'orders' {
+    GET '/' MICROFLOW Module.PRS_GetAllOrders;
+    GET '/{id}' MICROFLOW Module.PRS_GetOrderById;
+    POST '/' MICROFLOW Module.PRS_CreateOrder;
+    PUT '/{id}' MICROFLOW Module.PRS_UpdateOrder;
+    DELETE '/{id}' MICROFLOW Module.PRS_DeleteOrder;
+  }
+};
+```
+
+### Multiple Resources
+
+```sql
+CREATE PUBLISHED REST SERVICE Module.CrmAPI (
+  Path: 'rest/crm/v1',
+  Version: '1.0.0',
+  ServiceName: 'CRM API'
+)
+{
+  RESOURCE 'orders' {
+    GET '/' MICROFLOW Module.PRS_GetOrders;
+  }
+  RESOURCE 'customers' {
+    GET '/' MICROFLOW Module.PRS_GetCustomers;
+  }
+  RESOURCE 'orders/{orderId}/items' {
+    GET '/' MICROFLOW Module.PRS_GetOrderItems;
+  }
+};
+```
+
+### Update or Remove
+
+```sql
+-- Replace with new version
+CREATE OR REPLACE PUBLISHED REST SERVICE Module.OrderAPI (
+  Path: 'rest/orders/v2',
+  Version: '2.0.0',
+  ServiceName: 'Order API v2'
+) { ... };
+
+-- Remove entirely
+DROP PUBLISHED REST SERVICE Module.OrderAPI;
+```

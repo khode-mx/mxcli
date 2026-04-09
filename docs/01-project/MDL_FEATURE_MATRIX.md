@@ -194,7 +194,7 @@ Document types that exist in Mendix but have no MDL support:
 | **Extensions** | N | N | N | N | N | N | N | N | N | N | N | N | N | N | N | N | N | Mendix extensions / add-ons |
 | **Custom JS actions** | N | N | N | N | N | N | N | N | N | N | N | N | N | N | N | N | N | JavaScript actions for nanoflows |
 | **Custom widgets** | N | N | N | N | N | N | N | N | N | N | N | N | N | N | N | N | N | Pluggable widget packages |
-| **REST publish** | N | N | N | N | N | N | N | N | N | N | N | N | N | N | N | N | N | Published REST services |
+| **REST publish** | Y | Y | Y | N | Y | N | N | N | Y | N | P | N | Y | N | N | Y | N | Published REST services (CREATE/DROP/SHOW/DESCRIBE) |
 | **REST consume (v2)** | N | N | N | N | N | N | 06 | N | N | N | N | Y | N | N | N | N | N | Consumed REST services; partial grammar exists |
 | **Web service publish** | N | N | N | N | N | N | N | N | N | N | N | N | N | N | N | N | N | Published SOAP web services |
 | **Web service consume** | N | N | N | N | N | N | N | N | N | N | N | N | N | N | N | N | N | Consumed SOAP web services |

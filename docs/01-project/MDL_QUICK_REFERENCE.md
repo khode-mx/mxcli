@@ -436,6 +436,41 @@ CREATE OR REPLACE NAVIGATION Responsive
 
 **Export levels:** `'Hidden'` (default, internal to module), `'Public'` (accessible from other modules).
 
+## Published REST Services
+
+| Statement | Syntax | Notes |
+|-----------|--------|-------|
+| Show services | `SHOW PUBLISHED REST SERVICES [IN Module];` | List all or filter by module |
+| Describe service | `DESCRIBE PUBLISHED REST SERVICE Module.Name;` | Re-executable CREATE statement |
+| Create service | See below | |
+| Create or replace | `CREATE OR REPLACE PUBLISHED REST SERVICE ...` | Replaces existing service |
+| Drop service | `DROP PUBLISHED REST SERVICE Module.Name;` | |
+
+```sql
+CREATE PUBLISHED REST SERVICE Module.MyAPI (
+  Path: 'rest/api/v1',
+  Version: '1.0.0',
+  ServiceName: 'My API',
+  Folder: 'Integration/REST'
+)
+{
+  RESOURCE 'orders' {
+    GET '/' MICROFLOW Module.GetAllOrders;
+    GET '/{id}' MICROFLOW Module.GetOrderById;
+    POST '/' MICROFLOW Module.CreateOrder;
+    PUT '/{id}' MICROFLOW Module.UpdateOrder;
+    DELETE '/{id}' MICROFLOW Module.DeleteOrder;
+  }
+  RESOURCE 'customers' {
+    GET '/' MICROFLOW Module.GetAllCustomers;
+  }
+};
+```
+
+**Properties:** `Path` (required), `Version`, `ServiceName`, `Folder`
+**HTTP methods:** `GET`, `POST`, `PUT`, `DELETE`, `PATCH`
+**Operation modifiers:** `DEPRECATED`, `IMPORT MAPPING Module.Name`, `EXPORT MAPPING Module.Name`, `COMMIT Yes|No`
+
 ## JSON Structures
 
 | Statement | Syntax | Notes |
