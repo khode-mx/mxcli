@@ -38,30 +38,35 @@ func MxBuildCDNURL(version, goarch string) string {
 
 // CachedMxBuildPath returns the path to a cached mxbuild binary for the given version,
 // or empty string if not cached.
+// On Windows, checks both "mxbuild.exe" and "mxbuild" (Linux binary cached for Docker).
 func CachedMxBuildPath(version string) string {
 	cacheDir, err := MxBuildCacheDir(version)
 	if err != nil {
 		return ""
 	}
-	bin := filepath.Join(cacheDir, "modeler", mxbuildBinaryName())
-	if info, err := os.Stat(bin); err == nil && !info.IsDir() {
-		return bin
+	for _, name := range mxbuildBinaryNames() {
+		bin := filepath.Join(cacheDir, "modeler", name)
+		if info, err := os.Stat(bin); err == nil && !info.IsDir() {
+			return bin
+		}
 	}
 	return ""
 }
 
 // AnyCachedMxBuildPath searches for any cached mxbuild version.
 // Returns the path to the first mxbuild binary found, or empty string.
+// On Windows, checks both "mxbuild.exe" and "mxbuild" (Linux binary cached for Docker).
 func AnyCachedMxBuildPath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	pattern := filepath.Join(home, ".mxcli", "mxbuild", "*", "modeler", mxbuildBinaryName())
-	matches, _ := filepath.Glob(pattern)
-	if len(matches) > 0 {
-		// Return the last match (likely newest version by lexicographic sort)
-		return matches[len(matches)-1]
+	for _, name := range mxbuildBinaryNames() {
+		pattern := filepath.Join(home, ".mxcli", "mxbuild", "*", "modeler", name)
+		matches, _ := filepath.Glob(pattern)
+		if len(matches) > 0 {
+			return matches[len(matches)-1]
+		}
 	}
 	return ""
 }
@@ -113,11 +118,18 @@ func DownloadMxBuild(version string, w io.Writer) (string, error) {
 		return "", fmt.Errorf("extracting mxbuild: %w", err)
 	}
 
-	// Verify the binary exists
-	bin := filepath.Join(cacheDir, "modeler", mxbuildBinaryName())
-	if _, err := os.Stat(bin); err != nil {
+	// Verify the binary exists (check all candidate names)
+	var bin string
+	for _, name := range mxbuildBinaryNames() {
+		candidate := filepath.Join(cacheDir, "modeler", name)
+		if _, err := os.Stat(candidate); err == nil {
+			bin = candidate
+			break
+		}
+	}
+	if bin == "" {
 		os.RemoveAll(cacheDir)
-		return "", fmt.Errorf("mxbuild binary not found after extraction (expected %s)", bin)
+		return "", fmt.Errorf("mxbuild binary not found after extraction (looked in %s/modeler/)", cacheDir)
 	}
 
 	fmt.Fprintf(w, "  MxBuild cached at %s\n", bin)
