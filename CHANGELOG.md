@@ -4,6 +4,41 @@ All notable changes to mxcli will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0] - 2026-04-09
+
+### Added
+
+- **RENAME** — Automatic reference refactoring when renaming entities, attributes, associations, and other elements
+- **CREATE EXTERNAL ENTITIES** — Bulk import entities from OData contracts (#143)
+- **@excluded Annotation** — Mark documents and microflow activities as excluded, with Excluded column in catalog and `[EXCLUDED]` indicator in LIST
+- **LIST Alias** — LIST as alias for SHOW in MDL and CLI
+- **ALTER WORKFLOW** — Full activity manipulation (INSERT, DROP, REPLACE) for workflow definitions
+- **Primitive Page Parameters** — Support for String, Integer, and other primitive types in page parameters
+- **DataGrid Column Targeting** — Addressable columns in ALTER PAGE via dotted refs (e.g., `DataGrid.ColumnName`)
+- **diff-local --ref** — Accept git ranges directly via `--ref` for comparing arbitrary revisions
+- **Virtual System Module** — Complete module listing including System module
+- **PasswordPolicy.ValidatePassword** — Demo user password validation against project policy
+- **Multiple XPath Predicates** — Support `[cond1][cond2]` in WHERE clauses
+- **DESCRIBE Enhancements** — Missing types added to mxcli describe command, view entity Source object preservation
+- **Proposals** — Bulk external action support from OData contracts, RENAME with reference refactoring
+
+### Fixed
+
+- INTO clause in CREATE EXTERNAL ENTITIES not routing to target module
+- Mendix 11.9.0 integration test failures
+- Demo user password updated to meet 12-char policy
+- JSON number type inference and mxcli new locale duplicates
+- BSON properties aligned with Mendix schema for mx diff compatibility
+- View entity Source object ID preserved with CREATE OR MODIFY in DESCRIBE
+
+### Changed
+
+- Refactored large files: executor.go (4 files), init.go (3 files), tui/app.go (4 files), cmd_entities.go (3 files)
+- Simplified diff-local to accept git ranges via `--ref` directly (removed `--base` flag)
+- Pre-warmed name lookup maps to eliminate O(n²) BSON parsing in catalog source
+- Updated CI to test against Mendix 11.9.0
+- Documentation updates: LIST preferred over SHOW, execution modes, DataGrid column targeting, IMAGE datasource properties
+
 ## [0.5.0] - 2026-04-06
 
 ### Added
