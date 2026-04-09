@@ -250,6 +250,16 @@ type LinkClientAction struct {
 
 func (LinkClientAction) isClientAction() {}
 
+// SetTaskOutcomeClientAction completes a workflow user task with a named outcome.
+type SetTaskOutcomeClientAction struct {
+	model.BaseElement
+	ClosePage    bool   `json:"closePage,omitempty"`
+	Commit       bool   `json:"commit,omitempty"`
+	OutcomeValue string `json:"outcomeValue,omitempty"`
+}
+
+func (SetTaskOutcomeClientAction) isClientAction() {}
+
 // LinkType represents the type of link.
 type LinkType string
 

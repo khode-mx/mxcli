@@ -109,6 +109,28 @@ func buildMicroflowStatement(ctx parser.IMicroflowStatementContext) ast.Microflo
 		stmt = buildImportFromMappingStatement(importMapping)
 	} else if exportMapping := mfCtx.ExportToMappingStatement(); exportMapping != nil {
 		stmt = buildExportToMappingStatement(exportMapping)
+	} else if callWf := mfCtx.CallWorkflowStatement(); callWf != nil {
+		stmt = buildCallWorkflowStatement(callWf)
+	} else if getWfData := mfCtx.GetWorkflowDataStatement(); getWfData != nil {
+		stmt = buildGetWorkflowDataStatement(getWfData)
+	} else if getWfs := mfCtx.GetWorkflowsStatement(); getWfs != nil {
+		stmt = buildGetWorkflowsStatement(getWfs)
+	} else if getWfRecords := mfCtx.GetWorkflowActivityRecordsStatement(); getWfRecords != nil {
+		stmt = buildGetWorkflowActivityRecordsStatement(getWfRecords)
+	} else if wfOp := mfCtx.WorkflowOperationStatement(); wfOp != nil {
+		stmt = buildWorkflowOperationStatement(wfOp)
+	} else if setOutcome := mfCtx.SetTaskOutcomeStatement(); setOutcome != nil {
+		stmt = buildSetTaskOutcomeStatement(setOutcome)
+	} else if openTask := mfCtx.OpenUserTaskStatement(); openTask != nil {
+		stmt = buildOpenUserTaskStatement(openTask)
+	} else if notifyWf := mfCtx.NotifyWorkflowStatement(); notifyWf != nil {
+		stmt = buildNotifyWorkflowStatement(notifyWf)
+	} else if openWf := mfCtx.OpenWorkflowStatement(); openWf != nil {
+		stmt = buildOpenWorkflowStatement(openWf)
+	} else if lockWf := mfCtx.LockWorkflowStatement(); lockWf != nil {
+		stmt = buildLockWorkflowStatement(lockWf)
+	} else if unlockWf := mfCtx.UnlockWorkflowStatement(); unlockWf != nil {
+		stmt = buildUnlockWorkflowStatement(unlockWf)
 	}
 
 	// Attach annotations to the statement

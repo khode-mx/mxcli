@@ -200,6 +200,15 @@ func serializeClientAction(action pages.ClientAction) bson.D {
 			{Key: "ConfirmationInfo", Value: nil},
 			{Key: "DisabledDuringExecution", Value: true},
 		}
+	case *pages.SetTaskOutcomeClientAction:
+		return bson.D{
+			{Key: "$ID", Value: idToBsonBinary(string(a.ID))},
+			{Key: "$Type", Value: "Forms$SetTaskOutcomeClientAction"},
+			{Key: "ClosePage", Value: a.ClosePage},
+			{Key: "Commit", Value: a.Commit},
+			{Key: "DisabledDuringExecution", Value: true},
+			{Key: "OutcomeValue", Value: a.OutcomeValue},
+		}
 	case *pages.NoClientAction:
 		return bson.D{
 			{Key: "$ID", Value: idToBsonBinary(string(a.ID))},

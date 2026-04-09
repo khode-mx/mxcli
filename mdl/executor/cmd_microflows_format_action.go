@@ -604,11 +604,98 @@ func (e *Executor) formatAction(
 	case *microflows.ExportXmlAction:
 		return e.formatExportXmlAction(a)
 
+	// Workflow microflow actions
+	case *microflows.GetWorkflowDataAction:
+		if a.OutputVariableName != "" {
+			return fmt.Sprintf("$%s = GET WORKFLOW DATA $%s AS %s;", a.OutputVariableName, a.WorkflowVariable, a.Workflow)
+		}
+		return fmt.Sprintf("GET WORKFLOW DATA $%s AS %s;", a.WorkflowVariable, a.Workflow)
+
+	case *microflows.WorkflowCallAction:
+		if a.OutputVariableName != "" {
+			return fmt.Sprintf("$%s = CALL WORKFLOW %s ($%s);", a.OutputVariableName, a.Workflow, a.WorkflowContextVariable)
+		}
+		return fmt.Sprintf("CALL WORKFLOW %s ($%s);", a.Workflow, a.WorkflowContextVariable)
+
+	case *microflows.GetWorkflowsAction:
+		if a.OutputVariableName != "" {
+			return fmt.Sprintf("$%s = GET WORKFLOWS FOR $%s;", a.OutputVariableName, a.WorkflowContextVariableName)
+		}
+		return fmt.Sprintf("GET WORKFLOWS FOR $%s;", a.WorkflowContextVariableName)
+
+	case *microflows.GetWorkflowActivityRecordsAction:
+		if a.OutputVariableName != "" {
+			return fmt.Sprintf("$%s = GET WORKFLOW ACTIVITY RECORDS $%s;", a.OutputVariableName, a.WorkflowVariable)
+		}
+		return fmt.Sprintf("GET WORKFLOW ACTIVITY RECORDS $%s;", a.WorkflowVariable)
+
+	case *microflows.WorkflowOperationAction:
+		return e.formatWorkflowOperationAction(a)
+
+	case *microflows.SetTaskOutcomeAction:
+		return fmt.Sprintf("SET TASK OUTCOME $%s '%s';", a.WorkflowTaskVariable, a.OutcomeValue)
+
+	case *microflows.OpenUserTaskAction:
+		return fmt.Sprintf("OPEN USER TASK $%s;", a.UserTaskVariable)
+
+	case *microflows.NotifyWorkflowAction:
+		if a.OutputVariableName != "" {
+			return fmt.Sprintf("$%s = NOTIFY WORKFLOW $%s;", a.OutputVariableName, a.WorkflowVariable)
+		}
+		return fmt.Sprintf("NOTIFY WORKFLOW $%s;", a.WorkflowVariable)
+
+	case *microflows.OpenWorkflowAction:
+		return fmt.Sprintf("OPEN WORKFLOW $%s;", a.WorkflowVariable)
+
+	case *microflows.LockWorkflowAction:
+		if a.PauseAllWorkflows {
+			return "LOCK WORKFLOW ALL;"
+		}
+		if a.Workflow != "" {
+			return fmt.Sprintf("LOCK WORKFLOW %s;", a.Workflow)
+		}
+		return fmt.Sprintf("LOCK WORKFLOW $%s;", a.WorkflowVariable)
+
+	case *microflows.UnlockWorkflowAction:
+		if a.ResumeAllPausedWorkflows {
+			return "UNLOCK WORKFLOW ALL;"
+		}
+		if a.Workflow != "" {
+			return fmt.Sprintf("UNLOCK WORKFLOW %s;", a.Workflow)
+		}
+		return fmt.Sprintf("UNLOCK WORKFLOW $%s;", a.WorkflowVariable)
+
 	case *microflows.UnknownAction:
 		return fmt.Sprintf("-- Unsupported action type: %s", a.TypeName)
 
 	default:
 		return fmt.Sprintf("-- Unknown action: %T", action)
+	}
+}
+
+// formatWorkflowOperationAction formats a workflow operation action as MDL.
+func (e *Executor) formatWorkflowOperationAction(a *microflows.WorkflowOperationAction) string {
+	if a.Operation == nil {
+		return "WORKFLOW OPERATION ...;"
+	}
+	switch op := a.Operation.(type) {
+	case *microflows.AbortOperation:
+		if op.Reason != "" {
+			return fmt.Sprintf("WORKFLOW OPERATION ABORT $%s REASON '%s';", op.WorkflowVariable, strings.ReplaceAll(op.Reason, "'", "''"))
+		}
+		return fmt.Sprintf("WORKFLOW OPERATION ABORT $%s;", op.WorkflowVariable)
+	case *microflows.ContinueOperation:
+		return fmt.Sprintf("WORKFLOW OPERATION CONTINUE $%s;", op.WorkflowVariable)
+	case *microflows.PauseOperation:
+		return fmt.Sprintf("WORKFLOW OPERATION PAUSE $%s;", op.WorkflowVariable)
+	case *microflows.RestartOperation:
+		return fmt.Sprintf("WORKFLOW OPERATION RESTART $%s;", op.WorkflowVariable)
+	case *microflows.RetryOperation:
+		return fmt.Sprintf("WORKFLOW OPERATION RETRY $%s;", op.WorkflowVariable)
+	case *microflows.UnpauseOperation:
+		return fmt.Sprintf("WORKFLOW OPERATION UNPAUSE $%s;", op.WorkflowVariable)
+	default:
+		return fmt.Sprintf("-- Unknown workflow operation: %T", a.Operation)
 	}
 }
 

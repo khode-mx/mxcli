@@ -738,6 +738,11 @@ func buildActionV3(ctx parser.IActionExprV3Context) *ast.ActionV3 {
 		}
 	} else if actCtx.SIGN_OUT() != nil {
 		action.Type = "signOut"
+	} else if actCtx.COMPLETE_TASK() != nil {
+		action.Type = "completeTask"
+		if str := actCtx.STRING_LITERAL(); str != nil {
+			action.OutcomeValue = unquoteString(str.GetText())
+		}
 	}
 
 	return action

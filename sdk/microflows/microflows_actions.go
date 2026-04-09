@@ -844,3 +844,173 @@ type UnknownAction struct {
 }
 
 func (UnknownAction) isMicroflowAction() {}
+
+// ============================================================================
+// Workflow Microflow Actions
+// ============================================================================
+
+// WorkflowCallAction calls (starts) a workflow from a microflow.
+type WorkflowCallAction struct {
+	model.BaseElement
+	ErrorHandlingType       ErrorHandlingType `json:"errorHandlingType,omitempty"`
+	OutputVariableName      string            `json:"outputVariableName,omitempty"`
+	UseReturnVariable       bool              `json:"useReturnVariable"`
+	Workflow                string            `json:"workflow,omitempty"`                // BY_NAME_REFERENCE
+	WorkflowContextVariable string            `json:"workflowContextVariable,omitempty"`
+}
+
+func (WorkflowCallAction) isMicroflowAction() {}
+
+// GetWorkflowDataAction gets the typed context entity from a workflow instance.
+type GetWorkflowDataAction struct {
+	model.BaseElement
+	ErrorHandlingType  ErrorHandlingType `json:"errorHandlingType,omitempty"`
+	OutputVariableName string            `json:"outputVariableName,omitempty"`
+	Workflow           string            `json:"workflow,omitempty"` // BY_NAME_REFERENCE
+	WorkflowVariable   string            `json:"workflowVariable,omitempty"`
+}
+
+func (GetWorkflowDataAction) isMicroflowAction() {}
+
+// GetWorkflowsAction gets workflow instances for a context object.
+type GetWorkflowsAction struct {
+	model.BaseElement
+	ErrorHandlingType           ErrorHandlingType `json:"errorHandlingType,omitempty"`
+	OutputVariableName          string            `json:"outputVariableName,omitempty"`
+	WorkflowContextVariableName string            `json:"workflowContextVariableName,omitempty"`
+}
+
+func (GetWorkflowsAction) isMicroflowAction() {}
+
+// GetWorkflowActivityRecordsAction gets activity records for a workflow.
+type GetWorkflowActivityRecordsAction struct {
+	model.BaseElement
+	ErrorHandlingType  ErrorHandlingType `json:"errorHandlingType,omitempty"`
+	OutputVariableName string            `json:"outputVariableName,omitempty"`
+	WorkflowVariable   string            `json:"workflowVariable,omitempty"`
+}
+
+func (GetWorkflowActivityRecordsAction) isMicroflowAction() {}
+
+// WorkflowOperationAction performs a workflow operation.
+type WorkflowOperationAction struct {
+	model.BaseElement
+	ErrorHandlingType ErrorHandlingType `json:"errorHandlingType,omitempty"`
+	Operation         WorkflowOperation `json:"operation"`
+}
+
+func (WorkflowOperationAction) isMicroflowAction() {}
+
+// WorkflowOperation is the interface for polymorphic workflow operations.
+type WorkflowOperation interface {
+	isWorkflowOperation()
+}
+
+// AbortOperation aborts a workflow with a reason.
+type AbortOperation struct {
+	model.BaseElement
+	Reason           string `json:"reason,omitempty"`
+	WorkflowVariable string `json:"workflowVariable,omitempty"`
+}
+
+func (AbortOperation) isWorkflowOperation() {}
+
+// ContinueOperation continues a workflow.
+type ContinueOperation struct {
+	model.BaseElement
+	WorkflowVariable string `json:"workflowVariable,omitempty"`
+}
+
+func (ContinueOperation) isWorkflowOperation() {}
+
+// PauseOperation pauses a workflow.
+type PauseOperation struct {
+	model.BaseElement
+	WorkflowVariable string `json:"workflowVariable,omitempty"`
+}
+
+func (PauseOperation) isWorkflowOperation() {}
+
+// RestartOperation restarts a workflow.
+type RestartOperation struct {
+	model.BaseElement
+	WorkflowVariable string `json:"workflowVariable,omitempty"`
+}
+
+func (RestartOperation) isWorkflowOperation() {}
+
+// RetryOperation retries a failed workflow activity.
+type RetryOperation struct {
+	model.BaseElement
+	WorkflowVariable string `json:"workflowVariable,omitempty"`
+}
+
+func (RetryOperation) isWorkflowOperation() {}
+
+// UnpauseOperation resumes a paused workflow.
+type UnpauseOperation struct {
+	model.BaseElement
+	WorkflowVariable string `json:"workflowVariable,omitempty"`
+}
+
+func (UnpauseOperation) isWorkflowOperation() {}
+
+// SetTaskOutcomeAction sets a user task outcome programmatically.
+type SetTaskOutcomeAction struct {
+	model.BaseElement
+	ErrorHandlingType    ErrorHandlingType `json:"errorHandlingType,omitempty"`
+	OutcomeValue         string            `json:"outcomeValue,omitempty"`
+	WorkflowTaskVariable string            `json:"workflowTaskVariable,omitempty"`
+}
+
+func (SetTaskOutcomeAction) isMicroflowAction() {}
+
+// OpenUserTaskAction opens a user task page.
+type OpenUserTaskAction struct {
+	model.BaseElement
+	ErrorHandlingType ErrorHandlingType `json:"errorHandlingType,omitempty"`
+	UserTaskVariable  string            `json:"userTaskVariable,omitempty"`
+}
+
+func (OpenUserTaskAction) isMicroflowAction() {}
+
+// NotifyWorkflowAction notifies/wakes a waiting workflow.
+type NotifyWorkflowAction struct {
+	model.BaseElement
+	ErrorHandlingType  ErrorHandlingType `json:"errorHandlingType,omitempty"`
+	OutputVariableName string            `json:"outputVariableName,omitempty"`
+	WorkflowVariable   string            `json:"workflowVariable,omitempty"`
+}
+
+func (NotifyWorkflowAction) isMicroflowAction() {}
+
+// OpenWorkflowAction opens the workflow admin page.
+type OpenWorkflowAction struct {
+	model.BaseElement
+	ErrorHandlingType ErrorHandlingType `json:"errorHandlingType,omitempty"`
+	WorkflowVariable  string            `json:"workflowVariable,omitempty"`
+}
+
+func (OpenWorkflowAction) isMicroflowAction() {}
+
+// LockWorkflowAction locks/pauses workflows.
+type LockWorkflowAction struct {
+	model.BaseElement
+	ErrorHandlingType ErrorHandlingType `json:"errorHandlingType,omitempty"`
+	PauseAllWorkflows bool              `json:"pauseAllWorkflows,omitempty"`
+	Workflow          string            `json:"workflow,omitempty"`         // BY_NAME_REFERENCE
+	WorkflowVariable  string            `json:"workflowVariable,omitempty"`
+}
+
+func (LockWorkflowAction) isMicroflowAction() {}
+
+// UnlockWorkflowAction unlocks/resumes paused workflows.
+type UnlockWorkflowAction struct {
+	model.BaseElement
+	ErrorHandlingType        ErrorHandlingType `json:"errorHandlingType,omitempty"`
+	ResumeAllPausedWorkflows bool              `json:"resumeAllPausedWorkflows,omitempty"`
+	Workflow                 string            `json:"workflow,omitempty"`         // BY_NAME_REFERENCE
+	WorkflowVariable         string            `json:"workflowVariable,omitempty"`
+}
+
+func (UnlockWorkflowAction) isMicroflowAction() {}

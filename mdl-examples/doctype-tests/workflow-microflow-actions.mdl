@@ -1,0 +1,48 @@
+-- Test: workflow microflow actions syntax
+-- Verifies parsing of all 11 workflow action types in microflows
+
+CREATE MICROFLOW TestModule.MF_WorkflowActions (
+  $Workflow: Object,
+  $ContextObj: Object,
+  $UserTask: Object
+)
+RETURNS Nothing
+BEGIN
+  -- Priority 1: Get workflow data
+  $Issue = GET WORKFLOW DATA $Workflow AS TestModule.WF_DeliveryDelay;
+
+  -- Priority 2: Call workflow
+  $WfInstance = CALL WORKFLOW TestModule.WF_DeliveryDelay (WorkflowContext = $ContextObj);
+
+  -- Priority 3: Get workflows
+  $Workflows = GET WORKFLOWS FOR $ContextObj;
+
+  -- Get activity records
+  $Records = GET WORKFLOW ACTIVITY RECORDS $Workflow;
+
+  -- Set task outcome
+  SET TASK OUTCOME $UserTask 'Approve';
+
+  -- Open user task
+  OPEN USER TASK $UserTask;
+
+  -- Workflow operations
+  WORKFLOW OPERATION PAUSE $Workflow;
+  WORKFLOW OPERATION CONTINUE $Workflow;
+  WORKFLOW OPERATION ABORT $Workflow REASON 'No longer needed';
+  WORKFLOW OPERATION RESTART $Workflow;
+  WORKFLOW OPERATION RETRY $Workflow;
+  WORKFLOW OPERATION UNPAUSE $Workflow;
+
+  -- Notify workflow
+  NOTIFY WORKFLOW $Workflow;
+
+  -- Open workflow admin page
+  OPEN WORKFLOW $Workflow;
+
+  -- Lock/Unlock
+  LOCK WORKFLOW ALL;
+  UNLOCK WORKFLOW ALL;
+  LOCK WORKFLOW $Workflow;
+  UNLOCK WORKFLOW $Workflow;
+END;

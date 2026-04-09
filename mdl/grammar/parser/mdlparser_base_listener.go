@@ -1,4 +1,4 @@
-// Code generated from MDLParser.g4 by ANTLR 4.13.2. DO NOT EDIT.
+// Code generated from MDLParser.g4 by ANTLR 4.13.1. DO NOT EDIT.
 
 package parser // MDLParser
 import "github.com/antlr4-go/antlr/v4"
@@ -935,6 +935,82 @@ func (s *BaseMDLParserListener) EnterCallExternalActionStatement(ctx *CallExtern
 // ExitCallExternalActionStatement is called when production callExternalActionStatement is exited.
 func (s *BaseMDLParserListener) ExitCallExternalActionStatement(ctx *CallExternalActionStatementContext) {
 }
+
+// EnterCallWorkflowStatement is called when production callWorkflowStatement is entered.
+func (s *BaseMDLParserListener) EnterCallWorkflowStatement(ctx *CallWorkflowStatementContext) {}
+
+// ExitCallWorkflowStatement is called when production callWorkflowStatement is exited.
+func (s *BaseMDLParserListener) ExitCallWorkflowStatement(ctx *CallWorkflowStatementContext) {}
+
+// EnterGetWorkflowDataStatement is called when production getWorkflowDataStatement is entered.
+func (s *BaseMDLParserListener) EnterGetWorkflowDataStatement(ctx *GetWorkflowDataStatementContext) {}
+
+// ExitGetWorkflowDataStatement is called when production getWorkflowDataStatement is exited.
+func (s *BaseMDLParserListener) ExitGetWorkflowDataStatement(ctx *GetWorkflowDataStatementContext) {}
+
+// EnterGetWorkflowsStatement is called when production getWorkflowsStatement is entered.
+func (s *BaseMDLParserListener) EnterGetWorkflowsStatement(ctx *GetWorkflowsStatementContext) {}
+
+// ExitGetWorkflowsStatement is called when production getWorkflowsStatement is exited.
+func (s *BaseMDLParserListener) ExitGetWorkflowsStatement(ctx *GetWorkflowsStatementContext) {}
+
+// EnterGetWorkflowActivityRecordsStatement is called when production getWorkflowActivityRecordsStatement is entered.
+func (s *BaseMDLParserListener) EnterGetWorkflowActivityRecordsStatement(ctx *GetWorkflowActivityRecordsStatementContext) {
+}
+
+// ExitGetWorkflowActivityRecordsStatement is called when production getWorkflowActivityRecordsStatement is exited.
+func (s *BaseMDLParserListener) ExitGetWorkflowActivityRecordsStatement(ctx *GetWorkflowActivityRecordsStatementContext) {
+}
+
+// EnterWorkflowOperationStatement is called when production workflowOperationStatement is entered.
+func (s *BaseMDLParserListener) EnterWorkflowOperationStatement(ctx *WorkflowOperationStatementContext) {
+}
+
+// ExitWorkflowOperationStatement is called when production workflowOperationStatement is exited.
+func (s *BaseMDLParserListener) ExitWorkflowOperationStatement(ctx *WorkflowOperationStatementContext) {
+}
+
+// EnterWorkflowOperationType is called when production workflowOperationType is entered.
+func (s *BaseMDLParserListener) EnterWorkflowOperationType(ctx *WorkflowOperationTypeContext) {}
+
+// ExitWorkflowOperationType is called when production workflowOperationType is exited.
+func (s *BaseMDLParserListener) ExitWorkflowOperationType(ctx *WorkflowOperationTypeContext) {}
+
+// EnterSetTaskOutcomeStatement is called when production setTaskOutcomeStatement is entered.
+func (s *BaseMDLParserListener) EnterSetTaskOutcomeStatement(ctx *SetTaskOutcomeStatementContext) {}
+
+// ExitSetTaskOutcomeStatement is called when production setTaskOutcomeStatement is exited.
+func (s *BaseMDLParserListener) ExitSetTaskOutcomeStatement(ctx *SetTaskOutcomeStatementContext) {}
+
+// EnterOpenUserTaskStatement is called when production openUserTaskStatement is entered.
+func (s *BaseMDLParserListener) EnterOpenUserTaskStatement(ctx *OpenUserTaskStatementContext) {}
+
+// ExitOpenUserTaskStatement is called when production openUserTaskStatement is exited.
+func (s *BaseMDLParserListener) ExitOpenUserTaskStatement(ctx *OpenUserTaskStatementContext) {}
+
+// EnterNotifyWorkflowStatement is called when production notifyWorkflowStatement is entered.
+func (s *BaseMDLParserListener) EnterNotifyWorkflowStatement(ctx *NotifyWorkflowStatementContext) {}
+
+// ExitNotifyWorkflowStatement is called when production notifyWorkflowStatement is exited.
+func (s *BaseMDLParserListener) ExitNotifyWorkflowStatement(ctx *NotifyWorkflowStatementContext) {}
+
+// EnterOpenWorkflowStatement is called when production openWorkflowStatement is entered.
+func (s *BaseMDLParserListener) EnterOpenWorkflowStatement(ctx *OpenWorkflowStatementContext) {}
+
+// ExitOpenWorkflowStatement is called when production openWorkflowStatement is exited.
+func (s *BaseMDLParserListener) ExitOpenWorkflowStatement(ctx *OpenWorkflowStatementContext) {}
+
+// EnterLockWorkflowStatement is called when production lockWorkflowStatement is entered.
+func (s *BaseMDLParserListener) EnterLockWorkflowStatement(ctx *LockWorkflowStatementContext) {}
+
+// ExitLockWorkflowStatement is called when production lockWorkflowStatement is exited.
+func (s *BaseMDLParserListener) ExitLockWorkflowStatement(ctx *LockWorkflowStatementContext) {}
+
+// EnterUnlockWorkflowStatement is called when production unlockWorkflowStatement is entered.
+func (s *BaseMDLParserListener) EnterUnlockWorkflowStatement(ctx *UnlockWorkflowStatementContext) {}
+
+// ExitUnlockWorkflowStatement is called when production unlockWorkflowStatement is exited.
+func (s *BaseMDLParserListener) ExitUnlockWorkflowStatement(ctx *UnlockWorkflowStatementContext) {}
 
 // EnterCallArgumentList is called when production callArgumentList is entered.
 func (s *BaseMDLParserListener) EnterCallArgumentList(ctx *CallArgumentListContext) {}

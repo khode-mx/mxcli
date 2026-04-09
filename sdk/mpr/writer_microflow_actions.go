@@ -434,6 +434,30 @@ func serializeMicroflowAction(action microflows.MicroflowAction) bson.D {
 	case *microflows.ExportXmlAction:
 		return serializeExportXmlAction(a)
 
+	// Workflow actions
+	case *microflows.WorkflowCallAction:
+		return serializeWorkflowCallAction(a)
+	case *microflows.GetWorkflowDataAction:
+		return serializeGetWorkflowDataAction(a)
+	case *microflows.GetWorkflowsAction:
+		return serializeGetWorkflowsAction(a)
+	case *microflows.GetWorkflowActivityRecordsAction:
+		return serializeGetWorkflowActivityRecordsAction(a)
+	case *microflows.WorkflowOperationAction:
+		return serializeWorkflowOperationAction(a)
+	case *microflows.SetTaskOutcomeAction:
+		return serializeSetTaskOutcomeAction(a)
+	case *microflows.OpenUserTaskAction:
+		return serializeOpenUserTaskAction(a)
+	case *microflows.NotifyWorkflowAction:
+		return serializeNotifyWorkflowAction(a)
+	case *microflows.OpenWorkflowAction:
+		return serializeOpenWorkflowAction(a)
+	case *microflows.LockWorkflowAction:
+		return serializeLockWorkflowAction(a)
+	case *microflows.UnlockWorkflowAction:
+		return serializeUnlockWorkflowAction(a)
+
 	default:
 		return nil
 	}
