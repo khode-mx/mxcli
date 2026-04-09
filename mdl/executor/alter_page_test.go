@@ -517,3 +517,186 @@ func TestFindBsonWidget_DataViewFooter(t *testing.T) {
 		t.Fatal("Expected to find btnFooter in DataView FooterWidgets")
 	}
 }
+
+// ============================================================================
+// Page context tree tests (#157)
+// ============================================================================
+
+func makeWidgetWithID(name string, typeName string, id primitive.Binary) bson.D {
+	return bson.D{
+		{Key: "$ID", Value: id},
+		{Key: "$Type", Value: typeName},
+		{Key: "Name", Value: name},
+	}
+}
+
+func makeBsonID(b byte) primitive.Binary {
+	data := make([]byte, 16)
+	data[0] = b
+	return primitive.Binary{Subtype: 0x04, Data: data}
+}
+
+func TestExtractPageParamsFromBSON_EntityParams(t *testing.T) {
+	rawData := bson.D{
+		{Key: "Parameters", Value: bson.A{
+			int32(2), // type marker
+			bson.D{
+				{Key: "$ID", Value: makeBsonID(0x01)},
+				{Key: "$Type", Value: "Forms$PageParameter"},
+				{Key: "Name", Value: "Customer"},
+				{Key: "ParameterType", Value: bson.D{
+					{Key: "$ID", Value: makeBsonID(0x02)},
+					{Key: "$Type", Value: "DataTypes$ObjectType"},
+					{Key: "Entity", Value: "MyModule.Customer"},
+				}},
+			},
+			bson.D{
+				{Key: "$ID", Value: makeBsonID(0x03)},
+				{Key: "$Type", Value: "Forms$PageParameter"},
+				{Key: "Name", Value: "Order"},
+				{Key: "ParameterType", Value: bson.D{
+					{Key: "$ID", Value: makeBsonID(0x04)},
+					{Key: "$Type", Value: "DataTypes$ObjectType"},
+					{Key: "Entity", Value: "MyModule.Order"},
+				}},
+			},
+		}},
+	}
+
+	paramScope, paramEntityNames := extractPageParamsFromBSON(rawData)
+
+	if len(paramScope) != 2 {
+		t.Fatalf("Expected 2 params, got %d", len(paramScope))
+	}
+	if paramEntityNames["Customer"] != "MyModule.Customer" {
+		t.Errorf("Expected Customer -> MyModule.Customer, got %q", paramEntityNames["Customer"])
+	}
+	if paramEntityNames["Order"] != "MyModule.Order" {
+		t.Errorf("Expected Order -> MyModule.Order, got %q", paramEntityNames["Order"])
+	}
+	if paramScope["Customer"] == "" {
+		t.Error("Expected non-empty ID for Customer param")
+	}
+}
+
+func TestExtractPageParamsFromBSON_SkipsPrimitiveParams(t *testing.T) {
+	rawData := bson.D{
+		{Key: "Parameters", Value: bson.A{
+			int32(2),
+			bson.D{
+				{Key: "$ID", Value: makeBsonID(0x01)},
+				{Key: "$Type", Value: "Forms$PageParameter"},
+				{Key: "Name", Value: "Title"},
+				{Key: "ParameterType", Value: bson.D{
+					{Key: "$ID", Value: makeBsonID(0x02)},
+					{Key: "$Type", Value: "DataTypes$StringType"},
+				}},
+			},
+		}},
+	}
+
+	paramScope, paramEntityNames := extractPageParamsFromBSON(rawData)
+
+	if len(paramScope) != 0 {
+		t.Errorf("Expected 0 entity params (String is primitive), got %d", len(paramScope))
+	}
+	if len(paramEntityNames) != 0 {
+		t.Errorf("Expected 0 entity param names, got %d", len(paramEntityNames))
+	}
+}
+
+func TestExtractPageParamsFromBSON_Nil(t *testing.T) {
+	paramScope, paramEntityNames := extractPageParamsFromBSON(nil)
+	if len(paramScope) != 0 || len(paramEntityNames) != 0 {
+		t.Error("Expected empty maps for nil input")
+	}
+}
+
+func TestExtractWidgetScopeFromBSON_PageFormat(t *testing.T) {
+	id1 := makeBsonID(0x10)
+	id2 := makeBsonID(0x20)
+	rawData := bson.D{
+		{Key: "FormCall", Value: bson.D{
+			{Key: "Arguments", Value: bson.A{
+				int32(2),
+				bson.D{
+					{Key: "Widgets", Value: bson.A{
+						int32(2),
+						makeWidgetWithID("dgOrders", "CustomWidgets$CustomWidget", id1),
+						makeWidgetWithID("txtName", "Pages$TextBox", id2),
+					}},
+				},
+			}},
+		}},
+	}
+
+	scope := extractWidgetScopeFromBSON(rawData)
+
+	if len(scope) != 2 {
+		t.Fatalf("Expected 2 widgets in scope, got %d", len(scope))
+	}
+	if scope["dgOrders"] == "" {
+		t.Error("Expected dgOrders in widget scope")
+	}
+	if scope["txtName"] == "" {
+		t.Error("Expected txtName in widget scope")
+	}
+}
+
+func TestExtractWidgetScopeFromBSON_NestedWidgets(t *testing.T) {
+	idDv := makeBsonID(0x10)
+	idInner := makeBsonID(0x20)
+	rawData := bson.D{
+		{Key: "FormCall", Value: bson.D{
+			{Key: "Arguments", Value: bson.A{
+				int32(2),
+				bson.D{
+					{Key: "Widgets", Value: bson.A{
+						int32(2),
+						bson.D{
+							{Key: "$ID", Value: idDv},
+							{Key: "$Type", Value: "Pages$DataView"},
+							{Key: "Name", Value: "dvOrder"},
+							{Key: "Widgets", Value: bson.A{
+								int32(2),
+								makeWidgetWithID("txtOrderNum", "Pages$TextBox", idInner),
+							}},
+						},
+					}},
+				},
+			}},
+		}},
+	}
+
+	scope := extractWidgetScopeFromBSON(rawData)
+
+	if scope["dvOrder"] == "" {
+		t.Error("Expected dvOrder in widget scope")
+	}
+	if scope["txtOrderNum"] == "" {
+		t.Error("Expected txtOrderNum in widget scope (nested in DataView)")
+	}
+}
+
+func TestExtractWidgetScopeFromBSON_SnippetFormat(t *testing.T) {
+	idW := makeBsonID(0x10)
+	rawData := bson.D{
+		{Key: "Widgets", Value: bson.A{
+			int32(2),
+			makeWidgetWithID("txtSnippet", "Pages$TextBox", idW),
+		}},
+	}
+
+	scope := extractWidgetScopeFromBSON(rawData)
+
+	if scope["txtSnippet"] == "" {
+		t.Error("Expected txtSnippet in widget scope (snippet format)")
+	}
+}
+
+func TestExtractWidgetScopeFromBSON_Nil(t *testing.T) {
+	scope := extractWidgetScopeFromBSON(nil)
+	if len(scope) != 0 {
+		t.Error("Expected empty scope for nil input")
+	}
+}

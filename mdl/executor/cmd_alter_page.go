@@ -1193,8 +1193,8 @@ func (e *Executor) applyInsertWidgetWith(rawData bson.D, op *ast.InsertWidgetOp,
 	// Find entity context from enclosing DataView/DataGrid/ListView
 	entityCtx := findEnclosingEntityContext(rawData, op.Target.Widget)
 
-	// Build new widget BSON from AST
-	newBsonWidgets, err := e.buildWidgetsBson(op.Widgets, moduleName, moduleID, entityCtx)
+	// Build new widget BSON from AST (pass rawData for page param + widget scope resolution)
+	newBsonWidgets, err := e.buildWidgetsBson(op.Widgets, moduleName, moduleID, entityCtx, rawData)
 	if err != nil {
 		return fmt.Errorf("failed to build widgets: %w", err)
 	}
@@ -1281,8 +1281,8 @@ func (e *Executor) applyReplaceWidgetWith(rawData bson.D, op *ast.ReplaceWidgetO
 	// Find entity context from enclosing DataView/DataGrid/ListView
 	entityCtx := findEnclosingEntityContext(rawData, op.Target.Widget)
 
-	// Build new widget BSON from AST
-	newBsonWidgets, err := e.buildWidgetsBson(op.NewWidgets, moduleName, moduleID, entityCtx)
+	// Build new widget BSON from AST (pass rawData for page param + widget scope resolution)
+	newBsonWidgets, err := e.buildWidgetsBson(op.NewWidgets, moduleName, moduleID, entityCtx, rawData)
 	if err != nil {
 		return fmt.Errorf("failed to build replacement widgets: %w", err)
 	}
@@ -1529,16 +1529,21 @@ func applyDropVariable(rawData bson.D, op *ast.DropVariableOp) error {
 
 // buildWidgetsBson converts AST widgets to ordered BSON documents.
 // Returns bson.D elements (not map[string]any) to preserve field ordering.
-func (e *Executor) buildWidgetsBson(widgets []*ast.WidgetV3, moduleName string, moduleID model.ID, entityContext string) ([]any, error) {
+// rawPageData is the full page/snippet BSON, used to extract page parameters
+// and existing widget IDs for PARAMETER/SELECTION DataSource resolution.
+func (e *Executor) buildWidgetsBson(widgets []*ast.WidgetV3, moduleName string, moduleID model.ID, entityContext string, rawPageData bson.D) ([]any, error) {
+	paramScope, paramEntityNames := extractPageParamsFromBSON(rawPageData)
+	widgetScope := extractWidgetScopeFromBSON(rawPageData)
+
 	pb := &pageBuilder{
 		writer:           e.writer,
 		reader:           e.reader,
 		moduleID:         moduleID,
 		moduleName:       moduleName,
 		entityContext:    entityContext,
-		widgetScope:      make(map[string]model.ID),
-		paramScope:       make(map[string]model.ID),
-		paramEntityNames: make(map[string]string),
+		widgetScope:      widgetScope,
+		paramScope:       paramScope,
+		paramEntityNames: paramEntityNames,
 		execCache:        e.cache,
 		fragments:        e.fragments,
 		themeRegistry:    e.getThemeRegistry(),
@@ -1559,6 +1564,150 @@ func (e *Executor) buildWidgetsBson(widgets []*ast.WidgetV3, moduleName string, 
 		result = append(result, bsonD)
 	}
 	return result, nil
+}
+
+// extractPageParamsFromBSON extracts page/snippet parameter names and entity
+// IDs from the raw BSON document. This enables ALTER PAGE REPLACE/INSERT
+// operations to resolve PARAMETER DataSource references (e.g., DataSource: $Customer).
+func extractPageParamsFromBSON(rawData bson.D) (map[string]model.ID, map[string]string) {
+	paramScope := make(map[string]model.ID)
+	paramEntityNames := make(map[string]string)
+	if rawData == nil {
+		return paramScope, paramEntityNames
+	}
+
+	params := dGetArrayElements(dGet(rawData, "Parameters"))
+	for _, p := range params {
+		pDoc, ok := p.(bson.D)
+		if !ok {
+			continue
+		}
+		name := dGetString(pDoc, "Name")
+		if name == "" {
+			continue
+		}
+		paramType := dGetDoc(pDoc, "ParameterType")
+		if paramType == nil {
+			continue
+		}
+		typeName := dGetString(paramType, "$Type")
+		if typeName != "DataTypes$ObjectType" {
+			continue
+		}
+		entityName := dGetString(paramType, "Entity")
+		if entityName == "" {
+			continue
+		}
+		idVal := dGet(pDoc, "$ID")
+		paramID := model.ID(extractBinaryIDFromDoc(idVal))
+		paramScope[name] = paramID
+		paramEntityNames[name] = entityName
+	}
+	return paramScope, paramEntityNames
+}
+
+// extractWidgetScopeFromBSON walks the entire raw BSON widget tree and
+// collects a map of widget name → widget ID. This enables ALTER PAGE INSERT
+// operations to resolve SELECTION DataSource references to existing sibling widgets.
+func extractWidgetScopeFromBSON(rawData bson.D) map[string]model.ID {
+	scope := make(map[string]model.ID)
+	if rawData == nil {
+		return scope
+	}
+	// Page format: FormCall.Arguments[].Widgets[]
+	if formCall := dGetDoc(rawData, "FormCall"); formCall != nil {
+		args := dGetArrayElements(dGet(formCall, "Arguments"))
+		for _, arg := range args {
+			argDoc, ok := arg.(bson.D)
+			if !ok {
+				continue
+			}
+			collectWidgetScope(argDoc, "Widgets", scope)
+		}
+	}
+	// Snippet format: Widgets[] or Widget.Widgets[]
+	collectWidgetScope(rawData, "Widgets", scope)
+	if widgetContainer := dGetDoc(rawData, "Widget"); widgetContainer != nil {
+		collectWidgetScope(widgetContainer, "Widgets", scope)
+	}
+	return scope
+}
+
+// collectWidgetScope recursively walks a widget array and collects name→ID mappings.
+func collectWidgetScope(parentDoc bson.D, key string, scope map[string]model.ID) {
+	elements := dGetArrayElements(dGet(parentDoc, key))
+	for _, elem := range elements {
+		wDoc, ok := elem.(bson.D)
+		if !ok {
+			continue
+		}
+		name := dGetString(wDoc, "Name")
+		if name != "" {
+			idVal := dGet(wDoc, "$ID")
+			if wID := extractBinaryIDFromDoc(idVal); wID != "" {
+				scope[name] = model.ID(wID)
+			}
+		}
+		// Also register entity context for widgets with DataSource
+		// so SELECTION can resolve the entity type
+		collectWidgetScopeInChildren(wDoc, scope)
+	}
+}
+
+// collectWidgetScopeInChildren recursively walks widget children to collect scope.
+func collectWidgetScopeInChildren(wDoc bson.D, scope map[string]model.ID) {
+	typeName := dGetString(wDoc, "$Type")
+
+	// Direct Widgets[]
+	collectWidgetScope(wDoc, "Widgets", scope)
+	// FooterWidgets[]
+	collectWidgetScope(wDoc, "FooterWidgets", scope)
+	// LayoutGrid: Rows[].Columns[].Widgets[]
+	if strings.Contains(typeName, "LayoutGrid") {
+		rows := dGetArrayElements(dGet(wDoc, "Rows"))
+		for _, row := range rows {
+			rowDoc, ok := row.(bson.D)
+			if !ok {
+				continue
+			}
+			cols := dGetArrayElements(dGet(rowDoc, "Columns"))
+			for _, col := range cols {
+				colDoc, ok := col.(bson.D)
+				if !ok {
+					continue
+				}
+				collectWidgetScope(colDoc, "Widgets", scope)
+			}
+		}
+	}
+	// TabContainer: TabPages[].Widgets[]
+	tabPages := dGetArrayElements(dGet(wDoc, "TabPages"))
+	for _, tp := range tabPages {
+		tpDoc, ok := tp.(bson.D)
+		if !ok {
+			continue
+		}
+		collectWidgetScope(tpDoc, "Widgets", scope)
+	}
+	// ControlBar
+	if controlBar := dGetDoc(wDoc, "ControlBar"); controlBar != nil {
+		collectWidgetScope(controlBar, "Items", scope)
+	}
+	// CustomWidget (pluggable): Object.Properties[].Value.Widgets[]
+	if strings.Contains(typeName, "CustomWidget") {
+		if obj := dGetDoc(wDoc, "Object"); obj != nil {
+			props := dGetArrayElements(dGet(obj, "Properties"))
+			for _, prop := range props {
+				propDoc, ok := prop.(bson.D)
+				if !ok {
+					continue
+				}
+				if valDoc := dGetDoc(propDoc, "Value"); valDoc != nil {
+					collectWidgetScope(valDoc, "Widgets", scope)
+				}
+			}
+		}
+	}
 }
 
 // ============================================================================
