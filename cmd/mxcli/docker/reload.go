@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -110,7 +111,57 @@ func Reload(opts ReloadOptions) error {
 		fmt.Fprintln(w, "Model reloaded.")
 	}
 
+	// Check for pending schema changes (new/dropped entities or attributes).
+	// reload_model only reloads the in-memory model definition; it does not
+	// sync the database schema. If DDL changes are pending, the app will crash
+	// at runtime with "Entity does not exist" or similar errors.
+	if pending := checkPendingDDL(m2eeOpts); pending != "" {
+		fmt.Fprintln(w, "")
+		fmt.Fprintln(w, "WARNING: Database schema changes detected after reload.")
+		fmt.Fprintln(w, "  The model was reloaded, but new entities or attributes require")
+		fmt.Fprintln(w, "  a database schema update that hot-reload cannot perform.")
+		fmt.Fprintln(w, "")
+		fmt.Fprintln(w, "  Pending DDL:")
+		for _, line := range strings.Split(pending, "\n") {
+			if strings.TrimSpace(line) != "" {
+				fmt.Fprintf(w, "    %s\n", line)
+			}
+		}
+		fmt.Fprintln(w, "")
+		fmt.Fprintln(w, "  Fix: run 'mxcli docker up --fresh' to restart with schema sync.")
+	}
+
 	return nil
+}
+
+// checkPendingDDL queries the runtime for pending DDL commands.
+// Returns the DDL text if changes are pending, or empty string if none or on error.
+func checkPendingDDL(opts M2EEOptions) string {
+	resp, err := CallM2EE(opts, "get_ddl_commands", nil)
+	if err != nil {
+		return ""
+	}
+	if resp.Result != 0 {
+		return ""
+	}
+
+	feedback := resp.Feedback()
+	if feedback == nil {
+		return ""
+	}
+
+	// The M2EE get_ddl_commands action returns DDL in feedback.ddl_commands
+	ddl, ok := feedback["ddl_commands"]
+	if !ok {
+		return ""
+	}
+
+	ddlStr, ok := ddl.(string)
+	if !ok || strings.TrimSpace(ddlStr) == "" {
+		return ""
+	}
+
+	return ddlStr
 }
 
 // extractReloadDuration extracts the duration from feedback.startup_metrics.duration.

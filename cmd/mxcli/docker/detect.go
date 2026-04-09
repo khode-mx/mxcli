@@ -21,17 +21,28 @@ func mxbuildBinaryName() string {
 	return "mxbuild"
 }
 
+// mxbuildBinaryNames returns all candidate binary names for mxbuild.
+// On Windows, the Linux binary ("mxbuild") may also be cached when downloaded
+// for Docker, so both names must be checked.
+func mxbuildBinaryNames() []string {
+	if runtime.GOOS == "windows" {
+		return []string{"mxbuild.exe", "mxbuild"}
+	}
+	return []string{"mxbuild"}
+}
+
 // findMxBuildInDir looks for the mxbuild binary inside a directory.
 // Checks: dir/mxbuild, dir/modeler/mxbuild (Mendix installation layout).
 func findMxBuildInDir(dir string) string {
-	bin := mxbuildBinaryName()
-	candidates := []string{
-		filepath.Join(dir, bin),
-		filepath.Join(dir, "modeler", bin),
-	}
-	for _, c := range candidates {
-		if info, err := os.Stat(c); err == nil && !info.IsDir() {
-			return c
+	for _, bin := range mxbuildBinaryNames() {
+		candidates := []string{
+			filepath.Join(dir, bin),
+			filepath.Join(dir, "modeler", bin),
+		}
+		for _, c := range candidates {
+			if info, err := os.Stat(c); err == nil && !info.IsDir() {
+				return c
+			}
 		}
 	}
 	return ""
