@@ -82,6 +82,31 @@ ALTER PAGE CRM.Customer_Edit {
 };
 ```
 
+## Modify DataGrid Columns
+
+Target columns using dotted notation `gridName.columnName`:
+
+```sql
+-- Add a column
+ALTER PAGE CRM.Customer_List {
+  INSERT AFTER dgCustomers.Email {
+    COLUMN Phone (Attribute: Phone, Caption: 'Phone')
+  }
+};
+
+-- Remove a column
+ALTER PAGE CRM.Customer_List {
+  DROP WIDGET dgCustomers.OldNotes
+};
+
+-- Rename a column header
+ALTER PAGE CRM.Customer_List {
+  SET Caption = 'E-mail Address' ON dgCustomers.Email
+};
+```
+
+Use `DESCRIBE PAGE CRM.Customer_List` to discover column names.
+
 ## Works on Snippets Too
 
 ```sql

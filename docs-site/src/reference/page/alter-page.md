@@ -76,6 +76,19 @@ Removes one or more widgets by name. The widget and all its children are removed
 
 Replaces a widget (and its entire subtree) with one or more new widgets.
 
+### DataGrid Column Operations
+
+DataGrid2 columns are addressable using dotted notation: `gridName.columnName`. The column name matches the name shown by `DESCRIBE PAGE` (derived from the attribute short name or caption).
+
+All four operations (SET, INSERT, DROP, REPLACE) support dotted column references:
+
+```sql
+SET Caption = 'Product SKU' ON dgProducts.Code
+DROP WIDGET dgProducts.OldColumn
+INSERT AFTER dgProducts.Price { COLUMN Margin (Attribute: Margin) }
+REPLACE dgProducts.Description WITH { COLUMN Notes (Attribute: Notes) }
+```
+
 ### SET Layout
 
 Changes the page's layout without rebuilding the widget tree. Placeholder names are auto-mapped by default. If the new layout has different placeholder names, use `MAP` to specify the mapping.

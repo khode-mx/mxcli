@@ -213,14 +213,32 @@ ALTER PAGE MyModule.Order_Edit {
 };
 ```
 
-### Add a DataGrid Column
+### DataGrid Column Operations
 
-Since DataGrid columns are part of the widget tree, use INSERT to add columns:
+DataGrid2 columns are addressable using dotted notation: `gridName.columnName`. Use `DESCRIBE PAGE` to discover column names (derived from the attribute short name or caption).
 
 ```sql
+-- Add a column after an existing one
 ALTER PAGE MyModule.Customer_Overview {
-  INSERT AFTER colEmail {
-    COLUMN colPhone (Attribute: Phone, Caption: 'Phone')
+  INSERT AFTER dgCustomers.Email {
+    COLUMN Phone (Attribute: Phone, Caption: 'Phone')
+  }
+};
+
+-- Remove a column
+ALTER PAGE MyModule.Customer_Overview {
+  DROP WIDGET dgCustomers.OldColumn
+};
+
+-- Change a column's caption
+ALTER PAGE MyModule.Customer_Overview {
+  SET Caption = 'E-mail Address' ON dgCustomers.Email
+};
+
+-- Replace a column
+ALTER PAGE MyModule.Customer_Overview {
+  REPLACE dgCustomers.Notes WITH {
+    COLUMN Description (Attribute: Description, Caption: 'Description')
   }
 };
 ```

@@ -2259,6 +2259,20 @@ ALTER PAGE PgTest.P033b_DataGrid_ColumnProperties {
   SET Layout = Atlas_Core.Atlas_TopBar;
 };
 
+-- MARK: ALTER PAGE DataGrid Column Operations
+
+-- =============================================================================
+-- ALTER PAGE - DataGrid Column Operations (dotted widget references)
+-- =============================================================================
+--
+-- DataGrid2 columns are addressable using gridName.columnName syntax.
+-- Column names are derived from the attribute short name or caption.
+
+-- DROP a column by dotted reference
+ALTER PAGE PgTest.P033b_DataGrid_ColumnProperties {
+  DROP WIDGET dgProducts.Description
+};
+
 -- MARK: Conditional Visibility/Editability and Responsive Widths
 
 -- =============================================================================

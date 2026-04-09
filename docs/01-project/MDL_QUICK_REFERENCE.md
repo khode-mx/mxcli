@@ -621,6 +621,9 @@ Modify an existing page or snippet's widget tree in-place without full `CREATE O
 | Drop widgets | `DROP WIDGET name1, name2` | Remove widgets by name |
 | Replace widget | `REPLACE widgetName WITH { widgets }` | Replace widget subtree |
 | Pluggable prop | `SET 'showLabel' = false ON cbStatus` | Quoted name for pluggable widgets |
+| Set column prop | `SET Caption = 'New' ON dgGrid.colName` | Dotted ref targets DataGrid column |
+| Drop column | `DROP WIDGET dgGrid.colName` | Remove a DataGrid column |
+| Insert column | `INSERT AFTER dgGrid.colName { COLUMN ... }` | Add column to DataGrid |
 | Add variable | `ADD Variables $name: Type = 'expr'` | Add a page variable |
 | Drop variable | `DROP Variables $name` | Remove a page variable |
 | Set layout | `SET Layout = Module.LayoutName` | Change page layout, auto-maps placeholders |

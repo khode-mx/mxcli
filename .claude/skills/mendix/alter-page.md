@@ -126,6 +126,30 @@ REPLACE footer1 WITH {
 
 Replaces the target widget with one or more new widgets. The new widgets use the same syntax as `CREATE PAGE`.
 
+### DataGrid Column Operations
+
+DataGrid2 columns are addressable using dotted notation: `gridName.columnName`. The column name is derived from the attribute short name or caption (same as shown by `DESCRIBE PAGE`).
+
+```sql
+-- SET a column property
+SET Caption = 'Product SKU' ON dgProducts.Code
+
+-- DROP a column
+DROP WIDGET dgProducts.OldColumn
+
+-- INSERT a column after an existing one
+INSERT AFTER dgProducts.Price {
+  COLUMN Margin (Attribute: Margin, Caption: 'Margin')
+}
+
+-- REPLACE a column
+REPLACE dgProducts.Description WITH {
+  COLUMN Notes (Attribute: Notes, Caption: 'Notes')
+}
+```
+
+To discover column names, run `DESCRIBE PAGE Module.PageName` and look at the COLUMN names inside the DATAGRID.
+
 ### ADD Variables - Add a Page Variable
 
 ```sql
