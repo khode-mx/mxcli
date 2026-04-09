@@ -22,8 +22,9 @@ func (e *Executor) showSettings() error {
 		return fmt.Errorf("failed to read project settings: %w", err)
 	}
 
-	fmt.Fprintf(e.output, "| %-35s | %-50s |\n", "Section", "Key Values")
-	fmt.Fprintf(e.output, "|%s|%s|\n", strings.Repeat("-", 37), strings.Repeat("-", 52))
+	tr := &TableResult{
+		Columns: []string{"Section", "Key Values"},
+	}
 
 	if ps.Model != nil {
 		ms := ps.Model
@@ -33,7 +34,7 @@ func (e *Executor) showSettings() error {
 		}
 		values = append(values, "Hash: "+ms.HashAlgorithm)
 		values = append(values, "Java: "+ms.JavaVersion)
-		fmt.Fprintf(e.output, "| %-35s | %-50s |\n", "Model Settings", strings.Join(values, ", "))
+		tr.Rows = append(tr.Rows, []any{"Model Settings", strings.Join(values, ", ")})
 	}
 
 	if ps.Configuration != nil {
@@ -46,15 +47,15 @@ func (e *Executor) showSettings() error {
 			if len(cfg.ConstantValues) > 0 {
 				values = append(values, fmt.Sprintf("%d constants", len(cfg.ConstantValues)))
 			}
-			fmt.Fprintf(e.output, "| %-35s | %-50s |\n",
+			tr.Rows = append(tr.Rows, []any{
 				fmt.Sprintf("Configuration '%s'", cfg.Name),
-				strings.Join(values, ", "))
+				strings.Join(values, ", "),
+			})
 		}
 	}
 
 	if ps.Language != nil {
-		fmt.Fprintf(e.output, "| %-35s | %-50s |\n",
-			"Language Settings", "Default: "+ps.Language.DefaultLanguageCode)
+		tr.Rows = append(tr.Rows, []any{"Language Settings", "Default: " + ps.Language.DefaultLanguageCode})
 	}
 
 	if ps.Workflows != nil {
@@ -66,21 +67,18 @@ func (e *Executor) showSettings() error {
 		if ws.DefaultTaskParallelism > 0 {
 			values = append(values, fmt.Sprintf("TaskParallelism: %d", ws.DefaultTaskParallelism))
 		}
-		fmt.Fprintf(e.output, "| %-35s | %-50s |\n", "Workflow Settings", strings.Join(values, ", "))
+		tr.Rows = append(tr.Rows, []any{"Workflow Settings", strings.Join(values, ", ")})
 	}
 
 	if ps.Convention != nil {
-		fmt.Fprintf(e.output, "| %-35s | %-50s |\n",
-			"Convention Settings", "AssocStorage: "+ps.Convention.DefaultAssociationStorage)
+		tr.Rows = append(tr.Rows, []any{"Convention Settings", "AssocStorage: " + ps.Convention.DefaultAssociationStorage})
 	}
 
 	if ps.WebUI != nil {
-		fmt.Fprintf(e.output, "| %-35s | %-50s |\n",
-			"Web UI Settings", "OptimizedClient: "+ps.WebUI.UseOptimizedClient)
+		tr.Rows = append(tr.Rows, []any{"Web UI Settings", "OptimizedClient: " + ps.WebUI.UseOptimizedClient})
 	}
 
-	fmt.Fprintln(e.output)
-	return nil
+	return e.writeResult(tr)
 }
 
 // describeSettings outputs the full MDL description of all settings.

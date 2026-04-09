@@ -272,7 +272,7 @@ func (e *Executor) showAssociations(moduleName string) error {
 		}
 	}
 
-	// Collect rows and calculate column widths
+	// Collect rows
 	type row struct {
 		qualifiedName string
 		module        string
@@ -284,42 +284,6 @@ func (e *Executor) showAssociations(moduleName string) error {
 		storage       string
 	}
 	var rows []row
-	qnWidth := len("Qualified Name")
-	modWidth := len("Module")
-	nameWidth := len("Name")
-	parentWidth := len("Parent")
-	childWidth := len("Child")
-	typeWidth := len("Type")
-	ownerWidth := len("Owner")
-	storageWidth := len("Storage")
-
-	addRow := func(qualifiedName, modName, assocName, parent, child string, assocType, owner, storage string) {
-		rows = append(rows, row{qualifiedName, modName, assocName, parent, child, assocType, owner, storage})
-		if len(qualifiedName) > qnWidth {
-			qnWidth = len(qualifiedName)
-		}
-		if len(modName) > modWidth {
-			modWidth = len(modName)
-		}
-		if len(assocName) > nameWidth {
-			nameWidth = len(assocName)
-		}
-		if len(parent) > parentWidth {
-			parentWidth = len(parent)
-		}
-		if len(child) > childWidth {
-			childWidth = len(child)
-		}
-		if len(assocType) > typeWidth {
-			typeWidth = len(assocType)
-		}
-		if len(owner) > ownerWidth {
-			ownerWidth = len(owner)
-		}
-		if len(storage) > storageWidth {
-			storageWidth = len(storage)
-		}
-	}
 
 	for _, dm := range domainModels {
 		modName := moduleNames[dm.ContainerID]
@@ -338,7 +302,7 @@ func (e *Executor) showAssociations(moduleName string) error {
 			if child == "" {
 				child = string(assoc.ChildID)
 			}
-			addRow(qualifiedName, modName, assoc.Name, parent, child, string(assoc.Type), string(assoc.Owner), string(assoc.StorageFormat))
+			rows = append(rows, row{qualifiedName, modName, assoc.Name, parent, child, string(assoc.Type), string(assoc.Owner), string(assoc.StorageFormat)})
 		}
 		// Cross-module associations
 		for _, ca := range dm.CrossAssociations {
@@ -347,7 +311,7 @@ func (e *Executor) showAssociations(moduleName string) error {
 			if parent == "" {
 				parent = string(ca.ParentID)
 			}
-			addRow(qualifiedName, modName, ca.Name, parent, ca.ChildRef, string(ca.Type), string(ca.Owner), string(ca.StorageFormat))
+			rows = append(rows, row{qualifiedName, modName, ca.Name, parent, ca.ChildRef, string(ca.Type), string(ca.Owner), string(ca.StorageFormat)})
 		}
 	}
 
@@ -356,21 +320,15 @@ func (e *Executor) showAssociations(moduleName string) error {
 		return strings.ToLower(rows[i].qualifiedName) < strings.ToLower(rows[j].qualifiedName)
 	})
 
-	// Markdown table with aligned columns
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*s | %-*s | %-*s | %-*s |\n",
-		qnWidth, "Qualified Name", modWidth, "Module", nameWidth, "Name",
-		parentWidth, "Parent", childWidth, "Child", typeWidth, "Type", ownerWidth, "Owner", storageWidth, "Storage")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|-%s-|-%s-|-%s-|-%s-|-%s-|\n",
-		strings.Repeat("-", qnWidth), strings.Repeat("-", modWidth), strings.Repeat("-", nameWidth),
-		strings.Repeat("-", parentWidth), strings.Repeat("-", childWidth),
-		strings.Repeat("-", typeWidth), strings.Repeat("-", ownerWidth), strings.Repeat("-", storageWidth))
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*s | %-*s | %-*s | %-*s |\n",
-			qnWidth, r.qualifiedName, modWidth, r.module, nameWidth, r.name,
-			parentWidth, r.parent, childWidth, r.child, typeWidth, r.assocType, ownerWidth, r.owner, storageWidth, r.storage)
+	// Build TableResult
+	result := &TableResult{
+		Columns: []string{"Qualified Name", "Module", "Name", "Parent", "Child", "Type", "Owner", "Storage"},
+		Summary: fmt.Sprintf("(%d associations)", len(rows)),
 	}
-	fmt.Fprintf(e.output, "\n(%d associations)\n", len(rows))
-	return nil
+	for _, r := range rows {
+		result.Rows = append(result.Rows, []any{r.qualifiedName, r.module, r.name, r.parent, r.child, r.assocType, r.owner, r.storage})
+	}
+	return e.writeResult(result)
 }
 
 // showAssociation handles SHOW ASSOCIATION command.

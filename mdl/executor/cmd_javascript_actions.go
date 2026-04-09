@@ -34,11 +34,6 @@ func (e *Executor) showJavaScriptActions(moduleName string) error {
 		folderPath    string
 	}
 	var rows []row
-	qnWidth := len("Qualified Name")
-	modWidth := len("Module")
-	nameWidth := len("Name")
-	platWidth := len("Platform")
-	pathWidth := len("Folder")
 
 	for _, jsa := range jsActions {
 		modID := h.FindModuleID(jsa.ContainerID)
@@ -50,23 +45,7 @@ func (e *Executor) showJavaScriptActions(moduleName string) error {
 			if platform == "" {
 				platform = "All"
 			}
-
 			rows = append(rows, row{qualifiedName, modName, jsa.Name, platform, folderPath})
-			if len(qualifiedName) > qnWidth {
-				qnWidth = len(qualifiedName)
-			}
-			if len(modName) > modWidth {
-				modWidth = len(modName)
-			}
-			if len(jsa.Name) > nameWidth {
-				nameWidth = len(jsa.Name)
-			}
-			if len(platform) > platWidth {
-				platWidth = len(platform)
-			}
-			if len(folderPath) > pathWidth {
-				pathWidth = len(folderPath)
-			}
 		}
 	}
 
@@ -74,20 +53,14 @@ func (e *Executor) showJavaScriptActions(moduleName string) error {
 		return strings.ToLower(rows[i].qualifiedName) < strings.ToLower(rows[j].qualifiedName)
 	})
 
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*s |\n",
-		qnWidth, "Qualified Name", modWidth, "Module", nameWidth, "Name",
-		platWidth, "Platform", pathWidth, "Folder")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|-%s-|-%s-|\n",
-		strings.Repeat("-", qnWidth), strings.Repeat("-", modWidth),
-		strings.Repeat("-", nameWidth), strings.Repeat("-", platWidth),
-		strings.Repeat("-", pathWidth))
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*s |\n",
-			qnWidth, r.qualifiedName, modWidth, r.module, nameWidth, r.name,
-			platWidth, r.platform, pathWidth, r.folderPath)
+	result := &TableResult{
+		Columns: []string{"Qualified Name", "Module", "Name", "Platform", "Folder"},
+		Summary: fmt.Sprintf("(%d javascript actions)", len(rows)),
 	}
-	fmt.Fprintf(e.output, "\n(%d javascript actions)\n", len(rows))
-	return nil
+	for _, r := range rows {
+		result.Rows = append(result.Rows, []any{r.qualifiedName, r.module, r.name, r.platform, r.folderPath})
+	}
+	return e.writeResult(result)
 }
 
 // describeJavaScriptAction handles DESCRIBE JAVASCRIPT ACTION command.

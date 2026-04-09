@@ -45,7 +45,7 @@ Examples:
 		filePath := args[0]
 		projectPath, _ := cmd.Flags().GetString("project")
 		checkRefs, _ := cmd.Flags().GetBool("references")
-		format, _ := cmd.Flags().GetString("format")
+		format := resolveFormat(cmd, "text")
 
 		// Read the file
 		content, err := os.ReadFile(filePath)

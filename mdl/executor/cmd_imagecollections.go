@@ -207,10 +207,10 @@ func (e *Executor) showImageCollections(moduleName string) error {
 		return err
 	}
 
-	fmt.Fprintf(e.output, "| %-40s | %-12s | %-6s |\n", "Image Collection", "Export Level", "Images")
-	fmt.Fprintf(e.output, "|%-42s|%-14s|%-8s|\n", strings.Repeat("-", 42), strings.Repeat("-", 14), strings.Repeat("-", 8))
+	result := &TableResult{
+		Columns: []string{"Image Collection", "Export Level", "Images"},
+	}
 
-	count := 0
 	for _, ic := range collections {
 		modID := h.FindModuleID(ic.ContainerID)
 		modName := h.GetModuleName(modID)
@@ -223,12 +223,11 @@ func (e *Executor) showImageCollections(moduleName string) error {
 		if exportLevel == "" {
 			exportLevel = "Hidden"
 		}
-		fmt.Fprintf(e.output, "| %-40s | %-12s | %6d |\n", qualifiedName, exportLevel, len(ic.Images))
-		count++
+		result.Rows = append(result.Rows, []any{qualifiedName, exportLevel, len(ic.Images)})
 	}
 
-	fmt.Fprintf(e.output, "\n(%d image collection(s))\n", count)
-	return nil
+	result.Summary = fmt.Sprintf("(%d image collection(s))", len(result.Rows))
+	return e.writeResult(result)
 }
 
 // findImageCollection finds an image collection by module and name.

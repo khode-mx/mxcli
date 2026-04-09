@@ -39,14 +39,6 @@ func (e *Executor) showMicroflows(moduleName string) error {
 		returnType    string
 	}
 	var rows []row
-	qnWidth := len("Qualified Name")
-	modWidth := len("Module")
-	nameWidth := len("Name")
-	pathWidth := len("Folder")
-	paramsWidth := len("Params")
-	actWidth := len("Actions")
-	compWidth := len("McCabe")
-	returnWidth := len("Returns")
 
 	for _, mf := range microflows {
 		modID := h.FindModuleID(mf.ContainerID)
@@ -69,33 +61,6 @@ func (e *Executor) showMicroflows(moduleName string) error {
 			complexity := calculateMicroflowComplexity(mf)
 
 			rows = append(rows, row{qualifiedName, modName, mf.Name, folderPath, len(mf.Parameters), activityCount, complexity, returnType})
-			if len(qualifiedName) > qnWidth {
-				qnWidth = len(qualifiedName)
-			}
-			if len(modName) > modWidth {
-				modWidth = len(modName)
-			}
-			if len(mf.Name) > nameWidth {
-				nameWidth = len(mf.Name)
-			}
-			if len(folderPath) > pathWidth {
-				pathWidth = len(folderPath)
-			}
-			paramsStr := fmt.Sprintf("%d", len(mf.Parameters))
-			if len(paramsStr) > paramsWidth {
-				paramsWidth = len(paramsStr)
-			}
-			actStr := fmt.Sprintf("%d", activityCount)
-			if len(actStr) > actWidth {
-				actWidth = len(actStr)
-			}
-			compStr := fmt.Sprintf("%d", complexity)
-			if len(compStr) > compWidth {
-				compWidth = len(compStr)
-			}
-			if len(returnType) > returnWidth {
-				returnWidth = len(returnType)
-			}
 		}
 	}
 
@@ -104,22 +69,14 @@ func (e *Executor) showMicroflows(moduleName string) error {
 		return strings.ToLower(rows[i].qualifiedName) < strings.ToLower(rows[j].qualifiedName)
 	})
 
-	// Markdown table with aligned columns
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*s | %-*s | %-*s | %-*s |\n",
-		qnWidth, "Qualified Name", modWidth, "Module", nameWidth, "Name",
-		pathWidth, "Folder", paramsWidth, "Params", actWidth, "Actions", compWidth, "McCabe", returnWidth, "Returns")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|-%s-|-%s-|-%s-|-%s-|-%s-|\n",
-		strings.Repeat("-", qnWidth), strings.Repeat("-", modWidth), strings.Repeat("-", nameWidth),
-		strings.Repeat("-", pathWidth), strings.Repeat("-", paramsWidth), strings.Repeat("-", actWidth),
-		strings.Repeat("-", compWidth), strings.Repeat("-", returnWidth))
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*d | %-*d | %-*d | %-*s |\n",
-			qnWidth, r.qualifiedName, modWidth, r.module, nameWidth, r.name,
-			pathWidth, r.folderPath, paramsWidth, r.params, actWidth, r.activities,
-			compWidth, r.complexity, returnWidth, r.returnType)
+	result := &TableResult{
+		Columns: []string{"Qualified Name", "Module", "Name", "Folder", "Params", "Actions", "McCabe", "Returns"},
+		Summary: fmt.Sprintf("(%d microflows)", len(rows)),
 	}
-	fmt.Fprintf(e.output, "\n(%d microflows)\n", len(rows))
-	return nil
+	for _, r := range rows {
+		result.Rows = append(result.Rows, []any{r.qualifiedName, r.module, r.name, r.folderPath, r.params, r.activities, r.complexity, r.returnType})
+	}
+	return e.writeResult(result)
 }
 
 // showNanoflows handles SHOW NANOFLOWS command.
@@ -148,14 +105,6 @@ func (e *Executor) showNanoflows(moduleName string) error {
 		returnType    string
 	}
 	var rows []row
-	qnWidth := len("Qualified Name")
-	modWidth := len("Module")
-	nameWidth := len("Name")
-	pathWidth := len("Folder")
-	paramsWidth := len("Params")
-	actWidth := len("Actions")
-	compWidth := len("McCabe")
-	returnWidth := len("Returns")
 
 	for _, nf := range nanoflows {
 		modID := h.FindModuleID(nf.ContainerID)
@@ -175,33 +124,6 @@ func (e *Executor) showNanoflows(moduleName string) error {
 			complexity := calculateNanoflowComplexity(nf)
 
 			rows = append(rows, row{qualifiedName, modName, nf.Name, folderPath, len(nf.Parameters), activityCount, complexity, returnType})
-			if len(qualifiedName) > qnWidth {
-				qnWidth = len(qualifiedName)
-			}
-			if len(modName) > modWidth {
-				modWidth = len(modName)
-			}
-			if len(nf.Name) > nameWidth {
-				nameWidth = len(nf.Name)
-			}
-			if len(folderPath) > pathWidth {
-				pathWidth = len(folderPath)
-			}
-			paramsStr := fmt.Sprintf("%d", len(nf.Parameters))
-			if len(paramsStr) > paramsWidth {
-				paramsWidth = len(paramsStr)
-			}
-			actStr := fmt.Sprintf("%d", activityCount)
-			if len(actStr) > actWidth {
-				actWidth = len(actStr)
-			}
-			compStr := fmt.Sprintf("%d", complexity)
-			if len(compStr) > compWidth {
-				compWidth = len(compStr)
-			}
-			if len(returnType) > returnWidth {
-				returnWidth = len(returnType)
-			}
 		}
 	}
 
@@ -210,22 +132,14 @@ func (e *Executor) showNanoflows(moduleName string) error {
 		return strings.ToLower(rows[i].qualifiedName) < strings.ToLower(rows[j].qualifiedName)
 	})
 
-	// Markdown table with aligned columns
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*s | %-*s | %-*s | %-*s |\n",
-		qnWidth, "Qualified Name", modWidth, "Module", nameWidth, "Name",
-		pathWidth, "Folder", paramsWidth, "Params", actWidth, "Actions", compWidth, "McCabe", returnWidth, "Returns")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|-%s-|-%s-|-%s-|-%s-|-%s-|\n",
-		strings.Repeat("-", qnWidth), strings.Repeat("-", modWidth), strings.Repeat("-", nameWidth),
-		strings.Repeat("-", pathWidth), strings.Repeat("-", paramsWidth), strings.Repeat("-", actWidth),
-		strings.Repeat("-", compWidth), strings.Repeat("-", returnWidth))
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*d | %-*d | %-*d | %-*s |\n",
-			qnWidth, r.qualifiedName, modWidth, r.module, nameWidth, r.name,
-			pathWidth, r.folderPath, paramsWidth, r.params, actWidth, r.activities,
-			compWidth, r.complexity, returnWidth, r.returnType)
+	result := &TableResult{
+		Columns: []string{"Qualified Name", "Module", "Name", "Folder", "Params", "Actions", "McCabe", "Returns"},
+		Summary: fmt.Sprintf("(%d nanoflows)", len(rows)),
 	}
-	fmt.Fprintf(e.output, "\n(%d nanoflows)\n", len(rows))
-	return nil
+	for _, r := range rows {
+		result.Rows = append(result.Rows, []any{r.qualifiedName, r.module, r.name, r.folderPath, r.params, r.activities, r.complexity, r.returnType})
+	}
+	return e.writeResult(result)
 }
 
 // countNanoflowActivities counts meaningful activities in a nanoflow.

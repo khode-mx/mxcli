@@ -33,7 +33,6 @@ func (e *Executor) showExportMappings(inModule string) error {
 		elementCount                      int
 	}
 	var rows []row
-	qnWidth, nameWidth, srcWidth := len("Export Mapping"), len("Name"), len("Schema Source")
 
 	for _, em := range all {
 		modID := h.FindModuleID(em.ContainerID)
@@ -52,17 +51,7 @@ func (e *Executor) showExportMappings(inModule string) error {
 		if src == "" {
 			src = "(none)"
 		}
-		r := row{qualifiedName: qn, name: em.Name, schemaSource: src, elementCount: len(em.Elements)}
-		if len(qn) > qnWidth {
-			qnWidth = len(qn)
-		}
-		if len(em.Name) > nameWidth {
-			nameWidth = len(em.Name)
-		}
-		if len(src) > srcWidth {
-			srcWidth = len(src)
-		}
-		rows = append(rows, r)
+		rows = append(rows, row{qualifiedName: qn, name: em.Name, schemaSource: src, elementCount: len(em.Elements)})
 	}
 
 	if len(rows) == 0 {
@@ -77,15 +66,13 @@ func (e *Executor) showExportMappings(inModule string) error {
 	// Sort alphabetically by qualified name
 	sort.Slice(rows, func(i, j int) bool { return rows[i].qualifiedName < rows[j].qualifiedName })
 
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %s |\n",
-		qnWidth, "Export Mapping", nameWidth, "Name", srcWidth, "Schema Source", "Elements")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|----------|\n",
-		strings.Repeat("-", qnWidth), strings.Repeat("-", nameWidth), strings.Repeat("-", srcWidth))
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %8d |\n",
-			qnWidth, r.qualifiedName, nameWidth, r.name, srcWidth, r.schemaSource, r.elementCount)
+	result := &TableResult{
+		Columns: []string{"Export Mapping", "Name", "Schema Source", "Elements"},
 	}
-	return nil
+	for _, r := range rows {
+		result.Rows = append(result.Rows, []any{r.qualifiedName, r.name, r.schemaSource, r.elementCount})
+	}
+	return e.writeResult(result)
 }
 
 // describeExportMapping prints the MDL representation of an export mapping.
@@ -236,7 +223,6 @@ func (e *Executor) execCreateExportMapping(s *ast.CreateExportMappingStmt) error
 	}
 	return nil
 }
-
 
 // buildExportMappingElementModel converts an AST element definition to a model element.
 // It clones properties from the matching JSON structure element and adds mapping bindings.

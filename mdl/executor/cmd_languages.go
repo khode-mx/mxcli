@@ -29,9 +29,10 @@ func (e *Executor) showLanguages() error {
 		return nil
 	}
 
-	// Print table
-	fmt.Fprintf(e.output, "| %-10s | %s |\n", "Language", "Strings")
-	fmt.Fprintf(e.output, "|%-12s|%s|\n", "------------", "---------")
+	tr := &TableResult{
+		Columns: []string{"Language", "Strings"},
+		Summary: fmt.Sprintf("(%d languages)", len(result.Rows)),
+	}
 	for _, row := range result.Rows {
 		lang := ""
 		count := ""
@@ -41,9 +42,7 @@ func (e *Executor) showLanguages() error {
 		if len(row) > 1 {
 			count = fmt.Sprintf("%v", row[1])
 		}
-		fmt.Fprintf(e.output, "| %-10s | %7s |\n", lang, count)
+		tr.Rows = append(tr.Rows, []any{lang, count})
 	}
-
-	fmt.Fprintf(e.output, "\n(%d languages)\n", len(result.Rows))
-	return nil
+	return e.writeResult(tr)
 }

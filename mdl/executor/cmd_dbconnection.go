@@ -141,11 +141,6 @@ func (e *Executor) showDatabaseConnections(moduleName string) error {
 		queries       int
 	}
 	var rows []row
-	qnWidth := len("Qualified Name")
-	modWidth := len("Module")
-	nameWidth := len("Name")
-	pathWidth := len("Folder")
-	typeWidth := len("Type")
 
 	for _, conn := range connections {
 		modID := h.FindModuleID(conn.ContainerID)
@@ -158,21 +153,6 @@ func (e *Executor) showDatabaseConnections(moduleName string) error {
 		folderPath := h.BuildFolderPath(conn.ContainerID)
 
 		rows = append(rows, row{qualifiedName, modName, conn.Name, folderPath, conn.DatabaseType, len(conn.Queries)})
-		if len(qualifiedName) > qnWidth {
-			qnWidth = len(qualifiedName)
-		}
-		if len(modName) > modWidth {
-			modWidth = len(modName)
-		}
-		if len(conn.Name) > nameWidth {
-			nameWidth = len(conn.Name)
-		}
-		if len(folderPath) > pathWidth {
-			pathWidth = len(folderPath)
-		}
-		if len(conn.DatabaseType) > typeWidth {
-			typeWidth = len(conn.DatabaseType)
-		}
 	}
 
 	if len(rows) == 0 {
@@ -184,21 +164,14 @@ func (e *Executor) showDatabaseConnections(moduleName string) error {
 		return strings.ToLower(rows[i].qualifiedName) < strings.ToLower(rows[j].qualifiedName)
 	})
 
-	qWidth := len("Queries")
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*s | %-*s |\n",
-		qnWidth, "Qualified Name", modWidth, "Module", nameWidth, "Name",
-		pathWidth, "Folder", typeWidth, "Type", qWidth, "Queries")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|-%s-|-%s-|-%s-|\n",
-		strings.Repeat("-", qnWidth), strings.Repeat("-", modWidth), strings.Repeat("-", nameWidth),
-		strings.Repeat("-", pathWidth), strings.Repeat("-", typeWidth), strings.Repeat("-", qWidth))
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*s | %-*d |\n",
-			qnWidth, r.qualifiedName, modWidth, r.module, nameWidth, r.name,
-			pathWidth, r.folderPath, typeWidth, r.dbType, qWidth, r.queries)
+	result := &TableResult{
+		Columns: []string{"Qualified Name", "Module", "Name", "Folder", "Type", "Queries"},
+		Summary: fmt.Sprintf("(%d database connections)", len(rows)),
 	}
-	fmt.Fprintf(e.output, "\n(%d database connections)\n", len(rows))
-
-	return nil
+	for _, r := range rows {
+		result.Rows = append(result.Rows, []any{r.qualifiedName, r.module, r.name, r.folderPath, r.dbType, r.queries})
+	}
+	return e.writeResult(result)
 }
 
 // describeDatabaseConnection handles DESCRIBE DATABASE CONNECTION command.

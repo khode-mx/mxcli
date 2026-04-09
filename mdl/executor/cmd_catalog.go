@@ -35,12 +35,7 @@ func (e *Executor) execShowCatalogTables() error {
 	}
 	infos := make([]tableInfo, 0, len(tables))
 
-	// Calculate max table name width
-	maxNameWidth := len("Table")
 	for _, t := range tables {
-		if len(t) > maxNameWidth {
-			maxNameWidth = len(t)
-		}
 		// Get count for this table
 		actualTable := strings.TrimPrefix(strings.ToLower(t), "catalog.")
 		result, err := e.catalog.Query(fmt.Sprintf("SELECT COUNT(*) FROM %s", actualTable))
@@ -53,23 +48,13 @@ func (e *Executor) execShowCatalogTables() error {
 		infos = append(infos, tableInfo{name: t, count: count})
 	}
 
-	// Calculate max count width (minimum 5 for "Count" header)
-	maxCountWidth := len("Count")
-	for _, info := range infos {
-		countStr := fmt.Sprintf("%d", info.count)
-		if len(countStr) > maxCountWidth {
-			maxCountWidth = len(countStr)
-		}
+	tr := &TableResult{
+		Columns: []string{"Table", "Count"},
 	}
-
-	// Output table with aligned columns
-	fmt.Fprintf(e.output, "| %-*s | %*s |\n", maxNameWidth, "Table", maxCountWidth, "Count")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|\n", strings.Repeat("-", maxNameWidth), strings.Repeat("-", maxCountWidth))
 	for _, info := range infos {
-		fmt.Fprintf(e.output, "| %-*s | %*d |\n", maxNameWidth, info.name, maxCountWidth, info.count)
+		tr.Rows = append(tr.Rows, []any{info.name, info.count})
 	}
-
-	return nil
+	return e.writeResult(tr)
 }
 
 // fullOnlyTables are catalog tables only populated by REFRESH CATALOG FULL.
@@ -193,44 +178,19 @@ func (e *Executor) execDescribeCatalogTable(stmt *ast.DescribeCatalogTableStmt) 
 	fmt.Fprintf(e.output, "Requires: %s\n\n", tableRequiredMode(tableName))
 
 	// PRAGMA table_info returns: cid, name, type, notnull, dflt_value, pk
-	// Build column table
-	type colInfo struct {
-		name string
-		typ  string
-		isPK bool
+	tr := &TableResult{
+		Columns: []string{"Column", "Type", "PK"},
 	}
-	var cols []colInfo
-	maxNameWidth := len("Column")
-	maxTypeWidth := len("Type")
-
 	for _, row := range result.Rows {
 		name := fmt.Sprintf("%v", row[1])
 		typ := fmt.Sprintf("%v", row[2])
-		pk := false
+		pkMark := ""
 		if v, ok := row[5].(int64); ok && v > 0 {
-			pk = true
+			pkMark = "*"
 		}
-		if len(name) > maxNameWidth {
-			maxNameWidth = len(name)
-		}
-		if len(typ) > maxTypeWidth {
-			maxTypeWidth = len(typ)
-		}
-		cols = append(cols, colInfo{name: name, typ: typ, isPK: pk})
+		tr.Rows = append(tr.Rows, []any{name, typ, pkMark})
 	}
-
-	pkWidth := 2 // "PK"
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s |\n", maxNameWidth, "Column", maxTypeWidth, "Type", pkWidth, "PK")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|\n", strings.Repeat("-", maxNameWidth), strings.Repeat("-", maxTypeWidth), strings.Repeat("-", pkWidth))
-	for _, col := range cols {
-		pkMark := "  "
-		if col.isPK {
-			pkMark = "* "
-		}
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %s |\n", maxNameWidth, col.name, maxTypeWidth, col.typ, pkMark)
-	}
-
-	return nil
+	return e.writeResult(tr)
 }
 
 // ensureCatalog ensures a catalog is available, using cache if possible.
@@ -630,52 +590,19 @@ func replaceIgnoreCase(s, old, new string) string {
 	return result.String()
 }
 
-// outputCatalogResults outputs query results in table format.
+// outputCatalogResults outputs query results in table or JSON format.
 func (e *Executor) outputCatalogResults(result *catalog.QueryResult) {
-	// Calculate column widths
-	widths := make([]int, len(result.Columns))
-	for i, col := range result.Columns {
-		widths[i] = len(col)
+	tr := &TableResult{
+		Columns: result.Columns,
 	}
 	for _, row := range result.Rows {
+		outRow := make([]any, len(row))
 		for i, val := range row {
-			s := formatValue(val)
-			if len(s) > widths[i] {
-				widths[i] = len(s)
-			}
+			outRow[i] = formatValue(val)
 		}
+		tr.Rows = append(tr.Rows, outRow)
 	}
-
-	// Cap column widths at 50 characters
-	for i := range widths {
-		if widths[i] > 50 {
-			widths[i] = 50
-		}
-	}
-
-	// Print header
-	fmt.Fprint(e.output, "|")
-	for i, col := range result.Columns {
-		fmt.Fprintf(e.output, " %-*s |", widths[i], truncate(col, widths[i]))
-	}
-	fmt.Fprintln(e.output)
-
-	// Print separator
-	fmt.Fprint(e.output, "|")
-	for _, w := range widths {
-		fmt.Fprintf(e.output, "-%s-|", strings.Repeat("-", w))
-	}
-	fmt.Fprintln(e.output)
-
-	// Print rows
-	for _, row := range result.Rows {
-		fmt.Fprint(e.output, "|")
-		for i, val := range row {
-			s := formatValue(val)
-			fmt.Fprintf(e.output, " %-*s |", widths[i], truncate(s, widths[i]))
-		}
-		fmt.Fprintln(e.output)
-	}
+	_ = e.writeResult(tr)
 }
 
 // formatValue formats a value for display.
@@ -692,17 +619,6 @@ func formatValue(val any) string {
 		s = strings.ReplaceAll(s, "  ", " ")
 	}
 	return s
-}
-
-// truncate truncates a string to max length.
-func truncate(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	if max <= 3 {
-		return s[:max]
-	}
-	return s[:max-3] + "..."
 }
 
 // captureDescribe generates MDL source for a given object type and qualified name.

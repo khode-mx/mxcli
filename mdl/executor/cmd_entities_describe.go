@@ -63,9 +63,6 @@ func (e *Executor) showEntities(moduleName string) error {
 		accessRules    int
 	}
 	var rows []row
-	qnWidth := len("Entity")
-	typeWidth := len("Type")
-	genWidth := len("Extends")
 
 	// Add System entities first (if showing all or System module)
 	if moduleName == "" || moduleName == "System" {
@@ -81,9 +78,6 @@ func (e *Executor) showEntities(moduleName string) error {
 				accessRules:   -1,
 			}
 			rows = append(rows, r)
-			if len(sysEntity) > qnWidth {
-				qnWidth = len(sysEntity)
-			}
 		}
 	}
 
@@ -117,16 +111,6 @@ func (e *Executor) showEntities(moduleName string) error {
 				accessRules:    len(entity.AccessRules),
 			}
 			rows = append(rows, r)
-
-			if len(qualifiedName) > qnWidth {
-				qnWidth = len(qualifiedName)
-			}
-			if len(entityType) > typeWidth {
-				typeWidth = len(entityType)
-			}
-			if len(entity.GeneralizationRef) > genWidth {
-				genWidth = len(entity.GeneralizationRef)
-			}
 		}
 	}
 
@@ -144,39 +128,31 @@ func (e *Executor) showEntities(moduleName string) error {
 		return strings.ToLower(rows[i].qualifiedName) < strings.ToLower(rows[j].qualifiedName)
 	})
 
-	// Markdown table with aligned columns
+	// Build TableResult
+	columns := []string{"Entity", "Type"}
 	if hasGeneralizations {
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %5s | %6s | %11s | %7s | %6s | %11s |\n",
-			qnWidth, "Entity", typeWidth, "Type", genWidth, "Extends", "Attrs", "Assocs", "Validations", "Indexes", "Events", "AccessRules")
-		fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|-------|--------|-------------|---------|--------|-------------|\n",
-			strings.Repeat("-", qnWidth), strings.Repeat("-", typeWidth), strings.Repeat("-", genWidth))
-	} else {
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %5s | %6s | %11s | %7s | %6s | %11s |\n",
-			qnWidth, "Entity", typeWidth, "Type", "Attrs", "Assocs", "Validations", "Indexes", "Events", "AccessRules")
-		fmt.Fprintf(e.output, "|-%s-|-%s-|-------|--------|-------------|---------|--------|-------------|\n",
-			strings.Repeat("-", qnWidth), strings.Repeat("-", typeWidth))
+		columns = append(columns, "Extends")
+	}
+	columns = append(columns, "Attrs", "Assocs", "Validations", "Indexes", "Events", "AccessRules")
+
+	result := &TableResult{
+		Columns: columns,
+		Summary: fmt.Sprintf("(%d entities)", len(rows)),
 	}
 	for _, r := range rows {
-		genStr := r.generalization
-		// For System entities, show "-" instead of -1
-		if r.entityType == "System" {
-			if hasGeneralizations {
-				fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %5s | %6s | %11s | %7s | %6s | %11s |\n",
-					qnWidth, r.qualifiedName, typeWidth, r.entityType, genWidth, genStr, "-", "-", "-", "-", "-", "-")
-			} else {
-				fmt.Fprintf(e.output, "| %-*s | %-*s | %5s | %6s | %11s | %7s | %6s | %11s |\n",
-					qnWidth, r.qualifiedName, typeWidth, r.entityType, "-", "-", "-", "-", "-", "-")
-			}
-		} else if hasGeneralizations {
-			fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %5d | %6d | %11d | %7d | %6d | %11d |\n",
-				qnWidth, r.qualifiedName, typeWidth, r.entityType, genWidth, genStr, r.attrs, r.assocs, r.validations, r.indexes, r.events, r.accessRules)
-		} else {
-			fmt.Fprintf(e.output, "| %-*s | %-*s | %5d | %6d | %11d | %7d | %6d | %11d |\n",
-				qnWidth, r.qualifiedName, typeWidth, r.entityType, r.attrs, r.assocs, r.validations, r.indexes, r.events, r.accessRules)
+		var rowData []any
+		rowData = append(rowData, r.qualifiedName, r.entityType)
+		if hasGeneralizations {
+			rowData = append(rowData, r.generalization)
 		}
+		if r.entityType == "System" {
+			rowData = append(rowData, "-", "-", "-", "-", "-", "-")
+		} else {
+			rowData = append(rowData, r.attrs, r.assocs, r.validations, r.indexes, r.events, r.accessRules)
+		}
+		result.Rows = append(result.Rows, rowData)
 	}
-	fmt.Fprintf(e.output, "\n(%d entities)\n", len(rows))
-	return nil
+	return e.writeResult(result)
 }
 
 // showEntity handles SHOW ENTITY command.

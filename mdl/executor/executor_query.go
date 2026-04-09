@@ -138,74 +138,154 @@ func (e *Executor) execDescribe(s *ast.DescribeStmt) error {
 		return fmt.Errorf("not connected to a project")
 	}
 
-	switch s.ObjectType {
+	// Determine the object type label and name for JSON wrapping.
+	objectType := describeObjectTypeLabel(s.ObjectType)
+	name := s.Name.String()
+
+	return e.writeDescribeJSON(name, objectType, func() error {
+		switch s.ObjectType {
+		case ast.DescribeEnumeration:
+			return e.describeEnumeration(s.Name)
+		case ast.DescribeEntity:
+			return e.describeEntity(s.Name)
+		case ast.DescribeAssociation:
+			return e.describeAssociation(s.Name)
+		case ast.DescribeMicroflow:
+			return e.describeMicroflow(s.Name)
+		case ast.DescribeNanoflow:
+			return e.describeNanoflow(s.Name)
+		case ast.DescribeModule:
+			return e.describeModule(s.Name.Module, s.WithAll)
+		case ast.DescribePage:
+			return e.describePage(s.Name)
+		case ast.DescribeSnippet:
+			return e.describeSnippet(s.Name)
+		case ast.DescribeLayout:
+			return e.describeLayout(s.Name)
+		case ast.DescribeConstant:
+			return e.describeConstant(s.Name)
+		case ast.DescribeJavaAction:
+			return e.describeJavaAction(s.Name)
+		case ast.DescribeJavaScriptAction:
+			return e.describeJavaScriptAction(s.Name)
+		case ast.DescribeModuleRole:
+			return e.describeModuleRole(s.Name)
+		case ast.DescribeUserRole:
+			return e.describeUserRole(s.Name)
+		case ast.DescribeDemoUser:
+			return e.describeDemoUser(s.Name.Name)
+		case ast.DescribeODataClient:
+			return e.describeODataClient(s.Name)
+		case ast.DescribeODataService:
+			return e.describeODataService(s.Name)
+		case ast.DescribeExternalEntity:
+			return e.describeExternalEntity(s.Name)
+		case ast.DescribeNavigation:
+			return e.describeNavigation(s.Name)
+		case ast.DescribeWorkflow:
+			return e.describeWorkflow(s.Name)
+		case ast.DescribeBusinessEventService:
+			return e.describeBusinessEventService(s.Name)
+		case ast.DescribeDatabaseConnection:
+			return e.describeDatabaseConnection(s.Name)
+		case ast.DescribeSettings:
+			return e.describeSettings()
+		case ast.DescribeFragment:
+			return e.describeFragment(s.Name)
+		case ast.DescribeImageCollection:
+			return e.describeImageCollection(s.Name)
+		case ast.DescribeRestClient:
+			return e.describeRestClient(s.Name)
+		case ast.DescribePublishedRestService:
+			return e.describePublishedRestService(s.Name)
+		case ast.DescribeContractEntity:
+			return e.describeContractEntity(s.Name, s.Format)
+		case ast.DescribeContractAction:
+			return e.describeContractAction(s.Name, s.Format)
+		case ast.DescribeContractMessage:
+			return e.describeContractMessage(s.Name)
+		case ast.DescribeJsonStructure:
+			return e.describeJsonStructure(s.Name)
+		case ast.DescribeImportMapping:
+			return e.describeImportMapping(s.Name)
+		case ast.DescribeExportMapping:
+			return e.describeExportMapping(s.Name)
+		default:
+			return fmt.Errorf("unknown describe object type")
+		}
+	})
+}
+
+// describeObjectTypeLabel returns a human-readable label for a describe object type.
+func describeObjectTypeLabel(t ast.DescribeObjectType) string {
+	switch t {
 	case ast.DescribeEnumeration:
-		return e.describeEnumeration(s.Name)
+		return "enumeration"
 	case ast.DescribeEntity:
-		return e.describeEntity(s.Name)
+		return "entity"
 	case ast.DescribeAssociation:
-		return e.describeAssociation(s.Name)
+		return "association"
 	case ast.DescribeMicroflow:
-		return e.describeMicroflow(s.Name)
+		return "microflow"
 	case ast.DescribeNanoflow:
-		return e.describeNanoflow(s.Name)
+		return "nanoflow"
 	case ast.DescribeModule:
-		return e.describeModule(s.Name.Module, s.WithAll)
+		return "module"
 	case ast.DescribePage:
-		return e.describePage(s.Name)
+		return "page"
 	case ast.DescribeSnippet:
-		return e.describeSnippet(s.Name)
+		return "snippet"
 	case ast.DescribeLayout:
-		return e.describeLayout(s.Name)
+		return "layout"
 	case ast.DescribeConstant:
-		return e.describeConstant(s.Name)
+		return "constant"
 	case ast.DescribeJavaAction:
-		return e.describeJavaAction(s.Name)
+		return "javaaction"
 	case ast.DescribeJavaScriptAction:
-		return e.describeJavaScriptAction(s.Name)
+		return "javascriptaction"
 	case ast.DescribeModuleRole:
-		return e.describeModuleRole(s.Name)
+		return "modulerole"
 	case ast.DescribeUserRole:
-		return e.describeUserRole(s.Name)
+		return "userrole"
 	case ast.DescribeDemoUser:
-		return e.describeDemoUser(s.Name.Name)
+		return "demouser"
 	case ast.DescribeODataClient:
-		return e.describeODataClient(s.Name)
+		return "odataclient"
 	case ast.DescribeODataService:
-		return e.describeODataService(s.Name)
+		return "odataservice"
 	case ast.DescribeExternalEntity:
-		return e.describeExternalEntity(s.Name)
+		return "externalentity"
 	case ast.DescribeNavigation:
-		return e.describeNavigation(s.Name)
+		return "navigation"
 	case ast.DescribeWorkflow:
-		return e.describeWorkflow(s.Name)
+		return "workflow"
 	case ast.DescribeBusinessEventService:
-		return e.describeBusinessEventService(s.Name)
+		return "businesseventservice"
 	case ast.DescribeDatabaseConnection:
-		return e.describeDatabaseConnection(s.Name)
+		return "databaseconnection"
 	case ast.DescribeSettings:
-		return e.describeSettings()
+		return "settings"
 	case ast.DescribeFragment:
-		return e.describeFragment(s.Name)
+		return "fragment"
 	case ast.DescribeImageCollection:
-		return e.describeImageCollection(s.Name)
+		return "imagecollection"
 	case ast.DescribeRestClient:
-		return e.describeRestClient(s.Name)
+		return "restclient"
 	case ast.DescribePublishedRestService:
-		return e.describePublishedRestService(s.Name)
+		return "publishedrestservice"
 	case ast.DescribeContractEntity:
-		return e.describeContractEntity(s.Name, s.Format)
+		return "contractentity"
 	case ast.DescribeContractAction:
-		return e.describeContractAction(s.Name, s.Format)
+		return "contractaction"
 	case ast.DescribeContractMessage:
-		return e.describeContractMessage(s.Name)
+		return "contractmessage"
 	case ast.DescribeJsonStructure:
-		return e.describeJsonStructure(s.Name)
+		return "jsonstructure"
 	case ast.DescribeImportMapping:
-		return e.describeImportMapping(s.Name)
+		return "importmapping"
 	case ast.DescribeExportMapping:
-		return e.describeExportMapping(s.Name)
+		return "exportmapping"
 	default:
-		return fmt.Errorf("unknown describe object type")
+		return "unknown"
 	}
 }

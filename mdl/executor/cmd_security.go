@@ -57,17 +57,9 @@ func (e *Executor) showModuleRoles(moduleName string) error {
 		return fmt.Errorf("failed to read module security: %w", err)
 	}
 
-	type row struct {
-		qualifiedName string
-		module        string
-		role          string
-		description   string
+	result := &TableResult{
+		Columns: []string{"Qualified Name", "Module", "Role", "Description"},
 	}
-	var rows []row
-	qnWidth := len("Qualified Name")
-	modWidth := len("Module")
-	roleWidth := len("Role")
-	descWidth := len("Description")
 
 	for _, ms := range allMS {
 		modName := h.GetModuleName(ms.ContainerID)
@@ -79,34 +71,12 @@ func (e *Executor) showModuleRoles(moduleName string) error {
 		}
 		for _, mr := range ms.ModuleRoles {
 			qn := modName + "." + mr.Name
-			r := row{qn, modName, mr.Name, mr.Description}
-			rows = append(rows, r)
-			if len(qn) > qnWidth {
-				qnWidth = len(qn)
-			}
-			if len(modName) > modWidth {
-				modWidth = len(modName)
-			}
-			if len(mr.Name) > roleWidth {
-				roleWidth = len(mr.Name)
-			}
-			if len(mr.Description) > descWidth {
-				descWidth = len(mr.Description)
-			}
+			result.Rows = append(result.Rows, []any{qn, modName, mr.Name, mr.Description})
 		}
 	}
 
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s |\n",
-		qnWidth, "Qualified Name", modWidth, "Module", roleWidth, "Role", descWidth, "Description")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|-%s-|\n",
-		strings.Repeat("-", qnWidth), strings.Repeat("-", modWidth),
-		strings.Repeat("-", roleWidth), strings.Repeat("-", descWidth))
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s |\n",
-			qnWidth, r.qualifiedName, modWidth, r.module, roleWidth, r.role, descWidth, r.description)
-	}
-	fmt.Fprintf(e.output, "\n(%d module roles)\n", len(rows))
-	return nil
+	result.Summary = fmt.Sprintf("(%d module roles)", len(result.Rows))
+	return e.writeResult(result)
 }
 
 // showUserRoles handles SHOW USER ROLES.
@@ -116,17 +86,9 @@ func (e *Executor) showUserRoles() error {
 		return fmt.Errorf("failed to read project security: %w", err)
 	}
 
-	type row struct {
-		name          string
-		moduleRoles   int
-		manageAll     string
-		checkSecurity string
+	result := &TableResult{
+		Columns: []string{"Name", "Module Roles", "Manage All", "Check Security"},
 	}
-	var rows []row
-	nameWidth := len("Name")
-	mrWidth := len("Module Roles")
-	maWidth := len("Manage All")
-	csWidth := len("Check Security")
 
 	for _, ur := range ps.UserRoles {
 		ma := "No"
@@ -137,24 +99,11 @@ func (e *Executor) showUserRoles() error {
 		if ur.CheckSecurity {
 			cs = "Yes"
 		}
-		r := row{ur.Name, len(ur.ModuleRoles), ma, cs}
-		rows = append(rows, r)
-		if len(ur.Name) > nameWidth {
-			nameWidth = len(ur.Name)
-		}
+		result.Rows = append(result.Rows, []any{ur.Name, len(ur.ModuleRoles), ma, cs})
 	}
 
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s |\n",
-		nameWidth, "Name", mrWidth, "Module Roles", maWidth, "Manage All", csWidth, "Check Security")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|-%s-|\n",
-		strings.Repeat("-", nameWidth), strings.Repeat("-", mrWidth),
-		strings.Repeat("-", maWidth), strings.Repeat("-", csWidth))
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*d | %-*s | %-*s |\n",
-			nameWidth, r.name, mrWidth, r.moduleRoles, maWidth, r.manageAll, csWidth, r.checkSecurity)
-	}
-	fmt.Fprintf(e.output, "\n(%d user roles)\n", len(rows))
-	return nil
+	result.Summary = fmt.Sprintf("(%d user roles)", len(result.Rows))
+	return e.writeResult(result)
 }
 
 // showDemoUsers handles SHOW DEMO USERS.
@@ -170,37 +119,17 @@ func (e *Executor) showDemoUsers() error {
 		return nil
 	}
 
-	type row struct {
-		userName  string
-		roles     string
-		roleCount int
+	result := &TableResult{
+		Columns: []string{"User Name", "User Roles"},
 	}
-	var rows []row
-	nameWidth := len("User Name")
-	rolesWidth := len("User Roles")
 
 	for _, du := range ps.DemoUsers {
 		rolesStr := strings.Join(du.UserRoles, ", ")
-		r := row{du.UserName, rolesStr, len(du.UserRoles)}
-		rows = append(rows, r)
-		if len(du.UserName) > nameWidth {
-			nameWidth = len(du.UserName)
-		}
-		if len(rolesStr) > rolesWidth {
-			rolesWidth = len(rolesStr)
-		}
+		result.Rows = append(result.Rows, []any{du.UserName, rolesStr})
 	}
 
-	fmt.Fprintf(e.output, "| %-*s | %-*s |\n",
-		nameWidth, "User Name", rolesWidth, "User Roles")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|\n",
-		strings.Repeat("-", nameWidth), strings.Repeat("-", rolesWidth))
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*s |\n",
-			nameWidth, r.userName, rolesWidth, r.roles)
-	}
-	fmt.Fprintf(e.output, "\n(%d demo users)\n", len(rows))
-	return nil
+	result.Summary = fmt.Sprintf("(%d demo users)", len(result.Rows))
+	return e.writeResult(result)
 }
 
 // showAccessOnEntity handles SHOW ACCESS ON Module.Entity.

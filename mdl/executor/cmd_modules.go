@@ -521,8 +521,6 @@ func (e *Executor) showModules() error {
 		extDb       int
 	}
 	var rows []row
-	nameWidth := len("Module")
-	sourceWidth := len("Source")
 
 	for _, m := range modules {
 		// Determine source (AppStore with version or local)
@@ -554,27 +552,17 @@ func (e *Executor) showModules() error {
 			extDb:       extDbCounts[m.ID],
 		}
 		rows = append(rows, r)
-		if len(m.Name) > nameWidth {
-			nameWidth = len(m.Name)
-		}
-		if len(source) > sourceWidth {
-			sourceWidth = len(source)
-		}
 	}
 
-	// Markdown table with aligned columns
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %8s | %5s | %5s | %8s | %10s | %9s | %9s | %9s | %11s | %7s | %8s | %8s | %9s | %5s |\n",
-		nameWidth, "Module", sourceWidth, "Source", "Entities", "Enums", "Pages", "Snippets", "Microflows", "Nanoflows", "Workflows",
-		"Constants", "JavaActions", "PubREST", "PubOData", "ConOData", "BizEvents", "ExtDB")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|----------|-------|-------|----------|------------|-----------|-----------|-----------|-------------|---------|----------|----------|-----------|-------|\n",
-		strings.Repeat("-", nameWidth), strings.Repeat("-", sourceWidth))
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %8d | %5d | %5d | %8d | %10d | %9d | %9d | %9d | %11d | %7d | %8d | %8d | %9d | %5d |\n",
-			nameWidth, r.name, sourceWidth, r.source, r.entities, r.enums, r.pages, r.snippets, r.microflows, r.nanoflows, r.workflows,
-			r.constants, r.javaActions, r.pubRest, r.pubOData, r.conOData, r.bizEvents, r.extDb)
+	// Build TableResult
+	result := &TableResult{
+		Columns: []string{"Module", "Source", "Entities", "Enums", "Pages", "Snippets", "Microflows", "Nanoflows", "Workflows", "Constants", "JavaActions", "PubREST", "PubOData", "ConOData", "BizEvents", "ExtDB"},
+		Summary: fmt.Sprintf("(%d modules)", len(modules)),
 	}
-	fmt.Fprintf(e.output, "\n(%d modules)\n", len(modules))
-	return nil
+	for _, r := range rows {
+		result.Rows = append(result.Rows, []any{r.name, r.source, r.entities, r.enums, r.pages, r.snippets, r.microflows, r.nanoflows, r.workflows, r.constants, r.javaActions, r.pubRest, r.pubOData, r.conOData, r.bizEvents, r.extDb})
+	}
+	return e.writeResult(result)
 }
 
 // describeModule handles DESCRIBE MODULE [WITH ALL] command.

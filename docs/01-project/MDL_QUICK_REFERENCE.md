@@ -764,6 +764,7 @@ Cross-reference commands require `REFRESH CATALOG FULL` to populate reference da
 |---------|--------|-------|
 | Interactive REPL | `mxcli` | Interactive MDL shell |
 | Execute command | `mxcli -p app.mpr -c "SHOW ENTITIES"` | Single command |
+| JSON output | `mxcli -p app.mpr -c "SHOW ENTITIES" --json` | JSON for any command |
 | Execute script | `mxcli exec script.mdl -p app.mpr` | Script file |
 | Check syntax | `mxcli check script.mdl` | Parse-only validation |
 | Check references | `mxcli check script.mdl -p app.mpr --references` | With reference validation |

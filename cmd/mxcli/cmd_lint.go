@@ -79,7 +79,7 @@ Examples:
 `,
 	Run: func(cmd *cobra.Command, args []string) {
 		projectPath, _ := cmd.Flags().GetString("project")
-		format, _ := cmd.Flags().GetString("format")
+		format := resolveFormat(cmd, "text")
 		useColor, _ := cmd.Flags().GetBool("color")
 		listRules, _ := cmd.Flags().GetBool("list-rules")
 		excludeModules, _ := cmd.Flags().GetStringSlice("exclude")

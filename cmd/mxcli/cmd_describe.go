@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/mendixlabs/mxcli/mdl/executor"
 	"github.com/mendixlabs/mxcli/mdl/visitor"
 	"github.com/spf13/cobra"
 )
@@ -157,8 +158,11 @@ Example:
 			}
 		}
 
-		// Check for mermaid/elk format - bypass MDL parser and call directly
-		format, _ := cmd.Flags().GetString("format")
+		// Check for format overrides - bypass MDL parser for mermaid/elk, set executor for json
+		format := resolveFormat(cmd, "mdl")
+		if format == "json" {
+			exec.SetFormat(executor.FormatJSON)
+		}
 		typeArg := strings.Join(args[:len(args)-1], " ")
 		if format == "mermaid" {
 			if err := exec.DescribeMermaid(typeArg, name); err != nil {

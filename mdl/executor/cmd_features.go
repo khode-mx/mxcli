@@ -94,11 +94,11 @@ func (e *Executor) showFeaturesAll(reg *versions.Registry, pv versions.SemVer) e
 	}
 
 	fmt.Fprintf(e.output, "Features for Mendix %s:\n\n", pv)
-	fmt.Fprintf(e.output, "| %-30s | %-9s | %-8s | %s |\n", "Feature", "Available", "Since", "Notes")
-	fmt.Fprintf(e.output, "|%s|%s|%s|%s|\n",
-		strings.Repeat("-", 32), strings.Repeat("-", 11), strings.Repeat("-", 10), strings.Repeat("-", 40))
 
 	available, unavailable := 0, 0
+	tr := &TableResult{
+		Columns: []string{"Feature", "Available", "Since", "Notes"},
+	}
 	for _, f := range features {
 		avail := "Yes"
 		if !f.Available {
@@ -114,12 +114,10 @@ func (e *Executor) showFeaturesAll(reg *versions.Registry, pv versions.SemVer) e
 		if len(notes) > 38 {
 			notes = notes[:35] + "..."
 		}
-		fmt.Fprintf(e.output, "| %-30s | %-9s | %-8s | %-38s |\n",
-			f.DisplayName(), avail, f.MinVersion, notes)
+		tr.Rows = append(tr.Rows, []any{f.DisplayName(), avail, fmt.Sprintf("%s", f.MinVersion), notes})
 	}
-
-	fmt.Fprintf(e.output, "\n(%d available, %d not available in %s)\n", available, unavailable, pv)
-	return nil
+	tr.Summary = fmt.Sprintf("(%d available, %d not available in %s)", available, unavailable, pv)
+	return e.writeResult(tr)
 }
 
 func (e *Executor) showFeaturesInArea(reg *versions.Registry, pv versions.SemVer, area string) error {
@@ -133,10 +131,10 @@ func (e *Executor) showFeaturesInArea(reg *versions.Registry, pv versions.SemVer
 	}
 
 	fmt.Fprintf(e.output, "Features in %s for Mendix %s:\n\n", area, pv)
-	fmt.Fprintf(e.output, "| %-30s | %-9s | %-8s | %s |\n", "Feature", "Available", "Since", "Notes")
-	fmt.Fprintf(e.output, "|%s|%s|%s|%s|\n",
-		strings.Repeat("-", 32), strings.Repeat("-", 11), strings.Repeat("-", 10), strings.Repeat("-", 40))
 
+	tr := &TableResult{
+		Columns: []string{"Feature", "Available", "Since", "Notes"},
+	}
 	for _, f := range features {
 		avail := "Yes"
 		if !f.Available {
@@ -149,11 +147,9 @@ func (e *Executor) showFeaturesInArea(reg *versions.Registry, pv versions.SemVer
 		if len(notes) > 38 {
 			notes = notes[:35] + "..."
 		}
-		fmt.Fprintf(e.output, "| %-30s | %-9s | %-8s | %-38s |\n",
-			f.DisplayName(), avail, f.MinVersion, notes)
+		tr.Rows = append(tr.Rows, []any{f.DisplayName(), avail, fmt.Sprintf("%s", f.MinVersion), notes})
 	}
-
-	return nil
+	return e.writeResult(tr)
 }
 
 func (e *Executor) showFeaturesAddedSince(reg *versions.Registry, sinceV versions.SemVer) error {
@@ -164,10 +160,11 @@ func (e *Executor) showFeaturesAddedSince(reg *versions.Registry, sinceV version
 	}
 
 	fmt.Fprintf(e.output, "Features added since Mendix %s:\n\n", sinceV)
-	fmt.Fprintf(e.output, "| %-30s | %-12s | %-10s | %s |\n", "Feature", "Area", "Since", "Notes")
-	fmt.Fprintf(e.output, "|%s|%s|%s|%s|\n",
-		strings.Repeat("-", 32), strings.Repeat("-", 14), strings.Repeat("-", 12), strings.Repeat("-", 40))
 
+	tr := &TableResult{
+		Columns: []string{"Feature", "Area", "Since", "Notes"},
+		Summary: fmt.Sprintf("(%d features added since %s)", len(added), sinceV),
+	}
 	for _, f := range added {
 		notes := f.Notes
 		if f.MDL != "" && notes == "" {
@@ -176,10 +173,7 @@ func (e *Executor) showFeaturesAddedSince(reg *versions.Registry, sinceV version
 		if len(notes) > 38 {
 			notes = notes[:35] + "..."
 		}
-		fmt.Fprintf(e.output, "| %-30s | %-12s | %-10s | %-38s |\n",
-			f.DisplayName(), f.Area, f.MinVersion, notes)
+		tr.Rows = append(tr.Rows, []any{f.DisplayName(), f.Area, fmt.Sprintf("%s", f.MinVersion), notes})
 	}
-
-	fmt.Fprintf(e.output, "\n(%d features added since %s)\n", len(added), sinceV)
-	return nil
+	return e.writeResult(tr)
 }

@@ -54,12 +54,6 @@ func (e *Executor) showODataClients(moduleName string) error {
 		validated     string
 	}
 	var rows []row
-	modWidth := len("Module")
-	qnWidth := len("QualifiedName")
-	verWidth := len("Version")
-	odataWidth := len("OData")
-	urlWidth := len("MetadataUrl")
-	valWidth := len("Validated")
 
 	for _, svc := range services {
 		modID := h.FindModuleID(svc.ContainerID)
@@ -80,21 +74,6 @@ func (e *Executor) showODataClients(moduleName string) error {
 
 		qn := modName + "." + svc.Name
 		rows = append(rows, row{modName, qn, svc.Version, svc.ODataVersion, url, validated})
-		if len(modName) > modWidth {
-			modWidth = len(modName)
-		}
-		if len(qn) > qnWidth {
-			qnWidth = len(qn)
-		}
-		if len(svc.Version) > verWidth {
-			verWidth = len(svc.Version)
-		}
-		if len(svc.ODataVersion) > odataWidth {
-			odataWidth = len(svc.ODataVersion)
-		}
-		if len(url) > urlWidth {
-			urlWidth = len(url)
-		}
 	}
 
 	if len(rows) == 0 {
@@ -107,18 +86,14 @@ func (e *Executor) showODataClients(moduleName string) error {
 		return strings.ToLower(rows[i].qualifiedName) < strings.ToLower(rows[j].qualifiedName)
 	})
 
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*s | %-*s |\n",
-		modWidth, "Module", qnWidth, "QualifiedName", verWidth, "Version", odataWidth, "OData", urlWidth, "MetadataUrl", valWidth, "Validated")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|-%s-|-%s-|-%s-|\n",
-		strings.Repeat("-", modWidth), strings.Repeat("-", qnWidth), strings.Repeat("-", verWidth),
-		strings.Repeat("-", odataWidth), strings.Repeat("-", urlWidth), strings.Repeat("-", valWidth))
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*s | %-*s |\n",
-			modWidth, r.module, qnWidth, r.qualifiedName, verWidth, r.version, odataWidth, r.odataVer, urlWidth, r.url, valWidth, r.validated)
+	result := &TableResult{
+		Columns: []string{"Module", "QualifiedName", "Version", "OData", "MetadataUrl", "Validated"},
+		Summary: fmt.Sprintf("(%d OData clients)", len(rows)),
 	}
-	fmt.Fprintf(e.output, "\n(%d OData clients)\n", len(rows))
-
-	return nil
+	for _, r := range rows {
+		result.Rows = append(result.Rows, []any{r.module, r.qualifiedName, r.version, r.odataVer, r.url, r.validated})
+	}
+	return e.writeResult(result)
 }
 
 // describeODataClient handles DESCRIBE ODATA CLIENT command.
@@ -260,13 +235,6 @@ func (e *Executor) showODataServices(moduleName string) error {
 		authTypes     string
 	}
 	var rows []row
-	modWidth := len("Module")
-	qnWidth := len("QualifiedName")
-	pathWidth := len("Path")
-	verWidth := len("Version")
-	odataWidth := len("OData")
-	esWidth := len("EntitySets")
-	authWidth := len("AuthTypes")
 
 	for _, svc := range services {
 		modID := h.FindModuleID(svc.ContainerID)
@@ -283,27 +251,6 @@ func (e *Executor) showODataServices(moduleName string) error {
 
 		qn := modName + "." + svc.Name
 		rows = append(rows, row{modName, qn, svc.Path, svc.Version, svc.ODataVersion, esCount, authStr})
-		if len(modName) > modWidth {
-			modWidth = len(modName)
-		}
-		if len(qn) > qnWidth {
-			qnWidth = len(qn)
-		}
-		if len(svc.Path) > pathWidth {
-			pathWidth = len(svc.Path)
-		}
-		if len(svc.Version) > verWidth {
-			verWidth = len(svc.Version)
-		}
-		if len(svc.ODataVersion) > odataWidth {
-			odataWidth = len(svc.ODataVersion)
-		}
-		if len(esCount) > esWidth {
-			esWidth = len(esCount)
-		}
-		if len(authStr) > authWidth {
-			authWidth = len(authStr)
-		}
 	}
 
 	if len(rows) == 0 {
@@ -316,20 +263,14 @@ func (e *Executor) showODataServices(moduleName string) error {
 		return strings.ToLower(rows[i].qualifiedName) < strings.ToLower(rows[j].qualifiedName)
 	})
 
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*s | %-*s | %-*s |\n",
-		modWidth, "Module", qnWidth, "QualifiedName", pathWidth, "Path", verWidth, "Version", odataWidth, "OData", esWidth, "EntitySets", authWidth, "AuthTypes")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|-%s-|-%s-|-%s-|-%s-|\n",
-		strings.Repeat("-", modWidth), strings.Repeat("-", qnWidth), strings.Repeat("-", pathWidth),
-		strings.Repeat("-", verWidth), strings.Repeat("-", odataWidth), strings.Repeat("-", esWidth),
-		strings.Repeat("-", authWidth))
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*s | %-*s | %-*s |\n",
-			modWidth, r.module, qnWidth, r.qualifiedName, pathWidth, r.path, verWidth, r.version,
-			odataWidth, r.odataVer, esWidth, r.entitySets, authWidth, r.authTypes)
+	result := &TableResult{
+		Columns: []string{"Module", "QualifiedName", "Path", "Version", "OData", "EntitySets", "AuthTypes"},
+		Summary: fmt.Sprintf("(%d OData services)", len(rows)),
 	}
-	fmt.Fprintf(e.output, "\n(%d OData services)\n", len(rows))
-
-	return nil
+	for _, r := range rows {
+		result.Rows = append(result.Rows, []any{r.module, r.qualifiedName, r.path, r.version, r.odataVer, r.entitySets, r.authTypes})
+	}
+	return e.writeResult(result)
 }
 
 // describeODataService handles DESCRIBE ODATA SERVICE command.
@@ -529,12 +470,6 @@ func (e *Executor) showExternalEntities(moduleName string) error {
 		countable     string
 	}
 	var rows []row
-	modWidth := len("Module")
-	qnWidth := len("QualifiedName")
-	svcWidth := len("Service")
-	esWidth := len("EntitySet")
-	remWidth := len("RemoteName")
-	cntWidth := len("Countable")
 
 	for _, dm := range domainModels {
 		modID := h.FindModuleID(dm.ContainerID)
@@ -555,21 +490,6 @@ func (e *Executor) showExternalEntities(moduleName string) error {
 
 			qn := modName + "." + entity.Name
 			rows = append(rows, row{modName, qn, entity.RemoteServiceName, entity.RemoteEntitySet, entity.RemoteEntityName, countable})
-			if len(modName) > modWidth {
-				modWidth = len(modName)
-			}
-			if len(qn) > qnWidth {
-				qnWidth = len(qn)
-			}
-			if len(entity.RemoteServiceName) > svcWidth {
-				svcWidth = len(entity.RemoteServiceName)
-			}
-			if len(entity.RemoteEntitySet) > esWidth {
-				esWidth = len(entity.RemoteEntitySet)
-			}
-			if len(entity.RemoteEntityName) > remWidth {
-				remWidth = len(entity.RemoteEntityName)
-			}
 		}
 	}
 
@@ -583,18 +503,14 @@ func (e *Executor) showExternalEntities(moduleName string) error {
 		return strings.ToLower(rows[i].qualifiedName) < strings.ToLower(rows[j].qualifiedName)
 	})
 
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*s | %-*s |\n",
-		modWidth, "Module", qnWidth, "QualifiedName", svcWidth, "Service", esWidth, "EntitySet", remWidth, "RemoteName", cntWidth, "Countable")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|-%s-|-%s-|-%s-|\n",
-		strings.Repeat("-", modWidth), strings.Repeat("-", qnWidth), strings.Repeat("-", svcWidth),
-		strings.Repeat("-", esWidth), strings.Repeat("-", remWidth), strings.Repeat("-", cntWidth))
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*s | %-*s |\n",
-			modWidth, r.module, qnWidth, r.qualifiedName, svcWidth, r.service, esWidth, r.entitySet, remWidth, r.remoteName, cntWidth, r.countable)
+	result := &TableResult{
+		Columns: []string{"Module", "QualifiedName", "Service", "EntitySet", "RemoteName", "Countable"},
+		Summary: fmt.Sprintf("(%d external entities)", len(rows)),
 	}
-	fmt.Fprintf(e.output, "\n(%d external entities)\n", len(rows))
-
-	return nil
+	for _, r := range rows {
+		result.Rows = append(result.Rows, []any{r.module, r.qualifiedName, r.service, r.entitySet, r.remoteName, r.countable})
+	}
+	return e.writeResult(result)
 }
 
 // showExternalActions handles SHOW EXTERNAL ACTIONS [IN module] command.
@@ -705,27 +621,11 @@ func (e *Executor) showExternalActions(moduleName string) error {
 		usedBy     string
 	}
 	var rows []row
-	svcWidth := len("Service")
-	actWidth := len("Action")
-	paramWidth := len("Parameters")
-	usedWidth := len("UsedBy")
 
 	for _, info := range actionMap {
 		params := strings.Join(info.params, ", ")
 		usedBy := strings.Join(info.callers, ", ")
 		rows = append(rows, row{info.service, info.actionName, params, usedBy})
-		if len(info.service) > svcWidth {
-			svcWidth = len(info.service)
-		}
-		if len(info.actionName) > actWidth {
-			actWidth = len(info.actionName)
-		}
-		if len(params) > paramWidth {
-			paramWidth = len(params)
-		}
-		if len(usedBy) > usedWidth {
-			usedWidth = len(usedBy)
-		}
 	}
 
 	// Sort by service, then action name
@@ -736,18 +636,14 @@ func (e *Executor) showExternalActions(moduleName string) error {
 		return strings.ToLower(rows[i].actionName) < strings.ToLower(rows[j].actionName)
 	})
 
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s |\n",
-		svcWidth, "Service", actWidth, "Action", paramWidth, "Parameters", usedWidth, "UsedBy")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|-%s-|\n",
-		strings.Repeat("-", svcWidth), strings.Repeat("-", actWidth),
-		strings.Repeat("-", paramWidth), strings.Repeat("-", usedWidth))
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s |\n",
-			svcWidth, r.service, actWidth, r.actionName, paramWidth, r.params, usedWidth, r.usedBy)
+	result := &TableResult{
+		Columns: []string{"Service", "Action", "Parameters", "UsedBy"},
+		Summary: fmt.Sprintf("(%d external actions)", len(rows)),
 	}
-	fmt.Fprintf(e.output, "\n(%d external actions)\n", len(rows))
-
-	return nil
+	for _, r := range rows {
+		result.Rows = append(result.Rows, []any{r.service, r.actionName, r.params, r.usedBy})
+	}
+	return e.writeResult(result)
 }
 
 // describeExternalEntity handles DESCRIBE EXTERNAL ENTITY command.

@@ -106,6 +106,7 @@ Examples:
 				fmt.Fprintf(os.Stderr, "Using project: %s\n", discovered)
 			}
 		}
+		globalJSONFlag, _ = cmd.Flags().GetBool("json")
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		// Get flags
@@ -171,12 +172,32 @@ Examples:
 	},
 }
 
+// globalJSONFlag is set by PersistentPreRun when --json is passed.
+var globalJSONFlag bool
+
+// resolveFormat returns the effective output format for a command.
+// If the global --json flag is set and the command has a --format flag, it returns "json".
+// Otherwise it returns the command's --format flag value (or the provided default).
+func resolveFormat(cmd *cobra.Command, defaultFormat string) string {
+	if globalJSONFlag {
+		return "json"
+	}
+	if cmd.Flags().Lookup("format") != nil {
+		f, _ := cmd.Flags().GetString("format")
+		return f
+	}
+	return defaultFormat
+}
+
 // newLoggedExecutor creates an executor with diagnostics logging attached.
 // The caller must call logger.Close() when done (safe on nil).
 func newLoggedExecutor(mode string) (*executor.Executor, *diaglog.Logger) {
 	logger := diaglog.Init(version, mode)
 	exec := executor.New(os.Stdout)
 	exec.SetLogger(logger)
+	if globalJSONFlag {
+		exec.SetFormat(executor.FormatJSON)
+	}
 	return exec, logger
 }
 
@@ -216,6 +237,7 @@ func init() {
 
 	// Global flags
 	rootCmd.PersistentFlags().StringP("project", "p", "", "Path to Mendix project (.mpr file)")
+	rootCmd.PersistentFlags().Bool("json", false, "Output in JSON format")
 	rootCmd.Flags().StringP("command", "c", "", "Execute MDL command(s) and exit")
 
 	// Check command flags
@@ -234,7 +256,7 @@ func init() {
 	diffLocalCmd.Flags().IntP("width", "w", 120, "Terminal width for side-by-side format")
 
 	// Describe command flags
-	describeCmd.Flags().StringP("format", "f", "mdl", "Output format: mdl, mermaid, elk")
+	describeCmd.Flags().StringP("format", "f", "mdl", "Output format: mdl, json, mermaid, elk")
 
 	// Search command flags
 	searchCmd.Flags().StringP("format", "f", "table", "Output format: table, names, json")

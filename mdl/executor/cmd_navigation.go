@@ -110,21 +110,13 @@ func (e *Executor) showNavigation() error {
 		return nil
 	}
 
-	// Calculate column widths
-	nameWidth := len("Profile")
-	kindWidth := len("Kind")
-	homeWidth := len("HomePage")
-	loginWidth := len("LoginPage")
-	menuWidth := len("MenuItems")
-	roleHomeWidth := len("RoleHomes")
-
 	type row struct {
 		name      string
 		kind      string
 		homePage  string
 		loginPage string
-		menuItems string
-		roleHomes string
+		menuItems int
+		roleHomes int
 	}
 	var rows []row
 
@@ -144,53 +136,23 @@ func (e *Executor) showNavigation() error {
 		}
 
 		menuCount := countMenuItems(p.MenuItems)
-		menuStr := fmt.Sprintf("%d", menuCount)
-
-		roleHomeStr := fmt.Sprintf("%d", len(p.RoleBasedHomePages))
 
 		kind := p.Kind
 		if p.IsNative {
 			kind += " (native)"
 		}
 
-		r := row{p.Name, kind, homePage, loginPage, menuStr, roleHomeStr}
-		rows = append(rows, r)
-
-		if len(r.name) > nameWidth {
-			nameWidth = len(r.name)
-		}
-		if len(r.kind) > kindWidth {
-			kindWidth = len(r.kind)
-		}
-		if len(r.homePage) > homeWidth {
-			homeWidth = len(r.homePage)
-		}
-		if len(r.loginPage) > loginWidth {
-			loginWidth = len(r.loginPage)
-		}
-		if len(r.menuItems) > menuWidth {
-			menuWidth = len(r.menuItems)
-		}
-		if len(r.roleHomes) > roleHomeWidth {
-			roleHomeWidth = len(r.roleHomes)
-		}
+		rows = append(rows, row{p.Name, kind, homePage, loginPage, menuCount, len(p.RoleBasedHomePages)})
 	}
 
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*s | %-*s |\n",
-		nameWidth, "Profile", kindWidth, "Kind", homeWidth, "HomePage",
-		loginWidth, "LoginPage", menuWidth, "MenuItems", roleHomeWidth, "RoleHomes")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|-%s-|-%s-|-%s-|\n",
-		strings.Repeat("-", nameWidth), strings.Repeat("-", kindWidth),
-		strings.Repeat("-", homeWidth), strings.Repeat("-", loginWidth),
-		strings.Repeat("-", menuWidth), strings.Repeat("-", roleHomeWidth))
+	result := &TableResult{
+		Columns: []string{"Profile", "Kind", "HomePage", "LoginPage", "MenuItems", "RoleHomes"},
+		Summary: fmt.Sprintf("(%d navigation profiles)", len(rows)),
+	}
 	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*s | %-*s |\n",
-			nameWidth, r.name, kindWidth, r.kind, homeWidth, r.homePage,
-			loginWidth, r.loginPage, menuWidth, r.menuItems, roleHomeWidth, r.roleHomes)
+		result.Rows = append(result.Rows, []any{r.name, r.kind, r.homePage, r.loginPage, r.menuItems, r.roleHomes})
 	}
-	fmt.Fprintf(e.output, "\n(%d navigation profiles)\n", len(rows))
-
-	return nil
+	return e.writeResult(result)
 }
 
 // showNavigationMenu handles SHOW NAVIGATION MENU [profile] command.

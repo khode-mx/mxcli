@@ -30,7 +30,7 @@ func (e *Executor) showJavaActions(moduleName string) error {
 		return fmt.Errorf("failed to list java actions: %w", err)
 	}
 
-	// Collect rows and calculate column widths
+	// Collect rows
 	type row struct {
 		qualifiedName string
 		module        string
@@ -38,10 +38,6 @@ func (e *Executor) showJavaActions(moduleName string) error {
 		folderPath    string
 	}
 	var rows []row
-	qnWidth := len("Qualified Name")
-	modWidth := len("Module")
-	nameWidth := len("Name")
-	pathWidth := len("Folder")
 
 	for _, ja := range javaActions {
 		modID := h.FindModuleID(ja.ContainerID)
@@ -49,20 +45,7 @@ func (e *Executor) showJavaActions(moduleName string) error {
 		if moduleName == "" || modName == moduleName {
 			qualifiedName := modName + "." + ja.Name
 			folderPath := h.BuildFolderPath(ja.ContainerID)
-
 			rows = append(rows, row{qualifiedName, modName, ja.Name, folderPath})
-			if len(qualifiedName) > qnWidth {
-				qnWidth = len(qualifiedName)
-			}
-			if len(modName) > modWidth {
-				modWidth = len(modName)
-			}
-			if len(ja.Name) > nameWidth {
-				nameWidth = len(ja.Name)
-			}
-			if len(folderPath) > pathWidth {
-				pathWidth = len(folderPath)
-			}
 		}
 	}
 
@@ -71,18 +54,14 @@ func (e *Executor) showJavaActions(moduleName string) error {
 		return strings.ToLower(rows[i].qualifiedName) < strings.ToLower(rows[j].qualifiedName)
 	})
 
-	// Markdown table with aligned columns
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s |\n",
-		qnWidth, "Qualified Name", modWidth, "Module", nameWidth, "Name", pathWidth, "Folder")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|-%s-|\n",
-		strings.Repeat("-", qnWidth), strings.Repeat("-", modWidth),
-		strings.Repeat("-", nameWidth), strings.Repeat("-", pathWidth))
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s |\n",
-			qnWidth, r.qualifiedName, modWidth, r.module, nameWidth, r.name, pathWidth, r.folderPath)
+	result := &TableResult{
+		Columns: []string{"Qualified Name", "Module", "Name", "Folder"},
+		Summary: fmt.Sprintf("(%d java actions)", len(rows)),
 	}
-	fmt.Fprintf(e.output, "\n(%d java actions)\n", len(rows))
-	return nil
+	for _, r := range rows {
+		result.Rows = append(result.Rows, []any{r.qualifiedName, r.module, r.name, r.folderPath})
+	}
+	return e.writeResult(result)
 }
 
 // describeJavaAction handles DESCRIBE JAVA ACTION command - outputs MDL-style representation.

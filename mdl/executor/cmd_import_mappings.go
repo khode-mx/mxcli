@@ -33,7 +33,6 @@ func (e *Executor) showImportMappings(inModule string) error {
 		elementCount                      int
 	}
 	var rows []row
-	qnWidth, nameWidth, srcWidth := len("Import Mapping"), len("Name"), len("Schema Source")
 
 	for _, im := range all {
 		modID := h.FindModuleID(im.ContainerID)
@@ -52,17 +51,7 @@ func (e *Executor) showImportMappings(inModule string) error {
 		if src == "" {
 			src = "(none)"
 		}
-		r := row{qualifiedName: qn, name: im.Name, schemaSource: src, elementCount: len(im.Elements)}
-		if len(qn) > qnWidth {
-			qnWidth = len(qn)
-		}
-		if len(im.Name) > nameWidth {
-			nameWidth = len(im.Name)
-		}
-		if len(src) > srcWidth {
-			srcWidth = len(src)
-		}
-		rows = append(rows, r)
+		rows = append(rows, row{qualifiedName: qn, name: im.Name, schemaSource: src, elementCount: len(im.Elements)})
 	}
 
 	if len(rows) == 0 {
@@ -77,15 +66,13 @@ func (e *Executor) showImportMappings(inModule string) error {
 	// Sort alphabetically by qualified name
 	sort.Slice(rows, func(i, j int) bool { return rows[i].qualifiedName < rows[j].qualifiedName })
 
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %s |\n",
-		qnWidth, "Import Mapping", nameWidth, "Name", srcWidth, "Schema Source", "Elements")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|----------|\n",
-		strings.Repeat("-", qnWidth), strings.Repeat("-", nameWidth), strings.Repeat("-", srcWidth))
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %8d |\n",
-			qnWidth, r.qualifiedName, nameWidth, r.name, srcWidth, r.schemaSource, r.elementCount)
+	result := &TableResult{
+		Columns: []string{"Import Mapping", "Name", "Schema Source", "Elements"},
 	}
-	return nil
+	for _, r := range rows {
+		result.Rows = append(result.Rows, []any{r.qualifiedName, r.name, r.schemaSource, r.elementCount})
+	}
+	return e.writeResult(result)
 }
 
 // describeImportMapping prints the MDL representation of an import mapping.

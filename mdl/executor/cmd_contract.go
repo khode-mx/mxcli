@@ -38,10 +38,6 @@ func (e *Executor) showContractEntities(name *ast.QualifiedName) error {
 	}
 
 	var rows []row
-	esWidth := len("EntitySet")
-	etWidth := len("EntityType")
-	keyWidth := len("Key")
-	sumWidth := len("Summary")
 
 	for _, s := range doc.Schemas {
 		for _, et := range s.EntityTypes {
@@ -53,18 +49,6 @@ func (e *Executor) showContractEntities(name *ast.QualifiedName) error {
 			}
 
 			rows = append(rows, row{entitySetName, et.Name, key, len(et.Properties), len(et.NavigationProperties), summary})
-			if len(entitySetName) > esWidth {
-				esWidth = len(entitySetName)
-			}
-			if len(et.Name) > etWidth {
-				etWidth = len(et.Name)
-			}
-			if len(key) > keyWidth {
-				keyWidth = len(key)
-			}
-			if len(summary) > sumWidth {
-				sumWidth = len(summary)
-			}
 		}
 	}
 
@@ -77,24 +61,14 @@ func (e *Executor) showContractEntities(name *ast.QualifiedName) error {
 		return strings.ToLower(rows[i].entityType) < strings.ToLower(rows[j].entityType)
 	})
 
-	propsWidth := len("Props")
-	navsWidth := len("Navs")
-
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*s | %-*s |\n",
-		esWidth, "EntitySet", etWidth, "EntityType", keyWidth, "Key",
-		propsWidth, "Props", navsWidth, "Navs", sumWidth, "Summary")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|-%s-|-%s-|-%s-|\n",
-		strings.Repeat("-", esWidth), strings.Repeat("-", etWidth),
-		strings.Repeat("-", keyWidth), strings.Repeat("-", propsWidth),
-		strings.Repeat("-", navsWidth), strings.Repeat("-", sumWidth))
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*d | %-*d | %-*s |\n",
-			esWidth, r.entitySet, etWidth, r.entityType, keyWidth, r.key,
-			propsWidth, r.props, navsWidth, r.navs, sumWidth, r.summary)
+	result := &TableResult{
+		Columns: []string{"EntitySet", "EntityType", "Key", "Props", "Navs", "Summary"},
+		Summary: fmt.Sprintf("(%d entity types in %s contract)", len(rows), svcQN),
 	}
-	fmt.Fprintf(e.output, "\n(%d entity types in %s contract)\n", len(rows), svcQN)
-
-	return nil
+	for _, r := range rows {
+		result.Rows = append(result.Rows, []any{r.entitySet, r.entityType, r.key, r.props, r.navs, r.summary})
+	}
+	return e.writeResult(result)
 }
 
 // showContractActions handles SHOW CONTRACT ACTIONS FROM Module.Service.
@@ -121,8 +95,6 @@ func (e *Executor) showContractActions(name *ast.QualifiedName) error {
 	}
 
 	var rows []row
-	nameWidth := len("Action")
-	retWidth := len("ReturnType")
 
 	for _, a := range doc.Actions {
 		ret := a.ReturnType
@@ -147,33 +119,20 @@ func (e *Executor) showContractActions(name *ast.QualifiedName) error {
 		}
 
 		rows = append(rows, row{a.Name, len(a.Parameters), ret, bound})
-		if len(a.Name) > nameWidth {
-			nameWidth = len(a.Name)
-		}
-		if len(ret) > retWidth {
-			retWidth = len(ret)
-		}
 	}
 
 	sort.Slice(rows, func(i, j int) bool {
 		return strings.ToLower(rows[i].name) < strings.ToLower(rows[j].name)
 	})
 
-	paramWidth := len("Params")
-	boundWidth := len("Bound")
-
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s |\n",
-		nameWidth, "Action", paramWidth, "Params", retWidth, "ReturnType", boundWidth, "Bound")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|-%s-|\n",
-		strings.Repeat("-", nameWidth), strings.Repeat("-", paramWidth),
-		strings.Repeat("-", retWidth), strings.Repeat("-", boundWidth))
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*d | %-*s | %-*s |\n",
-			nameWidth, r.name, paramWidth, r.params, retWidth, r.returnType, boundWidth, r.bound)
+	result := &TableResult{
+		Columns: []string{"Action", "Params", "ReturnType", "Bound"},
+		Summary: fmt.Sprintf("(%d actions/functions in %s contract)", len(rows), svcQN),
 	}
-	fmt.Fprintf(e.output, "\n(%d actions/functions in %s contract)\n", len(rows), svcQN)
-
-	return nil
+	for _, r := range rows {
+		result.Rows = append(result.Rows, []any{r.name, r.params, r.returnType, r.bound})
+	}
+	return e.writeResult(result)
 }
 
 // describeContractEntity handles DESCRIBE CONTRACT ENTITY Service.EntityName [FORMAT mdl].
@@ -627,39 +586,19 @@ func (e *Executor) showContractChannels(name *ast.QualifiedName) error {
 	}
 
 	var rows []row
-	chWidth := len("Channel")
-	opWidth := len("Operation")
-	opIDWidth := len("OperationID")
-	msgWidth := len("Message")
 
 	for _, ch := range doc.Channels {
 		rows = append(rows, row{ch.Name, ch.OperationType, ch.OperationID, ch.MessageRef})
-		if len(ch.Name) > chWidth {
-			chWidth = len(ch.Name)
-		}
-		if len(ch.OperationType) > opWidth {
-			opWidth = len(ch.OperationType)
-		}
-		if len(ch.OperationID) > opIDWidth {
-			opIDWidth = len(ch.OperationID)
-		}
-		if len(ch.MessageRef) > msgWidth {
-			msgWidth = len(ch.MessageRef)
-		}
 	}
 
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s |\n",
-		chWidth, "Channel", opWidth, "Operation", opIDWidth, "OperationID", msgWidth, "Message")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|-%s-|\n",
-		strings.Repeat("-", chWidth), strings.Repeat("-", opWidth),
-		strings.Repeat("-", opIDWidth), strings.Repeat("-", msgWidth))
+	result := &TableResult{
+		Columns: []string{"Channel", "Operation", "OperationID", "Message"},
+		Summary: fmt.Sprintf("(%d channels in %s contract)", len(rows), svcQN),
+	}
 	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s |\n",
-			chWidth, r.channel, opWidth, r.operation, opIDWidth, r.opID, msgWidth, r.message)
+		result.Rows = append(result.Rows, []any{r.channel, r.operation, r.opID, r.message})
 	}
-	fmt.Fprintf(e.output, "\n(%d channels in %s contract)\n", len(rows), svcQN)
-
-	return nil
+	return e.writeResult(result)
 }
 
 // showContractMessages handles SHOW CONTRACT MESSAGES FROM Module.Service.
@@ -686,41 +625,23 @@ func (e *Executor) showContractMessages(name *ast.QualifiedName) error {
 	}
 
 	var rows []row
-	nameWidth := len("Message")
-	titleWidth := len("Title")
-	ctWidth := len("ContentType")
 
 	for _, msg := range doc.Messages {
 		rows = append(rows, row{msg.Name, msg.Title, msg.ContentType, len(msg.Properties)})
-		if len(msg.Name) > nameWidth {
-			nameWidth = len(msg.Name)
-		}
-		if len(msg.Title) > titleWidth {
-			titleWidth = len(msg.Title)
-		}
-		if len(msg.ContentType) > ctWidth {
-			ctWidth = len(msg.ContentType)
-		}
 	}
 
 	sort.Slice(rows, func(i, j int) bool {
 		return strings.ToLower(rows[i].name) < strings.ToLower(rows[j].name)
 	})
 
-	propsWidth := len("Props")
-
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s |\n",
-		nameWidth, "Message", titleWidth, "Title", ctWidth, "ContentType", propsWidth, "Props")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|-%s-|\n",
-		strings.Repeat("-", nameWidth), strings.Repeat("-", titleWidth),
-		strings.Repeat("-", ctWidth), strings.Repeat("-", propsWidth))
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*d |\n",
-			nameWidth, r.name, titleWidth, r.title, ctWidth, r.contentType, propsWidth, r.props)
+	result := &TableResult{
+		Columns: []string{"Message", "Title", "ContentType", "Props"},
+		Summary: fmt.Sprintf("(%d messages in %s contract)", len(rows), svcQN),
 	}
-	fmt.Fprintf(e.output, "\n(%d messages in %s contract)\n", len(rows), svcQN)
-
-	return nil
+	for _, r := range rows {
+		result.Rows = append(result.Rows, []any{r.name, r.title, r.contentType, r.props})
+	}
+	return e.writeResult(result)
 }
 
 // describeContractMessage handles DESCRIBE CONTRACT MESSAGE Module.Service.MessageName.

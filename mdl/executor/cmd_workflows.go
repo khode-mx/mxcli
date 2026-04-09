@@ -34,11 +34,6 @@ func (e *Executor) showWorkflows(moduleName string) error {
 		paramEntity   string
 	}
 	var rows []row
-	qnWidth := len("Qualified Name")
-	actWidth := len("Activities")
-	utWidth := len("User Tasks")
-	decWidth := len("Decisions")
-	peWidth := len("Parameter Entity")
 
 	for _, wf := range wfs {
 		modID := h.FindModuleID(wf.ContainerID)
@@ -56,24 +51,6 @@ func (e *Executor) showWorkflows(moduleName string) error {
 		acts, uts, decs := countWorkflowActivities(wf)
 
 		rows = append(rows, row{qualifiedName, modName, wf.Name, acts, uts, decs, paramEntity})
-		if len(qualifiedName) > qnWidth {
-			qnWidth = len(qualifiedName)
-		}
-		actStr := fmt.Sprintf("%d", acts)
-		if len(actStr) > actWidth {
-			actWidth = len(actStr)
-		}
-		utStr := fmt.Sprintf("%d", uts)
-		if len(utStr) > utWidth {
-			utWidth = len(utStr)
-		}
-		decStr := fmt.Sprintf("%d", decs)
-		if len(decStr) > decWidth {
-			decWidth = len(decStr)
-		}
-		if len(paramEntity) > peWidth {
-			peWidth = len(paramEntity)
-		}
 	}
 
 	// Sort by qualified name
@@ -81,21 +58,14 @@ func (e *Executor) showWorkflows(moduleName string) error {
 		return strings.ToLower(rows[i].qualifiedName) < strings.ToLower(rows[j].qualifiedName)
 	})
 
-	// Markdown table
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*s |\n",
-		qnWidth, "Qualified Name", actWidth, "Activities", utWidth, "User Tasks",
-		decWidth, "Decisions", peWidth, "Parameter Entity")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|-%s-|-%s-|\n",
-		strings.Repeat("-", qnWidth), strings.Repeat("-", actWidth),
-		strings.Repeat("-", utWidth), strings.Repeat("-", decWidth),
-		strings.Repeat("-", peWidth))
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*d | %-*d | %-*d | %-*s |\n",
-			qnWidth, r.qualifiedName, actWidth, r.activities, utWidth, r.userTasks,
-			decWidth, r.decisions, peWidth, r.paramEntity)
+	result := &TableResult{
+		Columns: []string{"Qualified Name", "Activities", "User Tasks", "Decisions", "Parameter Entity"},
+		Summary: fmt.Sprintf("(%d workflows)", len(rows)),
 	}
-	fmt.Fprintf(e.output, "\n(%d workflows)\n", len(rows))
-	return nil
+	for _, r := range rows {
+		result.Rows = append(result.Rows, []any{r.qualifiedName, r.activities, r.userTasks, r.decisions, r.paramEntity})
+	}
+	return e.writeResult(result)
 }
 
 // countWorkflowActivities counts total activities, user tasks, and decisions in a workflow.

@@ -32,11 +32,6 @@ func (e *Executor) showRestClients(moduleName string) error {
 		ops           int
 	}
 	var rows []row
-	modWidth := len("Module")
-	qnWidth := len("QualifiedName")
-	urlWidth := len("BaseURL")
-	authWidth := len("Auth")
-	opsWidth := len("Operations")
 
 	for _, svc := range services {
 		modID := h.FindModuleID(svc.ContainerID)
@@ -56,23 +51,7 @@ func (e *Executor) showRestClients(moduleName string) error {
 		}
 
 		qn := modName + "." + svc.Name
-		opsStr := fmt.Sprintf("%d", len(svc.Operations))
 		rows = append(rows, row{modName, qn, baseUrl, auth, len(svc.Operations)})
-		if len(modName) > modWidth {
-			modWidth = len(modName)
-		}
-		if len(qn) > qnWidth {
-			qnWidth = len(qn)
-		}
-		if len(baseUrl) > urlWidth {
-			urlWidth = len(baseUrl)
-		}
-		if len(auth) > authWidth {
-			authWidth = len(auth)
-		}
-		if len(opsStr) > opsWidth {
-			opsWidth = len(opsStr)
-		}
 	}
 
 	if len(rows) == 0 {
@@ -84,18 +63,14 @@ func (e *Executor) showRestClients(moduleName string) error {
 		return strings.ToLower(rows[i].qualifiedName) < strings.ToLower(rows[j].qualifiedName)
 	})
 
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*s |\n",
-		modWidth, "Module", qnWidth, "QualifiedName", urlWidth, "BaseURL", authWidth, "Auth", opsWidth, "Operations")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|-%s-|-%s-|\n",
-		strings.Repeat("-", modWidth), strings.Repeat("-", qnWidth), strings.Repeat("-", urlWidth),
-		strings.Repeat("-", authWidth), strings.Repeat("-", opsWidth))
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*d |\n",
-			modWidth, r.module, qnWidth, r.qualifiedName, urlWidth, r.baseUrl, authWidth, r.auth, opsWidth, r.ops)
+	result := &TableResult{
+		Columns: []string{"Module", "QualifiedName", "BaseURL", "Auth", "Operations"},
+		Summary: fmt.Sprintf("(%d REST clients)", len(rows)),
 	}
-	fmt.Fprintf(e.output, "\n(%d REST clients)\n", len(rows))
-
-	return nil
+	for _, r := range rows {
+		result.Rows = append(result.Rows, []any{r.module, r.qualifiedName, r.baseUrl, r.auth, r.ops})
+	}
+	return e.writeResult(result)
 }
 
 // describeRestClient handles DESCRIBE REST CLIENT command.

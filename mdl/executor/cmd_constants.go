@@ -24,7 +24,7 @@ func (e *Executor) showConstants(moduleName string) error {
 		return fmt.Errorf("failed to build hierarchy: %w", err)
 	}
 
-	// Collect rows and calculate column widths
+	// Collect rows
 	type row struct {
 		qualifiedName string
 		module        string
@@ -35,13 +35,6 @@ func (e *Executor) showConstants(moduleName string) error {
 		exposed       string
 	}
 	var rows []row
-	qnWidth := len("Qualified Name")
-	modWidth := len("Module")
-	nameWidth := len("Name")
-	pathWidth := len("Folder")
-	typeWidth := len("Type")
-	defaultWidth := len("Default")
-	exposedWidth := len("Exposed")
 
 	for _, c := range constants {
 		modID := h.FindModuleID(c.ContainerID)
@@ -63,27 +56,6 @@ func (e *Executor) showConstants(moduleName string) error {
 		}
 
 		rows = append(rows, row{qualifiedName, modName, c.Name, folderPath, typeStr, defaultStr, exposed})
-		if len(qualifiedName) > qnWidth {
-			qnWidth = len(qualifiedName)
-		}
-		if len(modName) > modWidth {
-			modWidth = len(modName)
-		}
-		if len(c.Name) > nameWidth {
-			nameWidth = len(c.Name)
-		}
-		if len(folderPath) > pathWidth {
-			pathWidth = len(folderPath)
-		}
-		if len(typeStr) > typeWidth {
-			typeWidth = len(typeStr)
-		}
-		if len(defaultStr) > defaultWidth {
-			defaultWidth = len(defaultStr)
-		}
-		if len(exposed) > exposedWidth {
-			exposedWidth = len(exposed)
-		}
 	}
 
 	if len(rows) == 0 {
@@ -96,22 +68,14 @@ func (e *Executor) showConstants(moduleName string) error {
 		return strings.ToLower(rows[i].qualifiedName) < strings.ToLower(rows[j].qualifiedName)
 	})
 
-	// Markdown table with aligned columns
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*s | %-*s | %-*s |\n",
-		qnWidth, "Qualified Name", modWidth, "Module", nameWidth, "Name",
-		pathWidth, "Folder", typeWidth, "Type", defaultWidth, "Default", exposedWidth, "Exposed")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|-%s-|-%s-|-%s-|-%s-|\n",
-		strings.Repeat("-", qnWidth), strings.Repeat("-", modWidth), strings.Repeat("-", nameWidth),
-		strings.Repeat("-", pathWidth), strings.Repeat("-", typeWidth),
-		strings.Repeat("-", defaultWidth), strings.Repeat("-", exposedWidth))
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*s | %-*s | %-*s |\n",
-			qnWidth, r.qualifiedName, modWidth, r.module, nameWidth, r.name,
-			pathWidth, r.folderPath, typeWidth, r.typeStr, defaultWidth, r.defaultStr, exposedWidth, r.exposed)
+	result := &TableResult{
+		Columns: []string{"Qualified Name", "Module", "Name", "Folder", "Type", "Default", "Exposed"},
+		Summary: fmt.Sprintf("(%d constants)", len(rows)),
 	}
-	fmt.Fprintf(e.output, "\n(%d constants)\n", len(rows))
-
-	return nil
+	for _, r := range rows {
+		result.Rows = append(result.Rows, []any{r.qualifiedName, r.module, r.name, r.folderPath, r.typeStr, r.defaultStr, r.exposed})
+	}
+	return e.writeResult(result)
 }
 
 // describeConstant handles DESCRIBE CONSTANT command.
@@ -437,54 +401,31 @@ func (e *Executor) showConstantValues(moduleName string) error {
 		value         string
 	}
 	var rows []row
-	constWidth := len("Constant")
-	cfgWidth := len("Configuration")
-	valWidth := len("Value")
 
 	for _, c := range consts {
 		// Default value row
 		rows = append(rows, row{c.qualifiedName, "(default)", c.defaultValue})
-		if len(c.qualifiedName) > constWidth {
-			constWidth = len(c.qualifiedName)
-		}
-		if len(c.defaultValue) > valWidth {
-			valWidth = len(c.defaultValue)
-		}
 
 		// Per-configuration rows
 		for _, cfgName := range configNames {
 			if val, ok := configValues[cfgName][c.qualifiedName]; ok {
 				rows = append(rows, row{c.qualifiedName, cfgName, val})
-				if len(cfgName) > cfgWidth {
-					cfgWidth = len(cfgName)
-				}
-				if len(val) > valWidth {
-					valWidth = len(val)
-				}
 			}
 		}
 	}
 
-	// Cap value column width
-	if valWidth > 60 {
-		valWidth = 60
+	result := &TableResult{
+		Columns: []string{"Constant", "Configuration", "Value"},
+		Summary: fmt.Sprintf("(%d rows)", len(rows)),
 	}
-
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s |\n",
-		constWidth, "Constant", cfgWidth, "Configuration", valWidth, "Value")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|\n",
-		strings.Repeat("-", constWidth), strings.Repeat("-", cfgWidth), strings.Repeat("-", valWidth))
 	for _, r := range rows {
 		val := r.value
 		if len(val) > 60 {
 			val = val[:57] + "..."
 		}
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s |\n",
-			constWidth, r.constant, cfgWidth, r.configuration, valWidth, val)
+		result.Rows = append(result.Rows, []any{r.constant, r.configuration, val})
 	}
-	fmt.Fprintf(e.output, "\n(%d rows)\n", len(rows))
-
-	return nil
+	return e.writeResult(result)
 }
 
 // dropConstant handles DROP CONSTANT command.

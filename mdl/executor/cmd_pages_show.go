@@ -22,7 +22,7 @@ func (e *Executor) showPages(moduleName string) error {
 		return fmt.Errorf("failed to list pages: %w", err)
 	}
 
-	// Collect rows and calculate column widths
+	// Collect rows
 	type row struct {
 		qualifiedName string
 		module        string
@@ -33,13 +33,6 @@ func (e *Executor) showPages(moduleName string) error {
 		params        int
 	}
 	var rows []row
-	qnWidth := len("Qualified Name")
-	modWidth := len("Module")
-	nameWidth := len("Name")
-	pathWidth := len("Folder")
-	titleWidth := len("Title")
-	urlWidth := len("URL")
-	paramsWidth := len("Params")
 
 	for _, p := range pages {
 		modID := h.FindModuleID(p.ContainerID)
@@ -64,28 +57,6 @@ func (e *Executor) showPages(moduleName string) error {
 			url := p.URL
 
 			rows = append(rows, row{qualifiedName, modName, p.Name, folderPath, title, url, len(p.Parameters)})
-			if len(qualifiedName) > qnWidth {
-				qnWidth = len(qualifiedName)
-			}
-			if len(modName) > modWidth {
-				modWidth = len(modName)
-			}
-			if len(p.Name) > nameWidth {
-				nameWidth = len(p.Name)
-			}
-			if len(folderPath) > pathWidth {
-				pathWidth = len(folderPath)
-			}
-			if len(title) > titleWidth {
-				titleWidth = len(title)
-			}
-			if len(url) > urlWidth {
-				urlWidth = len(url)
-			}
-			paramsStr := fmt.Sprintf("%d", len(p.Parameters))
-			if len(paramsStr) > paramsWidth {
-				paramsWidth = len(paramsStr)
-			}
 		}
 	}
 
@@ -94,19 +65,12 @@ func (e *Executor) showPages(moduleName string) error {
 		return strings.ToLower(rows[i].qualifiedName) < strings.ToLower(rows[j].qualifiedName)
 	})
 
-	// Markdown table with aligned columns
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*s | %-*s | %-*s |\n",
-		qnWidth, "Qualified Name", modWidth, "Module", nameWidth, "Name",
-		pathWidth, "Folder", titleWidth, "Title", urlWidth, "URL", paramsWidth, "Params")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|-%s-|-%s-|-%s-|-%s-|\n",
-		strings.Repeat("-", qnWidth), strings.Repeat("-", modWidth), strings.Repeat("-", nameWidth),
-		strings.Repeat("-", pathWidth), strings.Repeat("-", titleWidth), strings.Repeat("-", urlWidth),
-		strings.Repeat("-", paramsWidth))
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*s | %-*s | %-*d |\n",
-			qnWidth, r.qualifiedName, modWidth, r.module, nameWidth, r.name,
-			pathWidth, r.folderPath, titleWidth, r.title, urlWidth, r.url, paramsWidth, r.params)
+	result := &TableResult{
+		Columns: []string{"Qualified Name", "Module", "Name", "Folder", "Title", "URL", "Params"},
+		Summary: fmt.Sprintf("(%d pages)", len(rows)),
 	}
-	fmt.Fprintf(e.output, "\n(%d pages)\n", len(rows))
-	return nil
+	for _, r := range rows {
+		result.Rows = append(result.Rows, []any{r.qualifiedName, r.module, r.name, r.folderPath, r.title, r.url, r.params})
+	}
+	return e.writeResult(result)
 }

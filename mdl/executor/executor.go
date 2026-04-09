@@ -127,6 +127,7 @@ type Executor struct {
 	cache         *executorCache
 	catalog       *catalog.Catalog
 	quiet         bool                               // suppress connection and status messages
+	format        OutputFormat                       // output format (table, json)
 	logger        *diaglog.Logger                    // session diagnostics logger (nil = no logging)
 	fragments     map[string]*ast.DefineFragmentStmt // script-scoped fragment definitions
 	sqlMgr        *sqllib.Manager                    // external SQL connection manager (lazy init)
@@ -162,6 +163,11 @@ func (e *Executor) getThemeRegistry() *ThemeRegistry {
 // SetQuiet enables or disables quiet mode (suppresses connection/status messages).
 func (e *Executor) SetQuiet(quiet bool) {
 	e.quiet = quiet
+}
+
+// SetFormat sets the output format (table or json).
+func (e *Executor) SetFormat(f OutputFormat) {
+	e.format = f
 }
 
 // SetLogger sets the diagnostics logger for session logging.
@@ -371,4 +377,3 @@ func (e *Executor) ensureCache() {
 		e.cache = &executorCache{}
 	}
 }
-

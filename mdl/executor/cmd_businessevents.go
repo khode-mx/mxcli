@@ -51,7 +51,6 @@ func (e *Executor) showBusinessEventServices(inModule string) error {
 		msgCount, publishCount, subscribeCount int
 	}
 	var rows []row
-	modWidth, qnWidth, nameWidth := len("Module"), len("QualifiedName"), len("Service")
 
 	for _, svc := range filtered {
 		modID := h.FindModuleID(svc.ContainerID)
@@ -73,32 +72,17 @@ func (e *Executor) showBusinessEventServices(inModule string) error {
 			}
 		}
 
-		if len(moduleName) > modWidth {
-			modWidth = len(moduleName)
-		}
-		if len(qn) > qnWidth {
-			qnWidth = len(qn)
-		}
-		if len(svc.Name) > nameWidth {
-			nameWidth = len(svc.Name)
-		}
 		rows = append(rows, r)
 	}
 
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-10s | %-10s | %-10s |\n",
-		modWidth, "Module", qnWidth, "QualifiedName", nameWidth, "Service", "Messages", "Publish", "Subscribe")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|-%s-|-%s-|-%s-|\n",
-		strings.Repeat("-", modWidth), strings.Repeat("-", qnWidth), strings.Repeat("-", nameWidth),
-		strings.Repeat("-", 10), strings.Repeat("-", 10), strings.Repeat("-", 10))
-
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %10d | %10d | %10d |\n",
-			modWidth, r.module, qnWidth, r.qualifiedName, nameWidth, r.name,
-			r.msgCount, r.publishCount, r.subscribeCount)
+	result := &TableResult{
+		Columns: []string{"Module", "QualifiedName", "Service", "Messages", "Publish", "Subscribe"},
+		Summary: fmt.Sprintf("(%d business event services)", len(filtered)),
 	}
-
-	fmt.Fprintf(e.output, "\n(%d business event services)\n", len(filtered))
-	return nil
+	for _, r := range rows {
+		result.Rows = append(result.Rows, []any{r.module, r.qualifiedName, r.name, r.msgCount, r.publishCount, r.subscribeCount})
+	}
+	return e.writeResult(result)
 }
 
 // showBusinessEventClients displays a table of all business event client documents.
@@ -128,10 +112,6 @@ func (e *Executor) showBusinessEvents(inModule string) error {
 		attrs                               int
 	}
 	var rows []row
-	svcWidth := len("Service")
-	msgWidth := len("Message")
-	opWidth := len("Operation")
-	entityWidth := len("Entity")
 
 	for _, svc := range services {
 		modID := h.FindModuleID(svc.ContainerID)
@@ -157,26 +137,13 @@ func (e *Executor) showBusinessEvents(inModule string) error {
 						opStr = strings.ToUpper(op.Operation)
 						entityStr = op.Entity
 					}
-					r := row{
+					rows = append(rows, row{
 						service:   svcQN,
 						message:   msg.MessageName,
 						operation: opStr,
 						entity:    entityStr,
 						attrs:     len(msg.Attributes),
-					}
-					if len(svcQN) > svcWidth {
-						svcWidth = len(svcQN)
-					}
-					if len(msg.MessageName) > msgWidth {
-						msgWidth = len(msg.MessageName)
-					}
-					if len(opStr) > opWidth {
-						opWidth = len(opStr)
-					}
-					if len(entityStr) > entityWidth {
-						entityWidth = len(entityStr)
-					}
-					rows = append(rows, r)
+					})
 				}
 			}
 		}
@@ -191,20 +158,14 @@ func (e *Executor) showBusinessEvents(inModule string) error {
 		return nil
 	}
 
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-10s |\n",
-		svcWidth, "Service", msgWidth, "Message", opWidth, "Operation", entityWidth, "Entity", "Attributes")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|-%s-|-%s-|\n",
-		strings.Repeat("-", svcWidth), strings.Repeat("-", msgWidth),
-		strings.Repeat("-", opWidth), strings.Repeat("-", entityWidth), strings.Repeat("-", 10))
-
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %10d |\n",
-			svcWidth, r.service, msgWidth, r.message, opWidth, r.operation,
-			entityWidth, r.entity, r.attrs)
+	result := &TableResult{
+		Columns: []string{"Service", "Message", "Operation", "Entity", "Attributes"},
+		Summary: fmt.Sprintf("(%d business events)", len(rows)),
 	}
-
-	fmt.Fprintf(e.output, "\n(%d business events)\n", len(rows))
-	return nil
+	for _, r := range rows {
+		result.Rows = append(result.Rows, []any{r.service, r.message, r.operation, r.entity, r.attrs})
+	}
+	return e.writeResult(result)
 }
 
 // describeBusinessEventService outputs the full MDL description of a business event service.

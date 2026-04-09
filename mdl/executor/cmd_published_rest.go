@@ -31,12 +31,6 @@ func (e *Executor) showPublishedRestServices(moduleName string) error {
 		operations    int
 	}
 	var rows []row
-	modWidth := len("Module")
-	qnWidth := len("QualifiedName")
-	pathWidth := len("Path")
-	verWidth := len("Version")
-	resWidth := len("Resources")
-	opsWidth := len("Operations")
 
 	for _, svc := range services {
 		modID := h.FindModuleID(svc.ContainerID)
@@ -57,18 +51,6 @@ func (e *Executor) showPublishedRestServices(moduleName string) error {
 		}
 
 		rows = append(rows, row{modName, qn, path, svc.Version, len(svc.Resources), opCount})
-		if len(modName) > modWidth {
-			modWidth = len(modName)
-		}
-		if len(qn) > qnWidth {
-			qnWidth = len(qn)
-		}
-		if len(path) > pathWidth {
-			pathWidth = len(path)
-		}
-		if len(svc.Version) > verWidth {
-			verWidth = len(svc.Version)
-		}
 	}
 
 	if len(rows) == 0 {
@@ -80,21 +62,14 @@ func (e *Executor) showPublishedRestServices(moduleName string) error {
 		return strings.ToLower(rows[i].qualifiedName) < strings.ToLower(rows[j].qualifiedName)
 	})
 
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*s | %-*s |\n",
-		modWidth, "Module", qnWidth, "QualifiedName", pathWidth, "Path",
-		verWidth, "Version", resWidth, "Resources", opsWidth, "Operations")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|-%s-|-%s-|-%s-|\n",
-		strings.Repeat("-", modWidth), strings.Repeat("-", qnWidth),
-		strings.Repeat("-", pathWidth), strings.Repeat("-", verWidth),
-		strings.Repeat("-", resWidth), strings.Repeat("-", opsWidth))
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*d | %-*d |\n",
-			modWidth, r.module, qnWidth, r.qualifiedName, pathWidth, r.path,
-			verWidth, r.version, resWidth, r.resources, opsWidth, r.operations)
+	result := &TableResult{
+		Columns: []string{"Module", "QualifiedName", "Path", "Version", "Resources", "Operations"},
+		Summary: fmt.Sprintf("(%d published REST services)", len(rows)),
 	}
-	fmt.Fprintf(e.output, "\n(%d published REST services)\n", len(rows))
-
-	return nil
+	for _, r := range rows {
+		result.Rows = append(result.Rows, []any{r.module, r.qualifiedName, r.path, r.version, r.resources, r.operations})
+	}
+	return e.writeResult(result)
 }
 
 // describePublishedRestService handles DESCRIBE PUBLISHED REST SERVICE command.

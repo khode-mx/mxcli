@@ -31,7 +31,6 @@ func (e *Executor) showJsonStructures(moduleName string) error {
 		source        string
 	}
 	var rows []row
-	qnWidth := len("JSON Structure")
 
 	for _, js := range structures {
 		modID := h.FindModuleID(js.ContainerID)
@@ -52,23 +51,20 @@ func (e *Executor) showJsonStructures(moduleName string) error {
 			source = "JSON Snippet"
 		}
 
-		if len(qualifiedName) > qnWidth {
-			qnWidth = len(qualifiedName)
-		}
 		rows = append(rows, row{qualifiedName: qualifiedName, elemCount: elemCount, source: source})
 	}
 
 	// Sort alphabetically
 	sort.Slice(rows, func(i, j int) bool { return rows[i].qualifiedName < rows[j].qualifiedName })
 
-	fmt.Fprintf(e.output, "| %-*s | %-8s | %-12s |\n", qnWidth, "JSON Structure", "Elements", "Source")
-	fmt.Fprintf(e.output, "|-%s-|----------|%-14s|\n", strings.Repeat("-", qnWidth), strings.Repeat("-", 14))
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %8d | %-12s |\n", qnWidth, r.qualifiedName, r.elemCount, r.source)
+	tr := &TableResult{
+		Columns: []string{"JSON Structure", "Elements", "Source"},
+		Summary: fmt.Sprintf("(%d JSON structure(s))", len(rows)),
 	}
-
-	fmt.Fprintf(e.output, "\n(%d JSON structure(s))\n", len(rows))
-	return nil
+	for _, r := range rows {
+		tr.Rows = append(tr.Rows, []any{r.qualifiedName, r.elemCount, r.source})
+	}
+	return e.writeResult(tr)
 }
 
 // describeJsonStructure handles DESCRIBE JSON STRUCTURE Module.Name.
@@ -135,7 +131,6 @@ func (e *Executor) describeJsonStructure(name ast.QualifiedName) error {
 	fmt.Fprintln(e.output, ";")
 	return nil
 }
-
 
 // collectCustomNameMappings walks the element tree and returns JSON key → ExposedName
 // mappings where the ExposedName differs from the auto-generated default (capitalizeFirst).

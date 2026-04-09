@@ -148,7 +148,7 @@ func (e *Executor) showEnumerations(moduleName string) error {
 		return fmt.Errorf("failed to build hierarchy: %w", err)
 	}
 
-	// Collect rows and calculate column widths
+	// Collect rows
 	type row struct {
 		qualifiedName string
 		module        string
@@ -157,11 +157,6 @@ func (e *Executor) showEnumerations(moduleName string) error {
 		values        int
 	}
 	var rows []row
-	qnWidth := len("Qualified Name")
-	modWidth := len("Module")
-	nameWidth := len("Name")
-	pathWidth := len("Folder")
-	valWidth := len("Values")
 
 	for _, enum := range enums {
 		modID := h.FindModuleID(enum.ContainerID)
@@ -171,22 +166,6 @@ func (e *Executor) showEnumerations(moduleName string) error {
 			folderPath := h.BuildFolderPath(enum.ContainerID)
 
 			rows = append(rows, row{qualifiedName, modName, enum.Name, folderPath, len(enum.Values)})
-			if len(qualifiedName) > qnWidth {
-				qnWidth = len(qualifiedName)
-			}
-			if len(modName) > modWidth {
-				modWidth = len(modName)
-			}
-			if len(enum.Name) > nameWidth {
-				nameWidth = len(enum.Name)
-			}
-			if len(folderPath) > pathWidth {
-				pathWidth = len(folderPath)
-			}
-			valStr := fmt.Sprintf("%d", len(enum.Values))
-			if len(valStr) > valWidth {
-				valWidth = len(valStr)
-			}
 		}
 	}
 
@@ -195,18 +174,15 @@ func (e *Executor) showEnumerations(moduleName string) error {
 		return strings.ToLower(rows[i].qualifiedName) < strings.ToLower(rows[j].qualifiedName)
 	})
 
-	// Markdown table with aligned columns
-	fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*s |\n",
-		qnWidth, "Qualified Name", modWidth, "Module", nameWidth, "Name", pathWidth, "Folder", valWidth, "Values")
-	fmt.Fprintf(e.output, "|-%s-|-%s-|-%s-|-%s-|-%s-|\n",
-		strings.Repeat("-", qnWidth), strings.Repeat("-", modWidth), strings.Repeat("-", nameWidth),
-		strings.Repeat("-", pathWidth), strings.Repeat("-", valWidth))
-	for _, r := range rows {
-		fmt.Fprintf(e.output, "| %-*s | %-*s | %-*s | %-*s | %-*d |\n",
-			qnWidth, r.qualifiedName, modWidth, r.module, nameWidth, r.name, pathWidth, r.folderPath, valWidth, r.values)
+	// Build TableResult
+	result := &TableResult{
+		Columns: []string{"Qualified Name", "Module", "Name", "Folder", "Values"},
+		Summary: fmt.Sprintf("(%d enumerations)", len(rows)),
 	}
-	fmt.Fprintf(e.output, "\n(%d enumerations)\n", len(rows))
-	return nil
+	for _, r := range rows {
+		result.Rows = append(result.Rows, []any{r.qualifiedName, r.module, r.name, r.folderPath, r.values})
+	}
+	return e.writeResult(result)
 }
 
 // describeEnumeration handles DESCRIBE ENUMERATION command.
