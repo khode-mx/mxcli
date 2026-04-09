@@ -102,8 +102,7 @@ var diffLocalCmd = &cobra.Command{
 This command finds modified mxunit files in the mprcontents/ folder and shows
 the differences as MDL. Only works with MPR v2 format (Mendix 10.18+).
 
-Use --ref for single-ref comparison (working tree vs ref), or --base with --ref
-to compare two arbitrary revisions (e.g., main vs feature branch).
+The --ref flag accepts any git ref or range (e.g., HEAD, main, main..feature-branch).
 
 Examples:
   # Show uncommitted changes vs HEAD
@@ -115,11 +114,11 @@ Examples:
   # Compare against a branch
   mxcli diff-local -p app.mpr --ref main
 
-  # Compare two arbitrary revisions
-  mxcli diff-local -p app.mpr --base main --ref feature-branch
+  # Compare two arbitrary revisions (git range syntax)
+  mxcli diff-local -p app.mpr --ref main..feature-branch
 
-  # Compare two commits
-  mxcli diff-local -p app.mpr --base abc1234 --ref def5678
+  # Three-dot range (changes since common ancestor)
+  mxcli diff-local -p app.mpr --ref main...feature-branch
 
   # With structural format
   mxcli diff-local -p app.mpr --format struct --color
@@ -127,7 +126,6 @@ Examples:
 	Run: func(cmd *cobra.Command, args []string) {
 		projectPath, _ := cmd.Flags().GetString("project")
 		ref, _ := cmd.Flags().GetString("ref")
-		base, _ := cmd.Flags().GetString("base")
 		format, _ := cmd.Flags().GetString("format")
 		useColor, _ := cmd.Flags().GetBool("color")
 		width, _ := cmd.Flags().GetInt("width")
@@ -140,13 +138,6 @@ Examples:
 		// Default ref to HEAD
 		if ref == "" {
 			ref = "HEAD"
-		}
-
-		// Build the git ref spec
-		gitRef := ref
-		if base != "" {
-			// Two-revision comparison: base..ref
-			gitRef = base + ".." + ref
 		}
 
 		// Create executor and connect
@@ -169,7 +160,7 @@ Examples:
 			Width:    width,
 		}
 
-		if err := exec.DiffLocal(gitRef, opts); err != nil {
+		if err := exec.DiffLocal(ref, opts); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}

@@ -334,7 +334,7 @@ go build -o bin/mxcli ./cmd/mxcli
 | **Testing** | `mxcli test tests/ -p app.mpr` | `.test.mdl` / `.test.md` files, requires Docker |
 | **Diff** | `mxcli diff -p app.mpr changes.mdl` | Compare script against project state |
 | **Diff local** | `mxcli diff-local -p app.mpr --ref HEAD` | Git diff for MPR v2 projects |
-| **Diff revisions** | `mxcli diff-local -p app.mpr --base main --ref feature` | Compare two arbitrary git revisions |
+| **Diff revisions** | `mxcli diff-local -p app.mpr --ref main..feature` | Compare two arbitrary git revisions |
 | **OQL** | `mxcli oql -p app.mpr "SELECT ..."` | Query running Mendix runtime |
 | **Widgets** | `SHOW WIDGETS`, `UPDATE WIDGETS SET ...` | Widget discovery and bulk updates (experimental) |
 | **External SQL** | `SQL CONNECT`, `SQL <alias> SELECT ...`, `mxcli sql` | Direct SQL queries against PostgreSQL, Oracle, SQL Server (credential isolation) |

@@ -541,7 +541,7 @@ Cross-reference commands require `REFRESH CATALOG FULL` to populate reference da
 | Test | `mxcli test tests/ -p app.mpr` | `.test.mdl` / `.test.md` files |
 | Diff script | `mxcli diff -p app.mpr changes.mdl` | Compare script vs project |
 | Diff local | `mxcli diff-local -p app.mpr --ref HEAD` | Git diff for MPR v2 |
-| Diff revisions | `mxcli diff-local -p app.mpr --base main --ref feature` | Compare two git revisions |
+| Diff revisions | `mxcli diff-local -p app.mpr --ref main..feature` | Compare two git revisions |
 | OQL | `mxcli oql -p app.mpr "SELECT ..."` | Query running Mendix runtime |
 | External SQL | `mxcli sql --driver postgres --dsn '...' "SELECT 1"` | Direct database query |
 | Docker build | `mxcli docker build -p app.mpr` | Build with PAD patching |

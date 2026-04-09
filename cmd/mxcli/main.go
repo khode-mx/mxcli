@@ -228,8 +228,7 @@ func init() {
 	diffCmd.Flags().IntP("width", "w", 120, "Terminal width for side-by-side format")
 
 	// Diff-local command flags
-	diffLocalCmd.Flags().StringP("ref", "r", "HEAD", "Git reference to compare against (target revision)")
-	diffLocalCmd.Flags().StringP("base", "b", "", "Base revision for two-revision diff (e.g., --base main --ref feature)")
+	diffLocalCmd.Flags().StringP("ref", "r", "HEAD", "Git ref or range (e.g., HEAD, main, main..feature)")
 	diffLocalCmd.Flags().StringP("format", "f", "unified", "Output format: unified, side, struct")
 	diffLocalCmd.Flags().BoolP("color", "", false, "Use colored output")
 	diffLocalCmd.Flags().IntP("width", "w", 120, "Terminal width for side-by-side format")
