@@ -828,21 +828,21 @@ type ImportMappingElement struct {
 	// Object mapping fields
 	Entity         string `json:"entity,omitempty"`         // qualified entity name
 	ObjectHandling string `json:"objectHandling,omitempty"` // "Create", "Find", "FindOrCreate", "Custom"
-	Association    string `json:"association,omitempty"`     // qualified association name
+	Association    string `json:"association,omitempty"`    // qualified association name
 	// Value mapping fields
 	Attribute string `json:"attribute,omitempty"` // qualified attribute name (Module.Entity.Attr)
 	DataType  string `json:"dataType,omitempty"`  // "String", "Integer", "Boolean", etc.
 	IsKey     bool   `json:"isKey,omitempty"`
 	// Schema fields (cloned from JSON structure element)
-	ExposedName   string `json:"exposedName,omitempty"`
-	JsonPath      string `json:"jsonPath,omitempty"`
-	MinOccurs     int    `json:"minOccurs,omitempty"`
-	MaxOccurs     int    `json:"maxOccurs,omitempty"` // 0 = default from JSON structure
-	Nillable      bool   `json:"nillable,omitempty"`
-	OriginalValue string `json:"originalValue,omitempty"`
-	FractionDigits int   `json:"fractionDigits,omitempty"` // -1 = unset
-	TotalDigits    int   `json:"totalDigits,omitempty"`    // -1 = unset
-	MaxLength      int   `json:"maxLength,omitempty"`      // -1 = unset for non-string
+	ExposedName    string `json:"exposedName,omitempty"`
+	JsonPath       string `json:"jsonPath,omitempty"`
+	MinOccurs      int    `json:"minOccurs,omitempty"`
+	MaxOccurs      int    `json:"maxOccurs,omitempty"` // 0 = default from JSON structure
+	Nillable       bool   `json:"nillable,omitempty"`
+	OriginalValue  string `json:"originalValue,omitempty"`
+	FractionDigits int    `json:"fractionDigits,omitempty"` // -1 = unset
+	TotalDigits    int    `json:"totalDigits,omitempty"`    // -1 = unset
+	MaxLength      int    `json:"maxLength,omitempty"`      // -1 = unset for non-string
 	// Children
 	Children []*ImportMappingElement `json:"children,omitempty"`
 }
@@ -881,7 +881,7 @@ type ExportMappingElement struct {
 	Kind string `json:"kind"`
 	// Object mapping fields
 	Entity         string `json:"entity,omitempty"`         // qualified entity name
-	Association    string `json:"association,omitempty"`     // qualified association name
+	Association    string `json:"association,omitempty"`    // qualified association name
 	ObjectHandling string `json:"objectHandling,omitempty"` // "Parameter" for root, "Find" for children
 	MaxOccurs      int    `json:"maxOccurs,omitempty"`      // 1 for Object, -1 for Array; 0 = default (1)
 	// Value mapping fields

@@ -367,12 +367,12 @@ func extractBinaryIDFromDoc(val any) string {
 
 // bsonWidgetResult holds a found widget and its parent context.
 type bsonWidgetResult struct {
-	widget       bson.D            // the widget document itself
-	parentArr    []any             // the parent array elements (without marker)
-	parentKey    string            // key in the parent doc that holds this array
-	parentDoc    bson.D            // the doc containing parentKey
-	index        int               // index in parentArr
-	colPropKeys  map[string]string // column property TypePointer → key map (only set for column results)
+	widget      bson.D            // the widget document itself
+	parentArr   []any             // the parent array elements (without marker)
+	parentKey   string            // key in the parent doc that holds this array
+	parentDoc   bson.D            // the doc containing parentKey
+	index       int               // index in parentArr
+	colPropKeys map[string]string // column property TypePointer → key map (only set for column results)
 }
 
 // widgetFinder is a function type for locating widgets in a raw BSON tree.

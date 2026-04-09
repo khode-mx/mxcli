@@ -165,7 +165,8 @@ Examples:
 // files map to the same locale key (e.g., "en-US").
 //
 // Studio Pro-created projects have locale files only at:
-//   themesource/atlas_core/locales/<locale>/translation.json
+//
+//	themesource/atlas_core/locales/<locale>/translation.json
 //
 // mx create-project additionally creates duplicates in nested subdirectories
 // (e.g., locales/en-US/atlas_core/locales/en-US/translation.json).

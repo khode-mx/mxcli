@@ -30,21 +30,21 @@ type Registry struct {
 
 // VersionSpec represents one YAML file (one major version).
 type VersionSpec struct {
-	Major          int                            `yaml:"major"`
-	SupportedRange string                         `yaml:"supported_range"`
-	LTSVersions    []string                       `yaml:"lts_versions"`
-	MTSVersions    []string                       `yaml:"mts_versions"`
-	Features       map[string]map[string]Feature  `yaml:"features"`
-	Deprecated     []DeprecatedEntry              `yaml:"deprecated"`
-	Upgrade        map[string][]UpgradeEntry      `yaml:"upgrade_opportunities"`
+	Major          int                           `yaml:"major"`
+	SupportedRange string                        `yaml:"supported_range"`
+	LTSVersions    []string                      `yaml:"lts_versions"`
+	MTSVersions    []string                      `yaml:"mts_versions"`
+	Features       map[string]map[string]Feature `yaml:"features"`
+	Deprecated     []DeprecatedEntry             `yaml:"deprecated"`
+	Upgrade        map[string][]UpgradeEntry     `yaml:"upgrade_opportunities"`
 }
 
 // Feature represents a single capability in the registry.
 type Feature struct {
-	MinVersion string     `yaml:"min_version"`
-	MaxVersion string     `yaml:"max_version,omitempty"`
-	MDL        string     `yaml:"mdl,omitempty"`
-	Notes      string     `yaml:"notes,omitempty"`
+	MinVersion string      `yaml:"min_version"`
+	MaxVersion string      `yaml:"max_version,omitempty"`
+	MDL        string      `yaml:"mdl,omitempty"`
+	Notes      string      `yaml:"notes,omitempty"`
 	Workaround *Workaround `yaml:"workaround,omitempty"`
 }
 

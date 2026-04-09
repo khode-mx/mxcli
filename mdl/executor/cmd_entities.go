@@ -835,4 +835,3 @@ func (e *Executor) warnEntityReferences(entityName string) {
 		fmt.Fprintf(e.output, "  - %s %s (%s)\n", sourceType, sourceName, refKind)
 	}
 }
-

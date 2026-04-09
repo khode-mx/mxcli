@@ -828,10 +828,10 @@ func (ImportXmlAction) isMicroflowAction() {}
 // BSON type: Microflows$ExportXmlAction
 type ExportXmlAction struct {
 	model.BaseElement
-	ErrorHandlingType    ErrorHandlingType        `json:"errorHandlingType,omitempty"`
-	IsValidationRequired bool                     `json:"isValidationRequired,omitempty"`
-	OutputVariable       string                   `json:"outputVariable,omitempty"` // result string variable
-	RequestHandling      *MappingRequestHandling  `json:"requestHandling,omitempty"`
+	ErrorHandlingType    ErrorHandlingType       `json:"errorHandlingType,omitempty"`
+	IsValidationRequired bool                    `json:"isValidationRequired,omitempty"`
+	OutputVariable       string                  `json:"outputVariable,omitempty"` // result string variable
+	RequestHandling      *MappingRequestHandling `json:"requestHandling,omitempty"`
 }
 
 func (ExportXmlAction) isMicroflowAction() {}
@@ -855,7 +855,7 @@ type WorkflowCallAction struct {
 	ErrorHandlingType       ErrorHandlingType `json:"errorHandlingType,omitempty"`
 	OutputVariableName      string            `json:"outputVariableName,omitempty"`
 	UseReturnVariable       bool              `json:"useReturnVariable"`
-	Workflow                string            `json:"workflow,omitempty"`                // BY_NAME_REFERENCE
+	Workflow                string            `json:"workflow,omitempty"` // BY_NAME_REFERENCE
 	WorkflowContextVariable string            `json:"workflowContextVariable,omitempty"`
 }
 
@@ -998,7 +998,7 @@ type LockWorkflowAction struct {
 	model.BaseElement
 	ErrorHandlingType ErrorHandlingType `json:"errorHandlingType,omitempty"`
 	PauseAllWorkflows bool              `json:"pauseAllWorkflows,omitempty"`
-	Workflow          string            `json:"workflow,omitempty"`         // BY_NAME_REFERENCE
+	Workflow          string            `json:"workflow,omitempty"` // BY_NAME_REFERENCE
 	WorkflowVariable  string            `json:"workflowVariable,omitempty"`
 }
 
@@ -1009,7 +1009,7 @@ type UnlockWorkflowAction struct {
 	model.BaseElement
 	ErrorHandlingType        ErrorHandlingType `json:"errorHandlingType,omitempty"`
 	ResumeAllPausedWorkflows bool              `json:"resumeAllPausedWorkflows,omitempty"`
-	Workflow                 string            `json:"workflow,omitempty"`         // BY_NAME_REFERENCE
+	Workflow                 string            `json:"workflow,omitempty"` // BY_NAME_REFERENCE
 	WorkflowVariable         string            `json:"workflowVariable,omitempty"`
 }
 

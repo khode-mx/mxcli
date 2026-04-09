@@ -558,16 +558,16 @@ var microflowActionParsers = map[string]func(map[string]any) microflows.Microflo
 
 	// Workflow actions
 	"Microflows$WorkflowCallAction":               func(r map[string]any) microflows.MicroflowAction { return parseWorkflowCallAction(r) },
-	"Microflows$GetWorkflowDataAction":             func(r map[string]any) microflows.MicroflowAction { return parseGetWorkflowDataAction(r) },
-	"Microflows$GetWorkflowsAction":                func(r map[string]any) microflows.MicroflowAction { return parseGetWorkflowsAction(r) },
-	"Microflows$GetWorkflowActivityRecordsAction":  func(r map[string]any) microflows.MicroflowAction { return parseGetWorkflowActivityRecordsAction(r) },
-	"Microflows$WorkflowOperationAction":           func(r map[string]any) microflows.MicroflowAction { return parseWorkflowOperationAction(r) },
-	"Microflows$SetTaskOutcomeAction":              func(r map[string]any) microflows.MicroflowAction { return parseSetTaskOutcomeAction(r) },
-	"Microflows$OpenUserTaskAction":                func(r map[string]any) microflows.MicroflowAction { return parseOpenUserTaskAction(r) },
-	"Microflows$NotifyWorkflowAction":              func(r map[string]any) microflows.MicroflowAction { return parseNotifyWorkflowAction(r) },
-	"Microflows$OpenWorkflowAction":                func(r map[string]any) microflows.MicroflowAction { return parseOpenWorkflowAction(r) },
-	"Microflows$LockWorkflowAction":                func(r map[string]any) microflows.MicroflowAction { return parseLockWorkflowAction(r) },
-	"Microflows$UnlockWorkflowAction":              func(r map[string]any) microflows.MicroflowAction { return parseUnlockWorkflowAction(r) },
+	"Microflows$GetWorkflowDataAction":            func(r map[string]any) microflows.MicroflowAction { return parseGetWorkflowDataAction(r) },
+	"Microflows$GetWorkflowsAction":               func(r map[string]any) microflows.MicroflowAction { return parseGetWorkflowsAction(r) },
+	"Microflows$GetWorkflowActivityRecordsAction": func(r map[string]any) microflows.MicroflowAction { return parseGetWorkflowActivityRecordsAction(r) },
+	"Microflows$WorkflowOperationAction":          func(r map[string]any) microflows.MicroflowAction { return parseWorkflowOperationAction(r) },
+	"Microflows$SetTaskOutcomeAction":             func(r map[string]any) microflows.MicroflowAction { return parseSetTaskOutcomeAction(r) },
+	"Microflows$OpenUserTaskAction":               func(r map[string]any) microflows.MicroflowAction { return parseOpenUserTaskAction(r) },
+	"Microflows$NotifyWorkflowAction":             func(r map[string]any) microflows.MicroflowAction { return parseNotifyWorkflowAction(r) },
+	"Microflows$OpenWorkflowAction":               func(r map[string]any) microflows.MicroflowAction { return parseOpenWorkflowAction(r) },
+	"Microflows$LockWorkflowAction":               func(r map[string]any) microflows.MicroflowAction { return parseLockWorkflowAction(r) },
+	"Microflows$UnlockWorkflowAction":             func(r map[string]any) microflows.MicroflowAction { return parseUnlockWorkflowAction(r) },
 }
 
 // parseMicroflowAction parses a microflow action based on its $Type.

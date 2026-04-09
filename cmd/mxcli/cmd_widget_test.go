@@ -151,7 +151,7 @@ func TestGenerateDefJSON_AssociationAfterDataSource(t *testing.T) {
 		ID:   "com.example.AssocFirst",
 		Name: "AssocFirst",
 		Properties: []mpk.PropertyDef{
-			{Key: "myAssoc", Type: "association"},     // association BEFORE datasource in MPK
+			{Key: "myAssoc", Type: "association"}, // association BEFORE datasource in MPK
 			{Key: "myLabel", Type: "string"},
 			{Key: "myDS", Type: "datasource"},
 		},
