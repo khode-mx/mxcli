@@ -261,6 +261,11 @@ func (e *Executor) validateWithContext(stmt ast.Statement, sc *scriptContext) er
 			return fmt.Errorf("page '%s' has reference errors:\n  - %s",
 				s.Name.String(), strings.Join(refErrors, "\n  - "))
 		}
+		// Validate page context tree (parameter/selection/attribute bindings)
+		if ctxErrors := validatePageContextTree(s.Parameters, s.Widgets); len(ctxErrors) > 0 {
+			return fmt.Errorf("page '%s' has context errors:\n  - %s",
+				s.Name.String(), strings.Join(ctxErrors, "\n  - "))
+		}
 	case *ast.CreateSnippetStmtV3:
 		if s.Name.Module != "" && !sc.modules[s.Name.Module] {
 			if _, err := e.findModule(s.Name.Module); err != nil {
@@ -271,6 +276,11 @@ func (e *Executor) validateWithContext(stmt ast.Statement, sc *scriptContext) er
 		if refErrors := e.validateWidgetReferences(s.Widgets, sc); len(refErrors) > 0 {
 			return fmt.Errorf("snippet '%s' has reference errors:\n  - %s",
 				s.Name.String(), strings.Join(refErrors, "\n  - "))
+		}
+		// Validate snippet context tree (parameter/selection/attribute bindings)
+		if ctxErrors := validatePageContextTree(s.Parameters, s.Widgets); len(ctxErrors) > 0 {
+			return fmt.Errorf("snippet '%s' has context errors:\n  - %s",
+				s.Name.String(), strings.Join(ctxErrors, "\n  - "))
 		}
 	case *ast.CreateViewEntityStmt:
 		if s.Name.Module != "" && !sc.modules[s.Name.Module] {
