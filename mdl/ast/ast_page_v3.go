@@ -81,12 +81,13 @@ type OrderByItemV3 struct {
 
 // ActionV3 represents a V3 action expression.
 type ActionV3 struct {
-	Type       string      // "save", "cancel", "close", "delete", "create", "showPage", "microflow", "nanoflow", "openLink", "signOut"
-	Target     string      // Entity, page, or flow qualified name (for create/showPage/microflow/nanoflow)
-	Args       []FlowArgV3 // Arguments for showPage/microflow calls
-	ThenAction *ActionV3   // For CREATE_OBJECT ... THEN ...
-	ClosePage  bool        // For SAVE_CHANGES CLOSE_PAGE
-	LinkURL    string      // For OPEN_LINK
+	Type         string      // "save", "cancel", "close", "delete", "create", "showPage", "microflow", "nanoflow", "openLink", "signOut", "completeTask"
+	Target       string      // Entity, page, or flow qualified name (for create/showPage/microflow/nanoflow)
+	Args         []FlowArgV3 // Arguments for showPage/microflow calls
+	ThenAction   *ActionV3   // For CREATE_OBJECT ... THEN ...
+	ClosePage    bool        // For SAVE_CHANGES CLOSE_PAGE
+	LinkURL      string      // For OPEN_LINK
+	OutcomeValue string      // For COMPLETE_TASK
 }
 
 // ColumnV3 represents a V3 datagrid column.

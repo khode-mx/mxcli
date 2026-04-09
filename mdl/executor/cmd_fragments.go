@@ -281,6 +281,8 @@ func formatActionV3(a *ast.ActionV3) string {
 		return "NANOFLOW " + a.Target
 	case "signOut":
 		return "SIGN_OUT"
+	case "completeTask":
+		return "COMPLETE_TASK '" + strings.ReplaceAll(a.OutcomeValue, "'", "''") + "'"
 	default:
 		return a.Type
 	}

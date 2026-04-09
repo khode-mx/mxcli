@@ -1148,6 +1148,17 @@ microflowStatement
     | annotation* sendRestRequestStatement SEMICOLON?
     | annotation* importFromMappingStatement SEMICOLON?
     | annotation* exportToMappingStatement SEMICOLON?
+    | annotation* callWorkflowStatement SEMICOLON?
+    | annotation* getWorkflowDataStatement SEMICOLON?
+    | annotation* getWorkflowsStatement SEMICOLON?
+    | annotation* getWorkflowActivityRecordsStatement SEMICOLON?
+    | annotation* workflowOperationStatement SEMICOLON?
+    | annotation* setTaskOutcomeStatement SEMICOLON?
+    | annotation* openUserTaskStatement SEMICOLON?
+    | annotation* notifyWorkflowStatement SEMICOLON?
+    | annotation* openWorkflowStatement SEMICOLON?
+    | annotation* lockWorkflowStatement SEMICOLON?
+    | annotation* unlockWorkflowStatement SEMICOLON?
     ;
 
 declareStatement
@@ -1303,6 +1314,75 @@ executeDatabaseQueryStatement
 // qualifiedName matches Module.ServiceName.ActionName; visitor splits off the last segment as action name
 callExternalActionStatement
     : (VARIABLE EQUALS)? CALL EXTERNAL ACTION qualifiedName LPAREN callArgumentList? RPAREN onErrorClause?
+    ;
+
+// ============================================================================
+// Workflow microflow actions
+// ============================================================================
+
+// $Wf = CALL WORKFLOW Module.WF_Name ($ContextObj);
+callWorkflowStatement
+    : (VARIABLE EQUALS)? CALL WORKFLOW qualifiedName LPAREN callArgumentList? RPAREN onErrorClause?
+    ;
+
+// $Data = GET WORKFLOW DATA $WorkflowVar AS Module.WorkflowName;
+getWorkflowDataStatement
+    : (VARIABLE EQUALS)? GET WORKFLOW DATA VARIABLE AS qualifiedName onErrorClause?
+    ;
+
+// $Wfs = GET WORKFLOWS FOR $ContextObj;
+getWorkflowsStatement
+    : (VARIABLE EQUALS)? GET WORKFLOWS FOR VARIABLE onErrorClause?
+    ;
+
+// $Records = GET WORKFLOW ACTIVITY RECORDS $WorkflowVar;
+getWorkflowActivityRecordsStatement
+    : (VARIABLE EQUALS)? GET WORKFLOW ACTIVITY RECORDS VARIABLE onErrorClause?
+    ;
+
+// WORKFLOW OPERATION ABORT $Wf REASON 'text';
+// WORKFLOW OPERATION PAUSE $Wf;
+workflowOperationStatement
+    : WORKFLOW OPERATION workflowOperationType onErrorClause?
+    ;
+
+workflowOperationType
+    : ABORT VARIABLE (REASON expression)?
+    | CONTINUE VARIABLE
+    | PAUSE VARIABLE
+    | RESTART VARIABLE
+    | RETRY VARIABLE
+    | UNPAUSE VARIABLE
+    ;
+
+// SET TASK OUTCOME $UserTask 'OutcomeName';
+setTaskOutcomeStatement
+    : SET TASK OUTCOME VARIABLE STRING_LITERAL onErrorClause?
+    ;
+
+// OPEN USER TASK $UserTask;
+openUserTaskStatement
+    : OPEN USER TASK VARIABLE onErrorClause?
+    ;
+
+// NOTIFY WORKFLOW $Wf;
+notifyWorkflowStatement
+    : (VARIABLE EQUALS)? NOTIFY WORKFLOW VARIABLE onErrorClause?
+    ;
+
+// OPEN WORKFLOW $Wf;
+openWorkflowStatement
+    : OPEN WORKFLOW VARIABLE onErrorClause?
+    ;
+
+// LOCK WORKFLOW $Wf; or LOCK WORKFLOW ALL;
+lockWorkflowStatement
+    : LOCK WORKFLOW (VARIABLE | ALL) onErrorClause?
+    ;
+
+// UNLOCK WORKFLOW $Wf; or UNLOCK WORKFLOW ALL;
+unlockWorkflowStatement
+    : UNLOCK WORKFLOW (VARIABLE | ALL) onErrorClause?
     ;
 
 callArgumentList
@@ -2048,6 +2128,7 @@ actionExprV3
     | NANOFLOW qualifiedName microflowArgsV3?         // NANOFLOW Module.Flow
     | OPEN_LINK STRING_LITERAL                        // OPEN_LINK 'https://...'
     | SIGN_OUT                                        // SIGN_OUT
+    | COMPLETE_TASK STRING_LITERAL                    // COMPLETE_TASK 'OutcomeName'
     ;
 
 // V3 Microflow arguments: (Param: value, ...)

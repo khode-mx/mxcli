@@ -922,6 +922,17 @@ func (pb *pageBuilder) buildClientActionV3(action *ast.ActionV3) (pages.ClientAc
 			},
 		}, nil
 
+	case "completeTask":
+		return &pages.SetTaskOutcomeClientAction{
+			BaseElement: model.BaseElement{
+				ID:       model.ID(mpr.GenerateID()),
+				TypeName: "Forms$SetTaskOutcomeClientAction",
+			},
+			ClosePage:    true,
+			Commit:       true,
+			OutcomeValue: action.OutcomeValue,
+		}, nil
+
 	default:
 		return nil, fmt.Errorf("unsupported action type: %s", action.Type)
 	}

@@ -185,6 +185,29 @@ func (fb *flowBuilder) addStatement(stmt ast.MicroflowStatement) model.ID {
 		return fb.addImportFromMappingAction(s)
 	case *ast.ExportToMappingStmt:
 		return fb.addExportToMappingAction(s)
+	// Workflow microflow actions
+	case *ast.CallWorkflowStmt:
+		return fb.addCallWorkflowAction(s)
+	case *ast.GetWorkflowDataStmt:
+		return fb.addGetWorkflowDataAction(s)
+	case *ast.GetWorkflowsStmt:
+		return fb.addGetWorkflowsAction(s)
+	case *ast.GetWorkflowActivityRecordsStmt:
+		return fb.addGetWorkflowActivityRecordsAction(s)
+	case *ast.WorkflowOperationStmt:
+		return fb.addWorkflowOperationAction(s)
+	case *ast.SetTaskOutcomeStmt:
+		return fb.addSetTaskOutcomeAction(s)
+	case *ast.OpenUserTaskStmt:
+		return fb.addOpenUserTaskAction(s)
+	case *ast.NotifyWorkflowStmt:
+		return fb.addNotifyWorkflowAction(s)
+	case *ast.OpenWorkflowStmt:
+		return fb.addOpenWorkflowAction(s)
+	case *ast.LockWorkflowStmt:
+		return fb.addLockWorkflowAction(s)
+	case *ast.UnlockWorkflowStmt:
+		return fb.addUnlockWorkflowAction(s)
 	default:
 		// For now, skip unknown statement types
 		return ""

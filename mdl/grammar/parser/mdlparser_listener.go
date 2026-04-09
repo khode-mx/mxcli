@@ -1,4 +1,4 @@
-// Code generated from MDLParser.g4 by ANTLR 4.13.2. DO NOT EDIT.
+// Code generated from MDLParser.g4 by ANTLR 4.13.1. DO NOT EDIT.
 
 package parser // MDLParser
 import "github.com/antlr4-go/antlr/v4"
@@ -441,6 +441,42 @@ type MDLParserListener interface {
 
 	// EnterCallExternalActionStatement is called when entering the callExternalActionStatement production.
 	EnterCallExternalActionStatement(c *CallExternalActionStatementContext)
+
+	// EnterCallWorkflowStatement is called when entering the callWorkflowStatement production.
+	EnterCallWorkflowStatement(c *CallWorkflowStatementContext)
+
+	// EnterGetWorkflowDataStatement is called when entering the getWorkflowDataStatement production.
+	EnterGetWorkflowDataStatement(c *GetWorkflowDataStatementContext)
+
+	// EnterGetWorkflowsStatement is called when entering the getWorkflowsStatement production.
+	EnterGetWorkflowsStatement(c *GetWorkflowsStatementContext)
+
+	// EnterGetWorkflowActivityRecordsStatement is called when entering the getWorkflowActivityRecordsStatement production.
+	EnterGetWorkflowActivityRecordsStatement(c *GetWorkflowActivityRecordsStatementContext)
+
+	// EnterWorkflowOperationStatement is called when entering the workflowOperationStatement production.
+	EnterWorkflowOperationStatement(c *WorkflowOperationStatementContext)
+
+	// EnterWorkflowOperationType is called when entering the workflowOperationType production.
+	EnterWorkflowOperationType(c *WorkflowOperationTypeContext)
+
+	// EnterSetTaskOutcomeStatement is called when entering the setTaskOutcomeStatement production.
+	EnterSetTaskOutcomeStatement(c *SetTaskOutcomeStatementContext)
+
+	// EnterOpenUserTaskStatement is called when entering the openUserTaskStatement production.
+	EnterOpenUserTaskStatement(c *OpenUserTaskStatementContext)
+
+	// EnterNotifyWorkflowStatement is called when entering the notifyWorkflowStatement production.
+	EnterNotifyWorkflowStatement(c *NotifyWorkflowStatementContext)
+
+	// EnterOpenWorkflowStatement is called when entering the openWorkflowStatement production.
+	EnterOpenWorkflowStatement(c *OpenWorkflowStatementContext)
+
+	// EnterLockWorkflowStatement is called when entering the lockWorkflowStatement production.
+	EnterLockWorkflowStatement(c *LockWorkflowStatementContext)
+
+	// EnterUnlockWorkflowStatement is called when entering the unlockWorkflowStatement production.
+	EnterUnlockWorkflowStatement(c *UnlockWorkflowStatementContext)
 
 	// EnterCallArgumentList is called when entering the callArgumentList production.
 	EnterCallArgumentList(c *CallArgumentListContext)
@@ -1629,6 +1665,42 @@ type MDLParserListener interface {
 
 	// ExitCallExternalActionStatement is called when exiting the callExternalActionStatement production.
 	ExitCallExternalActionStatement(c *CallExternalActionStatementContext)
+
+	// ExitCallWorkflowStatement is called when exiting the callWorkflowStatement production.
+	ExitCallWorkflowStatement(c *CallWorkflowStatementContext)
+
+	// ExitGetWorkflowDataStatement is called when exiting the getWorkflowDataStatement production.
+	ExitGetWorkflowDataStatement(c *GetWorkflowDataStatementContext)
+
+	// ExitGetWorkflowsStatement is called when exiting the getWorkflowsStatement production.
+	ExitGetWorkflowsStatement(c *GetWorkflowsStatementContext)
+
+	// ExitGetWorkflowActivityRecordsStatement is called when exiting the getWorkflowActivityRecordsStatement production.
+	ExitGetWorkflowActivityRecordsStatement(c *GetWorkflowActivityRecordsStatementContext)
+
+	// ExitWorkflowOperationStatement is called when exiting the workflowOperationStatement production.
+	ExitWorkflowOperationStatement(c *WorkflowOperationStatementContext)
+
+	// ExitWorkflowOperationType is called when exiting the workflowOperationType production.
+	ExitWorkflowOperationType(c *WorkflowOperationTypeContext)
+
+	// ExitSetTaskOutcomeStatement is called when exiting the setTaskOutcomeStatement production.
+	ExitSetTaskOutcomeStatement(c *SetTaskOutcomeStatementContext)
+
+	// ExitOpenUserTaskStatement is called when exiting the openUserTaskStatement production.
+	ExitOpenUserTaskStatement(c *OpenUserTaskStatementContext)
+
+	// ExitNotifyWorkflowStatement is called when exiting the notifyWorkflowStatement production.
+	ExitNotifyWorkflowStatement(c *NotifyWorkflowStatementContext)
+
+	// ExitOpenWorkflowStatement is called when exiting the openWorkflowStatement production.
+	ExitOpenWorkflowStatement(c *OpenWorkflowStatementContext)
+
+	// ExitLockWorkflowStatement is called when exiting the lockWorkflowStatement production.
+	ExitLockWorkflowStatement(c *LockWorkflowStatementContext)
+
+	// ExitUnlockWorkflowStatement is called when exiting the unlockWorkflowStatement production.
+	ExitUnlockWorkflowStatement(c *UnlockWorkflowStatementContext)
 
 	// ExitCallArgumentList is called when exiting the callArgumentList production.
 	ExitCallArgumentList(c *CallArgumentListContext)

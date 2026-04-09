@@ -937,6 +937,9 @@ func (e *Executor) extractButtonAction(w map[string]any) string {
 			return result
 		}
 		return "CALL_NANOFLOW"
+	case "Forms$SetTaskOutcomeClientAction", "Pages$SetTaskOutcomeClientAction":
+		outcomeValue, _ := action["OutcomeValue"].(string)
+		return "COMPLETE_TASK '" + strings.ReplaceAll(outcomeValue, "'", "''") + "'"
 	case "Forms$NoClientAction", "Pages$NoClientAction":
 		return ""
 	default:

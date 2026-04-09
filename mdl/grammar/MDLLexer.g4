@@ -642,6 +642,21 @@ CONDITION: C O N D I T I O N;
 OFF: O F F;
 USERS: U S E R S;
 
+// Workflow microflow action tokens
+DATA: D A T A;
+RECORDS: R E C O R D S;
+NOTIFY: N O T I F Y;
+PAUSE: P A U S E;
+UNPAUSE: U N P A U S E;
+ABORT: A B O R T;
+RETRY: R E T R Y;
+RESTART: R E S T A R T;
+LOCK: L O C K;
+UNLOCK: U N L O C K;
+REASON: R E A S O N;
+OPEN: O P E N;
+COMPLETE_TASK: C O M P L E T E '_' T A S K;
+
 // =============================================================================
 // COMPARISON OPERATORS (multi-char before single-char)
 // =============================================================================
