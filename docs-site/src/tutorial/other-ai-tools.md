@@ -67,7 +67,7 @@ On top of the universal files, each tool gets its own configuration:
 |------|-------------|----------|
 | **Claude Code** | `.claude/`, `CLAUDE.md` | Settings, skills, commands, lint rules, project context |
 | **OpenCode** | `.opencode/`, `opencode.json` | Skills, commands, lint rules, project context |
-| **GitHub Copilot** | `AGENTS.md` | Reads universal context automatically via VS Code |
+| **GitHub Copilot** | `.github/copilot-instructions.md`, `AGENTS.md` | Project-level instructions auto-loaded by Copilot in VS Code |
 | **Cursor** | `.cursorrules` | Compact MDL reference and mxcli command guide |
 | **Continue.dev** | `.continue/config.json` | Custom commands and slash commands |
 | **Windsurf** | `.windsurfrules` | MDL rules for Codeium's AI |
@@ -86,16 +86,15 @@ mxcli init --tool opencode /path/to/project
 
 ### GitHub Copilot
 
-GitHub Copilot works with mxcli out of the box via the universal `AGENTS.md` file — no dedicated `--tool` flag is needed. Copilot's agent mode in VS Code automatically reads markdown files in the project root, so after running `mxcli init`, Copilot has access to the full MDL reference and skill files.
+GitHub Copilot has dedicated support via `--tool copilot`, which generates `.github/copilot-instructions.md` — Copilot's project-level instructions file that's automatically loaded in VS Code.
 
 ```bash
-# Any mxcli init creates AGENTS.md, which Copilot reads automatically
-mxcli init /path/to/project
+mxcli init --tool copilot /path/to/project
 ```
 
-For many organizations, Copilot is the default AI assistant as part of their Microsoft/GitHub enterprise agreement. mxcli supports this by ensuring the universal files (`AGENTS.md`, `.ai-context/skills/`) provide enough context for Copilot to work effectively with MDL.
+The generated file is compact (Copilot has a smaller instruction context window than Claude Code) and points to `AGENTS.md` and `.ai-context/skills/` for full reference material. It includes the critical `./mxcli` (not `mxcli`) rule, quick command examples, and MDL syntax reminders.
 
-To use: open the project in VS Code with the GitHub Copilot extension, open Copilot Chat (Ctrl+Shift+I), and ask for Mendix changes. Copilot will reference `AGENTS.md` and the skill files for MDL syntax guidance.
+For many organizations, Copilot is the default AI assistant as part of their Microsoft/GitHub enterprise agreement. To use: open the project in VS Code with the GitHub Copilot extension, open Copilot Chat (Ctrl+Shift+I), and ask for Mendix changes. Copilot will reference `.github/copilot-instructions.md`, `AGENTS.md`, and the skill files for MDL syntax guidance.
 
 ### Cursor
 

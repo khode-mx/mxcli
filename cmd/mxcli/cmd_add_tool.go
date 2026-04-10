@@ -37,6 +37,8 @@ Supported Tools:
   - windsurf    Windsurf (Codeium) with MDL rules
   - aider       Aider with project configuration
   - opencode    OpenCode AI agent with MDL commands and skills
+  - vibe        Mistral Vibe CLI agent with skills
+  - copilot     GitHub Copilot with project-level instructions
 `,
 	Args: cobra.RangeArgs(0, 2),
 	Run: func(cmd *cobra.Command, args []string) {

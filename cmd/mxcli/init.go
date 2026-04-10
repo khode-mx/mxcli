@@ -88,6 +88,7 @@ Supported Tools:
   - aider       Aider with project configuration
   - opencode    OpenCode AI agent with MDL commands and skills
   - vibe        Mistral Vibe CLI agent with skills
+  - copilot     GitHub Copilot with project-level instructions
 
 All tools receive universal documentation in AGENTS.md and .ai-context/
 

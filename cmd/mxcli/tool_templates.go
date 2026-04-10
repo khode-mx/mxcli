@@ -104,6 +104,16 @@ var SupportedTools = map[string]ToolConfig{
 		},
 		// Skills are synced dynamically from the embedded skillsFS in init.go
 	},
+	"copilot": {
+		Name:        "GitHub Copilot",
+		Description: "GitHub Copilot with project-level instructions",
+		Files: []ToolFile{
+			{
+				Path:    ".github/copilot-instructions.md",
+				Content: generateCopilotInstructions,
+			},
+		},
+	},
 }
 
 // Universal files created for all tools
@@ -445,6 +455,50 @@ allowed-tools:
 `, skillName, description)
 
 	return []byte(frontmatter + string(content))
+}
+
+// generateCopilotInstructions creates .github/copilot-instructions.md, the
+// project-level instructions file automatically loaded by GitHub Copilot in VS Code.
+// Kept compact since Copilot's instruction context window is smaller than Claude Code's.
+func generateCopilotInstructions(projectName, mprPath string) string {
+	mprFile := filepath.Base(mprPath)
+	return fmt.Sprintf("# Mendix MDL Project: %s\n\n"+
+		"This project uses **mxcli** to read and modify Mendix model files (`.mpr`) via MDL "+
+		"(Mendix Definition Language) — a SQL-like text format for Mendix applications.\n\n"+
+		"## Critical: mxcli Location\n\n"+
+		"The mxcli binary is in the **project root**, not on PATH:\n"+
+		"- ✅ `./mxcli ...`\n"+
+		"- ❌ `mxcli ...` (will fail)\n\n"+
+		"MPR file: `%s`\n\n"+
+		"## Quick Commands\n\n"+
+		"```bash\n"+
+		"# Explore project structure\n"+
+		"./mxcli -p %s -c \"SHOW STRUCTURE\"\n\n"+
+		"# Validate an MDL script (always do this before executing)\n"+
+		"./mxcli check script.mdl -p %s --references\n\n"+
+		"# Execute an MDL script\n"+
+		"./mxcli exec script.mdl -p %s\n\n"+
+		"# Search the project\n"+
+		"./mxcli search -p %s \"keyword\"\n"+
+		"```\n\n"+
+		"## Where to Look First\n\n"+
+		"- **`AGENTS.md`** — full mxcli reference, MDL command list, workflow examples.\n"+
+		"- **`.ai-context/skills/`** — focused syntax guides for microflows, pages, "+
+		"domain models, security, etc. **Read the relevant skill before writing MDL.**\n\n"+
+		"## MDL Syntax Reminders\n\n"+
+		"- **Entities:** `CREATE PERSISTENT ENTITY Mod.Customer (Name: String(200), Age: Integer);`\n"+
+		"- **Microflow variables:** start with `$` (e.g., `$Customer`, `$List`).\n"+
+		"- **Page widgets:** nest with `{ }`, properties use `(Key: value, ...)`.\n"+
+		"- **Single quotes in expressions:** escape by doubling — `'it''s here'`.\n"+
+		"- **No `AS` keyword** in entity attribute declarations.\n"+
+		"- **Statements** end with `;` or `/` on a line by itself.\n\n"+
+		"## Workflow\n\n"+
+		"1. Explore: read `AGENTS.md` and the relevant `.ai-context/skills/` file first.\n"+
+		"2. Write MDL in a `.mdl` file.\n"+
+		"3. Validate: `./mxcli check <file>.mdl -p %s --references`.\n"+
+		"4. Execute: `./mxcli exec <file>.mdl -p %s`.\n"+
+		"5. Verify: `./mxcli -p %s -c \"DESCRIBE ENTITY Mod.Name\"`.\n",
+		projectName, mprFile, mprFile, mprFile, mprFile, mprFile, mprFile, mprFile, mprFile)
 }
 
 func generateOpenCodeConfig(projectName, mprPath string) string {
