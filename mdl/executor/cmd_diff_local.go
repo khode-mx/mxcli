@@ -307,30 +307,46 @@ func (e *Executor) bsonToMDL(unitType, unitID string, content []byte) string {
 	}
 }
 
-// domainModelBsonToMDL converts a domain model BSON to MDL
+// domainModelBsonToMDL converts a domain model BSON to MDL.
+// Includes full entity definitions (attributes) so diffs show schema changes.
 func (e *Executor) domainModelBsonToMDL(raw map[string]any, name string) string {
 	var lines []string
 	lines = append(lines, fmt.Sprintf("-- Domain Model: %s", name))
+	lines = append(lines, "")
 
-	// List entities
+	// Render full entity definitions so attribute changes show up in diffs
 	entities := extractBsonArray(raw["Entities"])
 	for _, ent := range entities {
 		if entMap, ok := ent.(map[string]any); ok {
 			entName := extractString(entMap["Name"])
-			if entName != "" {
-				lines = append(lines, fmt.Sprintf("--   Entity: %s", entName))
+			if entName == "" {
+				continue
 			}
+			qn := name + "." + entName
+			lines = append(lines, e.entityBsonToMDL(entMap, qn))
+			lines = append(lines, "")
 		}
 	}
 
-	// List associations
+	// Render associations with their from/to references
 	associations := extractBsonArray(raw["Associations"])
 	for _, assoc := range associations {
 		if assocMap, ok := assoc.(map[string]any); ok {
 			assocName := extractString(assocMap["Name"])
-			if assocName != "" {
-				lines = append(lines, fmt.Sprintf("--   Association: %s", assocName))
+			if assocName == "" {
+				continue
 			}
+			lines = append(lines, fmt.Sprintf("-- Association: %s.%s", name, assocName))
+			if assocType := extractString(assocMap["Type"]); assocType != "" {
+				lines = append(lines, "--   Type: "+assocType)
+			}
+			if owner := extractString(assocMap["Owner"]); owner != "" {
+				lines = append(lines, "--   Owner: "+owner)
+			}
+			if delBeh := extractString(assocMap["DeleteBehavior"]); delBeh != "" {
+				lines = append(lines, "--   DeleteBehavior: "+delBeh)
+			}
+			lines = append(lines, "")
 		}
 	}
 

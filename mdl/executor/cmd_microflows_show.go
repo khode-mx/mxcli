@@ -32,6 +32,7 @@ func (e *Executor) showMicroflows(moduleName string) error {
 		qualifiedName string
 		module        string
 		name          string
+		excluded      bool
 		folderPath    string
 		params        int
 		activities    int
@@ -45,9 +46,6 @@ func (e *Executor) showMicroflows(moduleName string) error {
 		modName := h.GetModuleName(modID)
 		if moduleName == "" || modName == moduleName {
 			qualifiedName := modName + "." + mf.Name
-			if mf.Excluded {
-				qualifiedName += " [EXCLUDED]"
-			}
 			folderPath := h.BuildFolderPath(mf.ContainerID)
 			returnType := ""
 			if mf.ReturnType != nil {
@@ -60,7 +58,7 @@ func (e *Executor) showMicroflows(moduleName string) error {
 			// Calculate McCabe cyclomatic complexity
 			complexity := calculateMicroflowComplexity(mf)
 
-			rows = append(rows, row{qualifiedName, modName, mf.Name, folderPath, len(mf.Parameters), activityCount, complexity, returnType})
+			rows = append(rows, row{qualifiedName, modName, mf.Name, mf.Excluded, folderPath, len(mf.Parameters), activityCount, complexity, returnType})
 		}
 	}
 
@@ -70,11 +68,11 @@ func (e *Executor) showMicroflows(moduleName string) error {
 	})
 
 	result := &TableResult{
-		Columns: []string{"Qualified Name", "Module", "Name", "Folder", "Params", "Actions", "McCabe", "Returns"},
+		Columns: []string{"Qualified Name", "Module", "Name", "Excluded", "Folder", "Params", "Actions", "McCabe", "Returns"},
 		Summary: fmt.Sprintf("(%d microflows)", len(rows)),
 	}
 	for _, r := range rows {
-		result.Rows = append(result.Rows, []any{r.qualifiedName, r.module, r.name, r.folderPath, r.params, r.activities, r.complexity, r.returnType})
+		result.Rows = append(result.Rows, []any{r.qualifiedName, r.module, r.name, r.excluded, r.folderPath, r.params, r.activities, r.complexity, r.returnType})
 	}
 	return e.writeResult(result)
 }
@@ -98,6 +96,7 @@ func (e *Executor) showNanoflows(moduleName string) error {
 		qualifiedName string
 		module        string
 		name          string
+		excluded      bool
 		folderPath    string
 		params        int
 		activities    int
@@ -123,7 +122,7 @@ func (e *Executor) showNanoflows(moduleName string) error {
 			// Calculate McCabe cyclomatic complexity
 			complexity := calculateNanoflowComplexity(nf)
 
-			rows = append(rows, row{qualifiedName, modName, nf.Name, folderPath, len(nf.Parameters), activityCount, complexity, returnType})
+			rows = append(rows, row{qualifiedName, modName, nf.Name, nf.Excluded, folderPath, len(nf.Parameters), activityCount, complexity, returnType})
 		}
 	}
 
@@ -133,11 +132,11 @@ func (e *Executor) showNanoflows(moduleName string) error {
 	})
 
 	result := &TableResult{
-		Columns: []string{"Qualified Name", "Module", "Name", "Folder", "Params", "Actions", "McCabe", "Returns"},
+		Columns: []string{"Qualified Name", "Module", "Name", "Excluded", "Folder", "Params", "Actions", "McCabe", "Returns"},
 		Summary: fmt.Sprintf("(%d nanoflows)", len(rows)),
 	}
 	for _, r := range rows {
-		result.Rows = append(result.Rows, []any{r.qualifiedName, r.module, r.name, r.folderPath, r.params, r.activities, r.complexity, r.returnType})
+		result.Rows = append(result.Rows, []any{r.qualifiedName, r.module, r.name, r.excluded, r.folderPath, r.params, r.activities, r.complexity, r.returnType})
 	}
 	return e.writeResult(result)
 }

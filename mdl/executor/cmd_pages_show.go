@@ -27,6 +27,7 @@ func (e *Executor) showPages(moduleName string) error {
 		qualifiedName string
 		module        string
 		name          string
+		excluded      bool
 		folderPath    string
 		title         string
 		url           string
@@ -39,9 +40,6 @@ func (e *Executor) showPages(moduleName string) error {
 		modName := h.GetModuleName(modID)
 		if moduleName == "" || modName == moduleName {
 			qualifiedName := modName + "." + p.Name
-			if p.Excluded {
-				qualifiedName += " [EXCLUDED]"
-			}
 			folderPath := h.BuildFolderPath(p.ContainerID)
 			title := ""
 			if p.Title != nil {
@@ -56,7 +54,7 @@ func (e *Executor) showPages(moduleName string) error {
 			}
 			url := p.URL
 
-			rows = append(rows, row{qualifiedName, modName, p.Name, folderPath, title, url, len(p.Parameters)})
+			rows = append(rows, row{qualifiedName, modName, p.Name, p.Excluded, folderPath, title, url, len(p.Parameters)})
 		}
 	}
 
@@ -66,11 +64,11 @@ func (e *Executor) showPages(moduleName string) error {
 	})
 
 	result := &TableResult{
-		Columns: []string{"Qualified Name", "Module", "Name", "Folder", "Title", "URL", "Params"},
+		Columns: []string{"Qualified Name", "Module", "Name", "Excluded", "Folder", "Title", "URL", "Params"},
 		Summary: fmt.Sprintf("(%d pages)", len(rows)),
 	}
 	for _, r := range rows {
-		result.Rows = append(result.Rows, []any{r.qualifiedName, r.module, r.name, r.folderPath, r.title, r.url, r.params})
+		result.Rows = append(result.Rows, []any{r.qualifiedName, r.module, r.name, r.excluded, r.folderPath, r.title, r.url, r.params})
 	}
 	return e.writeResult(result)
 }
