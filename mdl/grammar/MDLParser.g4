@@ -119,6 +119,17 @@ alterStatement
     | ALTER PAGE qualifiedName LBRACE alterPageOperation+ RBRACE
     | ALTER SNIPPET qualifiedName LBRACE alterPageOperation+ RBRACE
     | ALTER WORKFLOW qualifiedName alterWorkflowAction+ SEMICOLON?
+    | ALTER PUBLISHED REST SERVICE qualifiedName alterPublishedRestServiceAction (COMMA? alterPublishedRestServiceAction)*
+    ;
+
+alterPublishedRestServiceAction
+    : SET publishedRestAlterAssignment (COMMA publishedRestAlterAssignment)*
+    | ADD publishedRestResource
+    | DROP RESOURCE STRING_LITERAL
+    ;
+
+publishedRestAlterAssignment
+    : identifierOrKeyword EQUALS STRING_LITERAL
     ;
 
 /**

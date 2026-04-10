@@ -25,6 +25,12 @@ type MDLParserListener interface {
 	// EnterAlterStatement is called when entering the alterStatement production.
 	EnterAlterStatement(c *AlterStatementContext)
 
+	// EnterAlterPublishedRestServiceAction is called when entering the alterPublishedRestServiceAction production.
+	EnterAlterPublishedRestServiceAction(c *AlterPublishedRestServiceActionContext)
+
+	// EnterPublishedRestAlterAssignment is called when entering the publishedRestAlterAssignment production.
+	EnterPublishedRestAlterAssignment(c *PublishedRestAlterAssignmentContext)
+
 	// EnterAlterStylingAction is called when entering the alterStylingAction production.
 	EnterAlterStylingAction(c *AlterStylingActionContext)
 
@@ -1269,6 +1275,12 @@ type MDLParserListener interface {
 
 	// ExitAlterStatement is called when exiting the alterStatement production.
 	ExitAlterStatement(c *AlterStatementContext)
+
+	// ExitAlterPublishedRestServiceAction is called when exiting the alterPublishedRestServiceAction production.
+	ExitAlterPublishedRestServiceAction(c *AlterPublishedRestServiceActionContext)
+
+	// ExitPublishedRestAlterAssignment is called when exiting the publishedRestAlterAssignment production.
+	ExitPublishedRestAlterAssignment(c *PublishedRestAlterAssignmentContext)
 
 	// ExitAlterStylingAction is called when exiting the alterStylingAction production.
 	ExitAlterStylingAction(c *AlterStylingActionContext)

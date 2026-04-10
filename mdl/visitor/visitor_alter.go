@@ -29,6 +29,12 @@ func (b *Builder) ExitAlterStatement(ctx *parser.AlterStatementContext) {
 		return
 	}
 
+	// Handle ALTER PUBLISHED REST SERVICE
+	if ctx.PUBLISHED() != nil && ctx.REST() != nil && ctx.SERVICE() != nil {
+		b.exitAlterPublishedRestServiceStatement(ctx)
+		return
+	}
+
 	if ctx.ODATA() == nil {
 		return // Not an OData alter - handled elsewhere
 	}

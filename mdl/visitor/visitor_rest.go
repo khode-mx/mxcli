@@ -284,64 +284,117 @@ func (b *Builder) ExitCreatePublishedRestServiceStatement(ctx *parser.CreatePubl
 	// Parse resources
 	for _, resCtx := range ctx.AllPublishedRestResource() {
 		rc := resCtx.(*parser.PublishedRestResourceContext)
-		resDef := &ast.PublishedRestResourceDef{
-			Name: unquoteString(rc.STRING_LITERAL().GetText()),
+		stmt.Resources = append(stmt.Resources, buildPublishedRestResourceDef(rc))
+	}
+
+	b.statements = append(b.statements, stmt)
+}
+
+// buildPublishedRestResourceDef converts a PublishedRestResourceContext to a
+// PublishedRestResourceDef AST node. Shared by CREATE and ALTER.
+func buildPublishedRestResourceDef(rc *parser.PublishedRestResourceContext) *ast.PublishedRestResourceDef {
+	resDef := &ast.PublishedRestResourceDef{
+		Name: unquoteString(rc.STRING_LITERAL().GetText()),
+	}
+
+	for _, opCtx := range rc.AllPublishedRestOperation() {
+		oc := opCtx.(*parser.PublishedRestOperationContext)
+		opDef := &ast.PublishedRestOperationDef{}
+
+		// HTTP method
+		if mCtx := oc.RestHttpMethod(); mCtx != nil {
+			opDef.HTTPMethod = strings.ToUpper(mCtx.GetText())
 		}
 
-		// Parse operations
-		for _, opCtx := range rc.AllPublishedRestOperation() {
-			oc := opCtx.(*parser.PublishedRestOperationContext)
-			opDef := &ast.PublishedRestOperationDef{}
-
-			// HTTP method
-			if mCtx := oc.RestHttpMethod(); mCtx != nil {
-				opDef.HTTPMethod = strings.ToUpper(mCtx.GetText())
+		// Operation path — strip leading/trailing slashes (CE6550/CE6551)
+		if pCtx := oc.PublishedRestOpPath(); pCtx != nil {
+			pc := pCtx.(*parser.PublishedRestOpPathContext)
+			if pc.STRING_LITERAL() != nil {
+				opDef.Path = strings.Trim(unquoteString(pc.STRING_LITERAL().GetText()), "/")
 			}
-
-			// Operation path — strip leading/trailing slashes (CE6550/CE6551)
-			if pCtx := oc.PublishedRestOpPath(); pCtx != nil {
-				pc := pCtx.(*parser.PublishedRestOpPathContext)
-				if pc.STRING_LITERAL() != nil {
-					opDef.Path = strings.Trim(unquoteString(pc.STRING_LITERAL().GetText()), "/")
-				}
-			}
-
-			// Microflow reference
-			allQN := oc.AllQualifiedName()
-			if len(allQN) >= 1 {
-				opDef.Microflow = buildQualifiedName(allQN[0])
-			}
-
-			// Optional modifiers
-			if oc.DEPRECATED() != nil {
-				opDef.Deprecated = true
-			}
-
-			// Import/Export mapping (qualifiedName after IMPORT/EXPORT MAPPING)
-			if oc.IMPORT() != nil && len(allQN) >= 2 {
-				opDef.ImportMapping = allQN[1].GetText()
-			}
-			if oc.EXPORT() != nil {
-				idx := 1
-				if oc.IMPORT() != nil {
-					idx = 2
-				}
-				if len(allQN) > idx {
-					opDef.ExportMapping = allQN[idx].GetText()
-				}
-			}
-
-			// Commit
-			if oc.COMMIT() != nil {
-				if idCtx := oc.IdentifierOrKeyword(); idCtx != nil {
-					opDef.Commit = identifierOrKeywordText(idCtx.(*parser.IdentifierOrKeywordContext))
-				}
-			}
-
-			resDef.Operations = append(resDef.Operations, opDef)
 		}
 
-		stmt.Resources = append(stmt.Resources, resDef)
+		// Microflow reference
+		allQN := oc.AllQualifiedName()
+		if len(allQN) >= 1 {
+			opDef.Microflow = buildQualifiedName(allQN[0])
+		}
+
+		if oc.DEPRECATED() != nil {
+			opDef.Deprecated = true
+		}
+
+		// Import/Export mapping (qualifiedName after IMPORT/EXPORT MAPPING)
+		if oc.IMPORT() != nil && len(allQN) >= 2 {
+			opDef.ImportMapping = allQN[1].GetText()
+		}
+		if oc.EXPORT() != nil {
+			idx := 1
+			if oc.IMPORT() != nil {
+				idx = 2
+			}
+			if len(allQN) > idx {
+				opDef.ExportMapping = allQN[idx].GetText()
+			}
+		}
+
+		if oc.COMMIT() != nil {
+			if idCtx := oc.IdentifierOrKeyword(); idCtx != nil {
+				opDef.Commit = identifierOrKeywordText(idCtx.(*parser.IdentifierOrKeywordContext))
+			}
+		}
+
+		resDef.Operations = append(resDef.Operations, opDef)
+	}
+
+	return resDef
+}
+
+// exitAlterPublishedRestServiceStatement handles ALTER PUBLISHED REST SERVICE.
+func (b *Builder) exitAlterPublishedRestServiceStatement(ctx *parser.AlterStatementContext) {
+	qn := ctx.QualifiedName()
+	if qn == nil {
+		return
+	}
+
+	stmt := &ast.AlterPublishedRestServiceStmt{
+		Name: buildQualifiedName(qn),
+	}
+
+	for _, actCtx := range ctx.AllAlterPublishedRestServiceAction() {
+		ac, ok := actCtx.(*parser.AlterPublishedRestServiceActionContext)
+		if !ok {
+			continue
+		}
+
+		// SET key = 'value' [, ...]
+		if ac.SET() != nil {
+			changes := make(map[string]string)
+			for _, asnCtx := range ac.AllPublishedRestAlterAssignment() {
+				asn := asnCtx.(*parser.PublishedRestAlterAssignmentContext)
+				key := identifierOrKeywordText(asn.IdentifierOrKeyword().(*parser.IdentifierOrKeywordContext))
+				val := unquoteString(asn.STRING_LITERAL().GetText())
+				changes[key] = val
+			}
+			stmt.Actions = append(stmt.Actions, &ast.PublishedRestSetAction{Changes: changes})
+			continue
+		}
+
+		// ADD RESOURCE 'name' { ... }
+		if ac.ADD() != nil {
+			if rc := ac.PublishedRestResource(); rc != nil {
+				resDef := buildPublishedRestResourceDef(rc.(*parser.PublishedRestResourceContext))
+				stmt.Actions = append(stmt.Actions, &ast.PublishedRestAddResourceAction{Resource: resDef})
+			}
+			continue
+		}
+
+		// DROP RESOURCE 'name'
+		if ac.DROP() != nil && ac.RESOURCE() != nil {
+			name := unquoteString(ac.STRING_LITERAL().GetText())
+			stmt.Actions = append(stmt.Actions, &ast.PublishedRestDropResourceAction{Name: name})
+			continue
+		}
 	}
 
 	b.statements = append(b.statements, stmt)

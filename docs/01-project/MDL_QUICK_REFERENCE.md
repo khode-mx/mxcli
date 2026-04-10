@@ -444,6 +444,9 @@ CREATE OR REPLACE NAVIGATION Responsive
 | Describe service | `DESCRIBE PUBLISHED REST SERVICE Module.Name;` | Re-executable CREATE statement |
 | Create service | See below | |
 | Create or replace | `CREATE OR REPLACE PUBLISHED REST SERVICE ...` | Replaces existing service |
+| Alter service | `ALTER PUBLISHED REST SERVICE Module.Name SET Path = '...', Version = '...';` | SET supports Path, Version, ServiceName |
+| Add resource | `ALTER PUBLISHED REST SERVICE Module.Name ADD RESOURCE 'name' { ... };` | Operation block uses CREATE syntax |
+| Drop resource | `ALTER PUBLISHED REST SERVICE Module.Name DROP RESOURCE 'name';` | |
 | Drop service | `DROP PUBLISHED REST SERVICE Module.Name;` | |
 | Grant access | `GRANT ACCESS ON PUBLISHED REST SERVICE Module.Name TO Module.Role, ...;` | Adds module roles to AllowedRoles |
 | Revoke access | `REVOKE ACCESS ON PUBLISHED REST SERVICE Module.Name FROM Module.Role, ...;` | |

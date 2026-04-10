@@ -38,6 +38,22 @@ CREATE / DROP PUBLISHED REST SERVICE
   Properties: Path (required), Version, ServiceName, Folder
   HTTP methods: GET, POST, PUT, DELETE, PATCH
 
+ALTER PUBLISHED REST SERVICE
+----------------------------
+
+  -- Change properties (Path, Version, ServiceName)
+  ALTER PUBLISHED REST SERVICE Module.MyAPI SET Version = '2.0.0';
+  ALTER PUBLISHED REST SERVICE Module.MyAPI
+    SET Path = 'rest/api/v2', ServiceName = 'My API v2';
+
+  -- Add a new resource block
+  ALTER PUBLISHED REST SERVICE Module.MyAPI ADD RESOURCE 'orders/{id}/items' {
+    GET '' MICROFLOW Module.GetOrderItems;
+  };
+
+  -- Drop a resource by name
+  ALTER PUBLISHED REST SERVICE Module.MyAPI DROP RESOURCE 'legacy';
+
 GRANT / REVOKE ACCESS
 ---------------------
 

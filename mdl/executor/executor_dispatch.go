@@ -200,6 +200,8 @@ func (e *Executor) executeInner(stmt ast.Statement) error {
 		return e.execCreatePublishedRestService(s)
 	case *ast.DropPublishedRestServiceStmt:
 		return e.execDropPublishedRestService(s)
+	case *ast.AlterPublishedRestServiceStmt:
+		return e.execAlterPublishedRestService(s)
 	case *ast.CreateExternalEntityStmt:
 		return e.execCreateExternalEntity(s)
 	case *ast.CreateExternalEntitiesStmt:

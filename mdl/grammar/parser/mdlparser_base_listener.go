@@ -56,6 +56,22 @@ func (s *BaseMDLParserListener) EnterAlterStatement(ctx *AlterStatementContext) 
 // ExitAlterStatement is called when production alterStatement is exited.
 func (s *BaseMDLParserListener) ExitAlterStatement(ctx *AlterStatementContext) {}
 
+// EnterAlterPublishedRestServiceAction is called when production alterPublishedRestServiceAction is entered.
+func (s *BaseMDLParserListener) EnterAlterPublishedRestServiceAction(ctx *AlterPublishedRestServiceActionContext) {
+}
+
+// ExitAlterPublishedRestServiceAction is called when production alterPublishedRestServiceAction is exited.
+func (s *BaseMDLParserListener) ExitAlterPublishedRestServiceAction(ctx *AlterPublishedRestServiceActionContext) {
+}
+
+// EnterPublishedRestAlterAssignment is called when production publishedRestAlterAssignment is entered.
+func (s *BaseMDLParserListener) EnterPublishedRestAlterAssignment(ctx *PublishedRestAlterAssignmentContext) {
+}
+
+// ExitPublishedRestAlterAssignment is called when production publishedRestAlterAssignment is exited.
+func (s *BaseMDLParserListener) ExitPublishedRestAlterAssignment(ctx *PublishedRestAlterAssignmentContext) {
+}
+
 // EnterAlterStylingAction is called when production alterStylingAction is entered.
 func (s *BaseMDLParserListener) EnterAlterStylingAction(ctx *AlterStylingActionContext) {}
 

@@ -269,3 +269,83 @@ func (e *Executor) execDropPublishedRestService(s *ast.DropPublishedRestServiceS
 
 	return fmt.Errorf("published REST service %s.%s not found", s.Name.Module, s.Name.Name)
 }
+
+// astResourceDefToModel converts an AST PublishedRestResourceDef to the
+// runtime model type used by the writer.
+func astResourceDefToModel(def *ast.PublishedRestResourceDef) *model.PublishedRestResource {
+	resource := &model.PublishedRestResource{Name: def.Name}
+	for _, opDef := range def.Operations {
+		resource.Operations = append(resource.Operations, &model.PublishedRestOperation{
+			HTTPMethod: opDef.HTTPMethod,
+			Path:       opDef.Path,
+			Microflow:  opDef.Microflow.String(),
+			Deprecated: opDef.Deprecated,
+		})
+	}
+	return resource
+}
+
+// execAlterPublishedRestService applies SET / ADD RESOURCE / DROP RESOURCE
+// actions to an existing published REST service.
+func (e *Executor) execAlterPublishedRestService(s *ast.AlterPublishedRestServiceStmt) error {
+	if e.writer == nil {
+		return fmt.Errorf("not connected to a project in write mode")
+	}
+
+	svc, err := e.findPublishedRestService(s.Name.Module, s.Name.Name)
+	if err != nil {
+		return fmt.Errorf("published REST service %s.%s not found", s.Name.Module, s.Name.Name)
+	}
+
+	for _, action := range s.Actions {
+		switch a := action.(type) {
+		case *ast.PublishedRestSetAction:
+			for key, val := range a.Changes {
+				switch strings.ToLower(key) {
+				case "path":
+					svc.Path = val
+				case "version":
+					svc.Version = val
+				case "servicename":
+					svc.ServiceName = val
+				default:
+					return fmt.Errorf("unknown published REST service property: %s (allowed: Path, Version, ServiceName)", key)
+				}
+			}
+
+		case *ast.PublishedRestAddResourceAction:
+			// Reject duplicate resource names
+			for _, existing := range svc.Resources {
+				if existing.Name == a.Resource.Name {
+					return fmt.Errorf("resource '%s' already exists on %s.%s", a.Resource.Name, s.Name.Module, s.Name.Name)
+				}
+			}
+			svc.Resources = append(svc.Resources, astResourceDefToModel(a.Resource))
+
+		case *ast.PublishedRestDropResourceAction:
+			idx := -1
+			for i, existing := range svc.Resources {
+				if existing.Name == a.Name {
+					idx = i
+					break
+				}
+			}
+			if idx == -1 {
+				return fmt.Errorf("resource '%s' not found on %s.%s", a.Name, s.Name.Module, s.Name.Name)
+			}
+			svc.Resources = append(svc.Resources[:idx], svc.Resources[idx+1:]...)
+
+		default:
+			return fmt.Errorf("unsupported alter action: %T", action)
+		}
+	}
+
+	if err := e.writer.UpdatePublishedRestService(svc); err != nil {
+		return fmt.Errorf("failed to alter published REST service: %w", err)
+	}
+
+	if !e.quiet {
+		fmt.Fprintf(e.output, "Altered published REST service %s.%s\n", s.Name.Module, s.Name.Name)
+	}
+	return nil
+}

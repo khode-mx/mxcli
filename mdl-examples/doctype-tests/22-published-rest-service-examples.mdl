@@ -140,7 +140,25 @@ REVOKE ACCESS ON PUBLISHED REST SERVICE PrsTest.OrderAPI FROM PrsTest.User;
 DESCRIBE PUBLISHED REST SERVICE PrsTest.OrderAPI;
 
 -- ############################################################################
--- PART 7: DROP
+-- PART 7: ALTER
+-- ############################################################################
+--
+-- Modify properties or add/remove resources without recreating the service.
+
+ALTER PUBLISHED REST SERVICE PrsTest.OrderAPI SET Version = '1.1.0';
+ALTER PUBLISHED REST SERVICE PrsTest.OrderAPI
+  SET Path = 'rest/orders/v1', ServiceName = 'Order API';
+
+ALTER PUBLISHED REST SERVICE PrsTest.OrderAPI ADD RESOURCE 'shipments' {
+  GET '' MICROFLOW PrsTest.PRS_GetAllOrders;
+};
+
+DESCRIBE PUBLISHED REST SERVICE PrsTest.OrderAPI;
+
+ALTER PUBLISHED REST SERVICE PrsTest.OrderAPI DROP RESOURCE 'shipments';
+
+-- ############################################################################
+-- PART 8: DROP
 -- ############################################################################
 
 DROP PUBLISHED REST SERVICE PrsTest.OrderAPI;

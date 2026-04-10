@@ -103,3 +103,42 @@ type DropPublishedRestServiceStmt struct {
 }
 
 func (s *DropPublishedRestServiceStmt) isStatement() {}
+
+// AlterPublishedRestServiceStmt represents:
+//
+//	ALTER PUBLISHED REST SERVICE Module.Name <action>+
+//
+// where each action is one of: SET key = 'value' [, ...], ADD RESOURCE
+// 'name' { ... }, or DROP RESOURCE 'name'.
+type AlterPublishedRestServiceStmt struct {
+	Name    QualifiedName
+	Actions []PublishedRestAlterAction
+}
+
+func (s *AlterPublishedRestServiceStmt) isStatement() {}
+
+// PublishedRestAlterAction is one of the alter operations.
+type PublishedRestAlterAction interface {
+	isPublishedRestAlterAction()
+}
+
+// PublishedRestSetAction represents: SET key = 'value' [, ...]
+type PublishedRestSetAction struct {
+	Changes map[string]string
+}
+
+func (a *PublishedRestSetAction) isPublishedRestAlterAction() {}
+
+// PublishedRestAddResourceAction represents: ADD RESOURCE 'name' { ops... }
+type PublishedRestAddResourceAction struct {
+	Resource *PublishedRestResourceDef
+}
+
+func (a *PublishedRestAddResourceAction) isPublishedRestAlterAction() {}
+
+// PublishedRestDropResourceAction represents: DROP RESOURCE 'name'
+type PublishedRestDropResourceAction struct {
+	Name string
+}
+
+func (a *PublishedRestDropResourceAction) isPublishedRestAlterAction() {}

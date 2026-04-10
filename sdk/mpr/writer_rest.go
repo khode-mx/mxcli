@@ -324,6 +324,16 @@ func (w *Writer) DeletePublishedRestService(id model.ID) error {
 	return w.deleteUnit(string(id))
 }
 
+// UpdatePublishedRestService re-serializes an existing published REST
+// service. Used by ALTER PUBLISHED REST SERVICE.
+func (w *Writer) UpdatePublishedRestService(svc *model.PublishedRestService) error {
+	contents, err := w.serializePublishedRestService(svc)
+	if err != nil {
+		return fmt.Errorf("failed to serialize published REST service: %w", err)
+	}
+	return w.updateUnit(string(svc.ID), contents)
+}
+
 func (w *Writer) serializePublishedRestService(svc *model.PublishedRestService) ([]byte, error) {
 	resources := bson.A{int32(2)}
 	for _, res := range svc.Resources {
