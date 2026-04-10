@@ -629,28 +629,6 @@ func (e *Executor) showSecurityMatrixJSON(moduleName string) error {
 		})
 	}
 
-	// Workflows
-	wfs, _ := e.reader.ListWorkflows()
-	for _, wf := range wfs {
-		if len(wf.AllowedModuleRoles) == 0 {
-			continue
-		}
-		modID := h.FindModuleID(wf.ContainerID)
-		modName := h.GetModuleName(modID)
-		if moduleName != "" && modName != moduleName {
-			continue
-		}
-		var roleStrs []string
-		for _, r := range wf.AllowedModuleRoles {
-			roleStrs = append(roleStrs, string(r))
-		}
-		tr.Rows = append(tr.Rows, []any{
-			"Workflow",
-			modName + "." + wf.Name,
-			strings.Join(roleStrs, ", "),
-			"X",
-		})
-	}
 
 	return e.writeResult(tr)
 }

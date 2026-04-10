@@ -46,4 +46,4 @@ END WORKFLOW;
 - [Workflow Structure](./workflow-structure.md) -- full CREATE WORKFLOW syntax
 - [Activity Types](./workflow-activities.md) -- all workflow activity types
 - [Workflow vs Microflow](./workflow-vs-microflow.md) -- choosing between the two
-- [GRANT / REVOKE](./grant-revoke.md) -- granting execute access on workflows
+- [GRANT / REVOKE](./grant-revoke.md) -- workflow access is controlled through triggering microflows and UserTask targeting, not document-level roles

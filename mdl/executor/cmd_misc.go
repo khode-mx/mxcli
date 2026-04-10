@@ -222,7 +222,6 @@ Security - Queries:
   SHOW DEMO USERS;
   SHOW ACCESS ON MICROFLOW Module.Name;
   SHOW ACCESS ON PAGE Module.Name;
-  SHOW ACCESS ON WORKFLOW Module.Name;
   SHOW ACCESS ON Module.Entity;
   SHOW SECURITY MATRIX [IN Module];
   DESCRIBE MODULE ROLE Module.Role;
