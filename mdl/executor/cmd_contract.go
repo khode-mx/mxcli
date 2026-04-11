@@ -613,10 +613,180 @@ func (e *Executor) createExternalEntities(s *ast.CreateExternalEntitiesStmt) err
 		}
 	}
 
+	// Second pass: walk navigation properties and create associations between
+	// the entities we just created. Re-read the domain model so we get fresh
+	// entity IDs (CreateEntity reloads the dm internally on each call).
+	dm, err = e.reader.GetDomainModel(module.ID)
+	if err == nil {
+		assocsCreated := e.createNavigationAssociations(dm, doc, typeByQualified, esMap, serviceRef)
+		if assocsCreated > 0 {
+			fmt.Fprintf(e.output, "Created %d navigation associations\n", assocsCreated)
+		}
+	}
+
 	fmt.Fprintf(e.output, "\nFrom %s into %s: %d created, %d updated, %d skipped, %d failed\n",
 		svcQN, targetModule, created, updated, skipped, failed)
 
 	return nil
+}
+
+// assocKey is a (parentEntityName, associationName) pair used to detect
+// duplicate associations across passes.
+type assocKey struct {
+	parent, name string
+}
+
+// createNavigationAssociations walks the navigation properties of every entity
+// type in the schema and creates a corresponding Mendix association for each
+// one whose target also exists as an entity in this domain model. Inherited
+// navigation properties from BaseType chains are walked too.
+//
+// Each association uses Rest$ODataRemoteAssociationSource so Studio Pro can
+// map it back to the OData navigation property.
+func (e *Executor) createNavigationAssociations(
+	dm *domainmodel.DomainModel,
+	doc *mpr.EdmxDocument,
+	typeByQualified map[string]*mpr.EdmEntityType,
+	esMap map[string]string,
+	serviceRef string,
+) int {
+	// Build a lookup from EDMX type qualified name → existing Mendix entity.
+	// An entity type matches by its EntitySet name when present, otherwise by
+	// its bare type name.
+	mendixByType := make(map[string]*domainmodel.Entity)
+	for qn, et := range typeByQualified {
+		entitySetName := esMap[qn]
+		mendixName := et.Name
+		if entitySetName != "" {
+			mendixName = entitySetName
+		}
+		for _, ent := range dm.Entities {
+			if ent.Name == mendixName {
+				mendixByType[qn] = ent
+				break
+			}
+		}
+	}
+
+	// Track associations we've already created to avoid duplicates from
+	// inherited nav properties.
+	existingAssocs := make(map[assocKey]bool)
+	for _, a := range dm.Associations {
+		// Find parent entity name for this association
+		for _, ent := range dm.Entities {
+			if ent.ID == a.ParentID {
+				existingAssocs[assocKey{ent.Name, a.Name}] = true
+				break
+			}
+		}
+	}
+
+	count := 0
+	for _, schema := range doc.Schemas {
+		for _, et := range schema.EntityTypes {
+			parentQN := schema.Namespace + "." + et.Name
+			parentEnt := mendixByType[parentQN]
+			if parentEnt == nil {
+				continue
+			}
+
+			for _, np := range et.NavigationProperties {
+				// ContainsTarget=true navigation properties refer to OData
+				// contained entities (e.g. Person.Trips). Studio Pro doesn't
+				// create an association for these — the contained entities
+				// are reached via the parent entity, not by association.
+				if np.ContainsTarget {
+					continue
+				}
+
+				// Resolve target type qualified name
+				targetTypeName := np.Type
+				isMany := false
+				if strings.HasPrefix(targetTypeName, "Collection(") && strings.HasSuffix(targetTypeName, ")") {
+					targetTypeName = targetTypeName[len("Collection(") : len(targetTypeName)-1]
+					isMany = true
+				}
+				childEnt := mendixByType[targetTypeName]
+				if childEnt == nil {
+					continue // target type isn't in our project
+				}
+
+				// Mendix forbids associations from a persistable entity to a
+				// non-persistable entity (CE0001). Skip these for now —
+				// Studio Pro doesn't create them either when the target is
+				// stored as Rest$ODataEntityTypeSource (Persistable=false).
+				if parentEnt.Persistable && !childEnt.Persistable {
+					continue
+				}
+
+				// An association name must be unique within a module and may
+				// not collide with any entity name (CE0065). When the OData
+				// nav property name collides with an existing entity, append
+				// a numeric suffix.
+				assocName := uniqueAssocName(np.Name, dm, existingAssocs)
+
+				assocType := domainmodel.AssociationTypeReference
+				if isMany {
+					assocType = domainmodel.AssociationTypeReferenceSet
+				}
+
+				assoc := &domainmodel.Association{
+					Name:                           assocName,
+					ParentID:                       parentEnt.ID,
+					ChildID:                        childEnt.ID,
+					Type:                           assocType,
+					Owner:                          domainmodel.AssociationOwnerDefault,
+					StorageFormat:                  domainmodel.StorageFormatColumn,
+					Source:                         "Rest$ODataRemoteAssociationSource",
+					RemoteParentNavigationProperty: np.Name,
+					Navigability2:                  "ParentToChild",
+					// TODO: parse Org.OData.Capabilities.V1 annotations to
+					// derive these per-association. Defaults match TripPin's
+					// most common case.
+					CreatableFromParent: true,
+					UpdatableFromParent: true,
+				}
+				assoc.ID = model.ID(mpr.GenerateID())
+
+				if err := e.writer.CreateAssociation(dm.ID, assoc); err != nil {
+					fmt.Fprintf(e.output, "  ASSOC FAILED: %s.%s — %v\n", parentEnt.Name, assocName, err)
+					continue
+				}
+				existingAssocs[assocKey{parentEnt.Name, assocName}] = true
+				count++
+			}
+		}
+	}
+	return count
+}
+
+// uniqueAssocName returns a Mendix-safe association name for an OData nav
+// property. If the requested name collides with an existing entity name OR an
+// already-created association name, append a numeric suffix.
+func uniqueAssocName(base string, dm *domainmodel.DomainModel, existingAssocs map[assocKey]bool) string {
+	collides := func(name string) bool {
+		for _, ent := range dm.Entities {
+			if ent.Name == name {
+				return true
+			}
+		}
+		for k := range existingAssocs {
+			if k.name == name {
+				return true
+			}
+		}
+		return false
+	}
+	if !collides(base) {
+		return base
+	}
+	for i := 2; i < 100; i++ {
+		candidate := fmt.Sprintf("%s_%d", base, i)
+		if !collides(candidate) {
+			return candidate
+		}
+	}
+	return base
 }
 
 // applyExternalEntityFields stamps the Source/RemoteServiceName/Key/Attributes

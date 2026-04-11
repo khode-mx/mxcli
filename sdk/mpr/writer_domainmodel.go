@@ -1065,7 +1065,7 @@ func serializeAssociation(a *domainmodel.Association) bson.M {
 	if storageFormat == "" {
 		storageFormat = "Column"
 	}
-	return bson.M{
+	doc := bson.M{
 		"$ID":              idToBsonBinary(string(a.ID)),
 		"$Type":            "DomainModels$Association",
 		"Name":             a.Name,
@@ -1079,9 +1079,28 @@ func serializeAssociation(a *domainmodel.Association) bson.M {
 		"ParentConnection": "0;50",
 		"ChildConnection":  "100;50",
 		"StorageFormat":    storageFormat,
-		"Source":           nil,
 		"DeleteBehavior":   serializeDeleteBehavior(a.ParentDeleteBehavior, a.ChildDeleteBehavior),
 	}
+	if a.Source == "Rest$ODataRemoteAssociationSource" {
+		nav := a.Navigability2
+		if nav == "" {
+			nav = "ParentToChild"
+		}
+		doc["Source"] = bson.M{
+			"$ID":                            idToBsonBinary(generateUUID()),
+			"$Type":                          "Rest$ODataRemoteAssociationSource",
+			"CreatableFromChild":             a.CreatableFromChild,
+			"CreatableFromParent":            a.CreatableFromParent,
+			"Navigability2":                  nav,
+			"RemoteChildNavigationProperty":  a.RemoteChildNavigationProperty,
+			"RemoteParentNavigationProperty": a.RemoteParentNavigationProperty,
+			"UpdatableFromChild":             a.UpdatableFromChild,
+			"UpdatableFromParent":            a.UpdatableFromParent,
+		}
+	} else {
+		doc["Source"] = nil
+	}
+	return doc
 }
 
 func serializeCrossAssociation(ca *domainmodel.CrossModuleAssociation) bson.M {

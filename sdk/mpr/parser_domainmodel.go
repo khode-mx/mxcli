@@ -429,6 +429,20 @@ func parseAssociation(raw map[string]any) *domainmodel.Association {
 		}
 	}
 
+	// Parse OData remote association source
+	if sourceMap, ok := raw["Source"].(map[string]any); ok {
+		if extractString(sourceMap["$Type"]) == "Rest$ODataRemoteAssociationSource" {
+			assoc.Source = "Rest$ODataRemoteAssociationSource"
+			assoc.RemoteParentNavigationProperty = extractString(sourceMap["RemoteParentNavigationProperty"])
+			assoc.RemoteChildNavigationProperty = extractString(sourceMap["RemoteChildNavigationProperty"])
+			assoc.CreatableFromParent = extractBool(sourceMap["CreatableFromParent"], false)
+			assoc.CreatableFromChild = extractBool(sourceMap["CreatableFromChild"], false)
+			assoc.UpdatableFromParent = extractBool(sourceMap["UpdatableFromParent"], false)
+			assoc.UpdatableFromChild = extractBool(sourceMap["UpdatableFromChild"], false)
+			assoc.Navigability2 = extractString(sourceMap["Navigability2"])
+		}
+	}
+
 	return assoc
 }
 

@@ -337,6 +337,19 @@ type Association struct {
 	// Delete behavior
 	ParentDeleteBehavior *DeleteBehavior `json:"parentDeleteBehavior,omitempty"`
 	ChildDeleteBehavior  *DeleteBehavior `json:"childDeleteBehavior,omitempty"`
+
+	// External association source (for OData remote associations between
+	// external entities). When Source = "Rest$ODataRemoteAssociationSource",
+	// the writer emits a Source block carrying the OData navigation property
+	// names instead of leaving the association as a plain persistent one.
+	Source                         string `json:"source,omitempty"`
+	RemoteParentNavigationProperty string `json:"remoteParentNavigationProperty,omitempty"`
+	RemoteChildNavigationProperty  string `json:"remoteChildNavigationProperty,omitempty"`
+	CreatableFromParent            bool   `json:"creatableFromParent,omitempty"`
+	CreatableFromChild             bool   `json:"creatableFromChild,omitempty"`
+	UpdatableFromParent            bool   `json:"updatableFromParent,omitempty"`
+	UpdatableFromChild             bool   `json:"updatableFromChild,omitempty"`
+	Navigability2                  string `json:"navigability2,omitempty"` // "ParentToChild" or "BothDirections"
 }
 
 // GetName returns the association's name.
