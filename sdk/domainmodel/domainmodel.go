@@ -178,6 +178,11 @@ type Attribute struct {
 	Sortable   bool   `json:"sortable,omitempty"`
 	Creatable  bool   `json:"creatable,omitempty"`
 	Updatable  bool   `json:"updatable,omitempty"`
+
+	// IsPrimitiveCollection marks the single attribute of a primitive
+	// collection NPE (e.g. TripTag.Tag). When set, the writer emits
+	// Rest$ODataMappedPrimitiveCollectionValue instead of Rest$ODataMappedValue.
+	IsPrimitiveCollection bool `json:"isPrimitiveCollection,omitempty"`
 }
 
 // GetName returns the attribute's name.

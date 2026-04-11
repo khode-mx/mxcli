@@ -272,13 +272,18 @@ func parseAttribute(raw map[string]any) *domainmodel.Attribute {
 
 		// For external entities, the Value is a Rest$ODataMappedValue that
 		// carries the OData property name, type, and capability flags.
-		if extractString(val["$Type"]) == "Rest$ODataMappedValue" {
+		switch extractString(val["$Type"]) {
+		case "Rest$ODataMappedValue":
 			attr.RemoteName = extractString(val["RemoteName"])
 			attr.RemoteType = extractString(val["RemoteType"])
 			attr.Filterable = extractBool(val["Filterable"], false)
 			attr.Sortable = extractBool(val["Sortable"], false)
 			attr.Creatable = extractBool(val["Creatable"], false)
 			attr.Updatable = extractBool(val["Updatable"], false)
+		case "Rest$ODataMappedPrimitiveCollectionValue":
+			attr.RemoteName = extractString(val["RemoteName"])
+			attr.RemoteType = extractString(val["RemoteType"])
+			attr.IsPrimitiveCollection = true
 		}
 	}
 
@@ -316,6 +321,13 @@ func parseAttributeValue(raw map[string]any) *domainmodel.AttributeValue {
 	case "Rest$ODataMappedValue":
 		val := &domainmodel.AttributeValue{
 			Type:         "ODataMappedValue",
+			DefaultValue: extractString(raw["DefaultValueDesignTime"]),
+		}
+		val.ID = valueID
+		return val
+	case "Rest$ODataMappedPrimitiveCollectionValue":
+		val := &domainmodel.AttributeValue{
+			Type:         "ODataMappedPrimitiveCollectionValue",
 			DefaultValue: extractString(raw["DefaultValueDesignTime"]),
 		}
 		val.ID = valueID
@@ -431,7 +443,8 @@ func parseAssociation(raw map[string]any) *domainmodel.Association {
 
 	// Parse OData remote association source
 	if sourceMap, ok := raw["Source"].(map[string]any); ok {
-		if extractString(sourceMap["$Type"]) == "Rest$ODataRemoteAssociationSource" {
+		switch extractString(sourceMap["$Type"]) {
+		case "Rest$ODataRemoteAssociationSource":
 			assoc.Source = "Rest$ODataRemoteAssociationSource"
 			assoc.RemoteParentNavigationProperty = extractString(sourceMap["RemoteParentNavigationProperty"])
 			assoc.RemoteChildNavigationProperty = extractString(sourceMap["RemoteChildNavigationProperty"])
@@ -440,6 +453,8 @@ func parseAssociation(raw map[string]any) *domainmodel.Association {
 			assoc.UpdatableFromParent = extractBool(sourceMap["UpdatableFromParent"], false)
 			assoc.UpdatableFromChild = extractBool(sourceMap["UpdatableFromChild"], false)
 			assoc.Navigability2 = extractString(sourceMap["Navigability2"])
+		case "Rest$ODataPrimitiveCollectionAssociationSource":
+			assoc.Source = "Rest$ODataPrimitiveCollectionAssociationSource"
 		}
 	}
 

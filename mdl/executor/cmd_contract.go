@@ -544,6 +544,13 @@ func (e *Executor) createExternalEntities(s *ast.CreateExternalEntitiesStmt) err
 				})
 			}
 
+			// Default Updatable depends on whether the parent will be a top-
+			// level entity-set entity or a derived/contained entity-type source.
+			// Top-level entities are typically read-only on writable attributes
+			// (matches People/Photos/Airlines in TripPin); contained types are
+			// updatable.
+			defaultUpdatable := !isTopLevel
+
 			// Build attributes from merged properties
 			var attrs []*domainmodel.Attribute
 			for _, p := range mergedProps {
@@ -572,10 +579,9 @@ func (e *Executor) createExternalEntities(s *ast.CreateExternalEntitiesStmt) err
 					Filterable: true,
 					Sortable:   true,
 					// TODO: parse Org.OData.Capabilities.V1 annotations to set
-					// these per-attribute. Current defaults assume create-on-insert
-					// but no in-place update.
+					// these per-attribute. Defaults match TripPin's pattern.
 					Creatable: true,
-					Updatable: false,
+					Updatable: defaultUpdatable,
 				}
 				attr.ID = model.ID(mpr.GenerateID())
 				attrs = append(attrs, attr)
@@ -613,9 +619,20 @@ func (e *Executor) createExternalEntities(s *ast.CreateExternalEntitiesStmt) err
 		}
 	}
 
-	// Second pass: walk navigation properties and create associations between
-	// the entities we just created. Re-read the domain model so we get fresh
-	// entity IDs (CreateEntity reloads the dm internally on each call).
+	// Second pass: create primitive-collection NPEs (e.g. TripTag for
+	// Trip.Tags = Collection(Edm.String)) and the association from the
+	// parent entity to each NPE.
+	dm, err = e.reader.GetDomainModel(module.ID)
+	if err == nil {
+		npesCreated := e.createPrimitiveCollectionNPEs(dm, doc, typeByQualified, esMap, serviceRef)
+		if npesCreated > 0 {
+			fmt.Fprintf(e.output, "Created %d primitive-collection NPEs\n", npesCreated)
+		}
+	}
+
+	// Third pass: walk navigation properties and create associations between
+	// the entities we just created. Re-read the domain model so the NPEs
+	// from the previous pass are visible.
 	dm, err = e.reader.GetDomainModel(module.ID)
 	if err == nil {
 		assocsCreated := e.createNavigationAssociations(dm, doc, typeByQualified, esMap, serviceRef)
@@ -634,6 +651,183 @@ func (e *Executor) createExternalEntities(s *ast.CreateExternalEntitiesStmt) err
 // duplicate associations across passes.
 type assocKey struct {
 	parent, name string
+}
+
+// createPrimitiveCollectionNPEs walks each entity type's properties and, for
+// each Collection(Edm.X) property, creates a non-persistent entity to hold
+// the values plus an association from the parent entity. This mirrors how
+// Studio Pro handles e.g. Trip.Tags = Collection(Edm.String) by creating a
+// TripTag NPE and a Trip_TripTag ReferenceSet.
+func (e *Executor) createPrimitiveCollectionNPEs(
+	dm *domainmodel.DomainModel,
+	doc *mpr.EdmxDocument,
+	typeByQualified map[string]*mpr.EdmEntityType,
+	esMap map[string]string,
+	serviceRef string,
+) int {
+	// Lookup parent Mendix entity by EDMX type qualified name.
+	parentByQN := make(map[string]*domainmodel.Entity)
+	for qn, et := range typeByQualified {
+		mendixName := et.Name
+		if es := esMap[qn]; es != "" {
+			mendixName = es
+		}
+		for _, ent := range dm.Entities {
+			if ent.Name == mendixName {
+				parentByQN[qn] = ent
+				break
+			}
+		}
+	}
+
+	count := 0
+	for _, schema := range doc.Schemas {
+		for _, et := range schema.EntityTypes {
+			parentEnt := parentByQN[schema.Namespace+"."+et.Name]
+			if parentEnt == nil {
+				continue
+			}
+
+			// Studio Pro only creates primitive collection NPEs when the
+			// parent entity is non-persistable (Rest$ODataEntityTypeSource).
+			// Mendix forbids associations from a persistable to a non-
+			// persistable entity (CE0001), so a top-level entity-set entity
+			// can't own an NPE child.
+			if parentEnt.Persistable {
+				continue
+			}
+
+			// Collect inherited properties from BaseType chain (only for the
+			// derived type itself — base types iterate independently).
+			merged, _ := mergedPropertiesWithKey(et, typeByQualified)
+			for _, p := range merged {
+				if !strings.HasPrefix(p.Type, "Collection(Edm.") {
+					continue
+				}
+
+				// Skip if a property of the same name was inherited from a
+				// base type (the base type's iteration already created the NPE).
+				if isInheritedProperty(et, p.Name, typeByQualified) {
+					continue
+				}
+
+				npeName := parentEnt.Name + singular(p.Name)
+
+				// Skip if NPE already exists (idempotent re-runs)
+				if findEntityByName(dm, npeName) != nil {
+					continue
+				}
+
+				// Build the inner attribute type from the element type
+				innerType := p.Type[len("Collection(") : len(p.Type)-1]
+				innerProp := &mpr.EdmProperty{
+					Name:      singular(p.Name),
+					Type:      innerType,
+					MaxLength: p.MaxLength,
+					Scale:     p.Scale,
+				}
+
+				attr := &domainmodel.Attribute{
+					Name:                  singular(p.Name),
+					Type:                  edmToDomainModelAttrType(innerProp, false),
+					RemoteName:            p.Name,
+					RemoteType:            primitiveCollectionRemoteType(innerType, p.Nullable),
+					IsPrimitiveCollection: true,
+				}
+				attr.ID = model.ID(mpr.GenerateID())
+
+				npe := &domainmodel.Entity{
+					Name:              npeName,
+					Persistable:       false,
+					Location:          model.Point{X: parentEnt.Location.X + 200, Y: parentEnt.Location.Y + 100},
+					Attributes:        []*domainmodel.Attribute{attr},
+					Source:            "Rest$ODataPrimitiveCollectionEntitySource",
+					RemoteServiceName: serviceRef,
+				}
+				npe.ID = model.ID(mpr.GenerateID())
+
+				if err := e.writer.CreateEntity(dm.ID, npe); err != nil {
+					fmt.Fprintf(e.output, "  NPE FAILED: %s — %v\n", npeName, err)
+					continue
+				}
+				count++
+
+				// Create the association from the parent entity to the NPE.
+				// Studio Pro names this <ParentEntityName>_<NPEName> and uses
+				// Rest$ODataPrimitiveCollectionAssociationSource (a marker
+				// type with no fields, paired with the NPE's source type).
+				assocName := parentEnt.Name + "_" + npeName
+				assoc := &domainmodel.Association{
+					Name:          assocName,
+					ParentID:      parentEnt.ID,
+					ChildID:       npe.ID,
+					Type:          domainmodel.AssociationTypeReferenceSet,
+					Owner:         domainmodel.AssociationOwnerDefault,
+					StorageFormat: domainmodel.StorageFormatColumn,
+					Source:        "Rest$ODataPrimitiveCollectionAssociationSource",
+				}
+				assoc.ID = model.ID(mpr.GenerateID())
+				if err := e.writer.CreateAssociation(dm.ID, assoc); err != nil {
+					fmt.Fprintf(e.output, "  NPE ASSOC FAILED: %s — %v\n", assocName, err)
+				}
+			}
+		}
+	}
+	return count
+}
+
+// isInheritedProperty reports whether a property name comes from one of the
+// entity type's base types (rather than being defined on the type itself).
+func isInheritedProperty(et *mpr.EdmEntityType, propName string, byQN map[string]*mpr.EdmEntityType) bool {
+	for _, p := range et.Properties {
+		if p.Name == propName {
+			return false
+		}
+	}
+	return true
+}
+
+// findEntityByName returns a domain model entity by name, or nil if not found.
+func findEntityByName(dm *domainmodel.DomainModel, name string) *domainmodel.Entity {
+	for _, ent := range dm.Entities {
+		if ent.Name == name {
+			return ent
+		}
+	}
+	return nil
+}
+
+// primitiveCollectionRemoteType formats the OData remote type string the way
+// Studio Pro stores it for a Collection(Edm.X) — bracketed with the Nullable
+// and Unicode attributes spelled out, e.g.
+//
+//	Collection([Edm.String Nullable=False Unicode=True])
+//	Collection([Edm.Int32 Nullable=False])
+func primitiveCollectionRemoteType(innerType string, nullable *bool) string {
+	nullableStr := "True"
+	if nullable != nil && !*nullable {
+		nullableStr = "False"
+	}
+	if innerType == "Edm.String" {
+		return fmt.Sprintf("Collection([%s Nullable=%s Unicode=True])", innerType, nullableStr)
+	}
+	return fmt.Sprintf("Collection([%s Nullable=%s])", innerType, nullableStr)
+}
+
+// singular returns a naive singular form of an English plural by stripping a
+// trailing "s". Good enough for OData property names like "Tags" → "Tag".
+// Doesn't handle irregular plurals.
+func singular(name string) string {
+	if strings.HasSuffix(name, "ies") {
+		return name[:len(name)-3] + "y"
+	}
+	if strings.HasSuffix(name, "es") && !strings.HasSuffix(name, "ses") {
+		return name[:len(name)-2]
+	}
+	if strings.HasSuffix(name, "s") {
+		return name[:len(name)-1]
+	}
+	return name
 }
 
 // createNavigationAssociations walks the navigation properties of every entity

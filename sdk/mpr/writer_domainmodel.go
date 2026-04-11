@@ -606,7 +606,12 @@ func (w *Writer) serializeDomainModel(dm *domainmodel.DomainModel) ([]byte, erro
 }
 
 func serializeEntity(e *domainmodel.Entity, moduleName string, pv *version.ProjectVersion) bson.D {
-	isExternal := e.Source == "Rest$ODataRemoteEntitySource"
+	// Any of the three OData source types means the attributes need OData
+	// mapped value serialization (Rest$ODataMappedValue or its primitive
+	// collection variant), not the regular DomainModels$StoredValue.
+	isExternal := e.Source == "Rest$ODataRemoteEntitySource" ||
+		e.Source == "Rest$ODataEntityTypeSource" ||
+		e.Source == "Rest$ODataPrimitiveCollectionEntitySource"
 
 	// Attributes array with version prefix 3
 	attrs := bson.A{int32(3)}
@@ -1015,6 +1020,19 @@ func serializeAttribute(a *domainmodel.Attribute, isExternalEntity bool) bson.D 
 			{Key: "Microflow", Value: microflowRef},
 			{Key: "PassEntity", Value: microflowRef != ""},
 		}
+	} else if isExternalEntity && a.IsPrimitiveCollection {
+		// Single attribute of a primitive collection NPE (e.g. TripTag.Tag)
+		defaultValue := ""
+		if a.Value != nil && a.Value.DefaultValue != "" {
+			defaultValue = a.Value.DefaultValue
+		}
+		valueDoc = bson.D{
+			{Key: "$ID", Value: idToBsonBinary(valueID)},
+			{Key: "$Type", Value: "Rest$ODataMappedPrimitiveCollectionValue"},
+			{Key: "DefaultValueDesignTime", Value: defaultValue},
+			{Key: "RemoteName", Value: a.RemoteName},
+			{Key: "RemoteType", Value: a.RemoteType},
+		}
 	} else if isExternalEntity && a.RemoteName != "" {
 		// External entity attribute backed by an OData property - use ODataMappedValue
 		defaultValue := ""
@@ -1081,7 +1099,8 @@ func serializeAssociation(a *domainmodel.Association) bson.M {
 		"StorageFormat":    storageFormat,
 		"DeleteBehavior":   serializeDeleteBehavior(a.ParentDeleteBehavior, a.ChildDeleteBehavior),
 	}
-	if a.Source == "Rest$ODataRemoteAssociationSource" {
+	switch a.Source {
+	case "Rest$ODataRemoteAssociationSource":
 		nav := a.Navigability2
 		if nav == "" {
 			nav = "ParentToChild"
@@ -1097,7 +1116,14 @@ func serializeAssociation(a *domainmodel.Association) bson.M {
 			"UpdatableFromChild":             a.UpdatableFromChild,
 			"UpdatableFromParent":            a.UpdatableFromParent,
 		}
-	} else {
+	case "Rest$ODataPrimitiveCollectionAssociationSource":
+		// Studio Pro emits this with no extra fields — it's a marker that
+		// pairs with Rest$ODataPrimitiveCollectionEntitySource on the child.
+		doc["Source"] = bson.M{
+			"$ID":   idToBsonBinary(generateUUID()),
+			"$Type": "Rest$ODataPrimitiveCollectionAssociationSource",
+		}
+	default:
 		doc["Source"] = nil
 	}
 	return doc
