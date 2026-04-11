@@ -227,8 +227,12 @@ func parseRestBody(bodyVal any, op *model.RestClientOperation) {
 		op.BodyType = "JSON"
 	case "Rest$JsonBody":
 		op.BodyType = "JSON"
+		op.BodyVariable = extractString(bodyMap["Value"])
 	case "Rest$StringBody":
 		op.BodyType = "FILE" // StringBody with template is used for file uploads
+		if vt := extractBsonMap(bodyMap["ValueTemplate"]); vt != nil {
+			op.BodyVariable = extractString(vt["Value"])
+		}
 	}
 }
 

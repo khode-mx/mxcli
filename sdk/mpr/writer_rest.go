@@ -177,7 +177,7 @@ func serializeRestMethod(op *model.RestClientOperation) bson.M {
 			"$Type":      "Rest$RestOperationMethodWithBody",
 			"HttpMethod": httpMethod,
 		}
-		doc["Body"] = serializeRestBody(op.BodyType)
+		doc["Body"] = serializeRestBody(op.BodyType, op.BodyVariable)
 		return doc
 	}
 
@@ -189,7 +189,7 @@ func serializeRestMethod(op *model.RestClientOperation) bson.M {
 			"$Type":      "Rest$RestOperationMethodWithBody",
 			"HttpMethod": httpMethod,
 		}
-		doc["Body"] = serializeRestBody("JSON")
+		doc["Body"] = serializeRestBody("JSON", op.BodyVariable)
 		return doc
 	}
 
@@ -204,25 +204,29 @@ func serializeRestMethod(op *model.RestClientOperation) bson.M {
 // serializeRestBody creates a polymorphic Body field.
 // Uses Rest$JsonBody instead of Rest$ImplicitMappingBody to avoid CE7247/CE0061
 // (ImplicitMappingBody requires entity mapping which isn't supported yet).
-func serializeRestBody(bodyType string) bson.M {
+//
+// bodyExpr is a Mendix expression (typically "$variableName") that produces
+// the JSON or file body at call time. It is stored verbatim in the BSON Value
+// field so a roundtrip preserves it.
+func serializeRestBody(bodyType, bodyExpr string) bson.M {
 	switch strings.ToUpper(bodyType) {
 	case "JSON":
 		return bson.M{
 			"$ID":   idToBsonBinary(generateUUID()),
 			"$Type": "Rest$JsonBody",
-			"Value": "",
+			"Value": bodyExpr,
 		}
 	case "FILE":
 		return bson.M{
 			"$ID":           idToBsonBinary(generateUUID()),
 			"$Type":         "Rest$StringBody",
-			"ValueTemplate": serializeValueTemplate(""),
+			"ValueTemplate": serializeValueTemplate(bodyExpr),
 		}
 	default:
 		return bson.M{
 			"$ID":   idToBsonBinary(generateUUID()),
 			"$Type": "Rest$JsonBody",
-			"Value": "",
+			"Value": bodyExpr,
 		}
 	}
 }
