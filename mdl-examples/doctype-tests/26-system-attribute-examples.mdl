@@ -11,7 +11,7 @@
 --   AutoChangedDate    -> ChangedDate: DateTime (auto-set on commit)
 --
 -- This file demonstrates enabling these both during CREATE ENTITY
--- (as pseudo-typed attributes) and via ALTER ENTITY (SET / DROP STORE).
+-- (as pseudo-typed attributes) and via ALTER ENTITY ADD/DROP ATTRIBUTE.
 --
 -- ============================================================================
 
@@ -52,10 +52,10 @@ CREATE OR MODIFY PERSISTENT ENTITY SysAttrTest.Customer (
   Email: String(200)
 );
 
-ALTER ENTITY SysAttrTest.Customer SET STORE OWNER;
-ALTER ENTITY SysAttrTest.Customer SET STORE CHANGED BY;
-ALTER ENTITY SysAttrTest.Customer SET STORE CREATED DATE;
-ALTER ENTITY SysAttrTest.Customer SET STORE CHANGED DATE;
+ALTER ENTITY SysAttrTest.Customer ADD ATTRIBUTE Owner: AutoOwner;
+ALTER ENTITY SysAttrTest.Customer ADD ATTRIBUTE ChangedBy: AutoChangedBy;
+ALTER ENTITY SysAttrTest.Customer ADD ATTRIBUTE CreatedDate: AutoCreatedDate;
+ALTER ENTITY SysAttrTest.Customer ADD ATTRIBUTE ChangedDate: AutoChangedDate;
 
 -- ============================================================================
 -- Example 4: ALTER ENTITY to disable previously enabled flags
@@ -67,9 +67,9 @@ CREATE OR MODIFY PERSISTENT ENTITY SysAttrTest.TempRecord (
   CreatedDate: AutoCreatedDate
 );
 
--- Disable both flags
-ALTER ENTITY SysAttrTest.TempRecord DROP STORE OWNER;
-ALTER ENTITY SysAttrTest.TempRecord DROP STORE CREATED DATE;
+-- Disable both flags (drop by system attribute name)
+ALTER ENTITY SysAttrTest.TempRecord DROP ATTRIBUTE Owner;
+ALTER ENTITY SysAttrTest.TempRecord DROP ATTRIBUTE CreatedDate;
 
 -- ============================================================================
 -- Example 5: Entity with event handlers

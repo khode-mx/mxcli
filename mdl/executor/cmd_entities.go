@@ -495,6 +495,21 @@ func (e *Executor) execAlterEntity(s *ast.AlterEntityStmt) error {
 		if a == nil {
 			return fmt.Errorf("no attribute definition provided")
 		}
+		// Pseudo-types: set entity flags instead of adding real attributes
+		switch a.Type.Kind {
+		case ast.TypeAutoOwner:
+			entity.HasOwner = true
+			return e.writer.UpdateEntity(dm.ID, entity)
+		case ast.TypeAutoChangedBy:
+			entity.HasChangedBy = true
+			return e.writer.UpdateEntity(dm.ID, entity)
+		case ast.TypeAutoCreatedDate:
+			entity.HasCreatedDate = true
+			return e.writer.UpdateEntity(dm.ID, entity)
+		case ast.TypeAutoChangedDate:
+			entity.HasChangedDate = true
+			return e.writer.UpdateEntity(dm.ID, entity)
+		}
 		// CALCULATED attributes are only supported on persistent entities
 		if a.Calculated && !entity.Persistable {
 			return fmt.Errorf("attribute '%s': CALCULATED attributes are only supported on persistent entities", a.Name)
@@ -639,6 +654,30 @@ func (e *Executor) execAlterEntity(s *ast.AlterEntityStmt) error {
 		fmt.Fprintf(e.output, "Modified attribute '%s' on entity %s\n", s.AttributeName, s.Name)
 
 	case ast.AlterEntityDropAttribute:
+		// System attribute pseudo-names: drop by clearing entity flags
+		switch strings.ToLower(s.AttributeName) {
+		case "owner":
+			if entity.HasOwner {
+				entity.HasOwner = false
+				return e.writer.UpdateEntity(dm.ID, entity)
+			}
+		case "changedby":
+			if entity.HasChangedBy {
+				entity.HasChangedBy = false
+				return e.writer.UpdateEntity(dm.ID, entity)
+			}
+		case "createddate":
+			if entity.HasCreatedDate {
+				entity.HasCreatedDate = false
+				return e.writer.UpdateEntity(dm.ID, entity)
+			}
+		case "changeddate":
+			if entity.HasChangedDate {
+				entity.HasChangedDate = false
+				return e.writer.UpdateEntity(dm.ID, entity)
+			}
+		}
+
 		idx := -1
 		for i, attr := range entity.Attributes {
 			if attr.Name == s.AttributeName {
@@ -745,70 +784,6 @@ func (e *Executor) execAlterEntity(s *ast.AlterEntityStmt) error {
 		}
 		e.invalidateDomainModelsCache()
 		fmt.Fprintf(e.output, "Set comment on entity %s\n", s.Name)
-
-	case ast.AlterEntitySetStoreOwner:
-		entity.HasOwner = true
-		if err := e.writer.UpdateEntity(dm.ID, entity); err != nil {
-			return fmt.Errorf("failed to set store owner: %w", err)
-		}
-		e.invalidateDomainModelsCache()
-		fmt.Fprintf(e.output, "Enabled store owner on entity %s\n", s.Name)
-
-	case ast.AlterEntitySetStoreChangedBy:
-		entity.HasChangedBy = true
-		if err := e.writer.UpdateEntity(dm.ID, entity); err != nil {
-			return fmt.Errorf("failed to set store changed by: %w", err)
-		}
-		e.invalidateDomainModelsCache()
-		fmt.Fprintf(e.output, "Enabled store changed by on entity %s\n", s.Name)
-
-	case ast.AlterEntitySetStoreCreatedDate:
-		entity.HasCreatedDate = true
-		if err := e.writer.UpdateEntity(dm.ID, entity); err != nil {
-			return fmt.Errorf("failed to set store created date: %w", err)
-		}
-		e.invalidateDomainModelsCache()
-		fmt.Fprintf(e.output, "Enabled store created date on entity %s\n", s.Name)
-
-	case ast.AlterEntitySetStoreChangedDate:
-		entity.HasChangedDate = true
-		if err := e.writer.UpdateEntity(dm.ID, entity); err != nil {
-			return fmt.Errorf("failed to set store changed date: %w", err)
-		}
-		e.invalidateDomainModelsCache()
-		fmt.Fprintf(e.output, "Enabled store changed date on entity %s\n", s.Name)
-
-	case ast.AlterEntityDropStoreOwner:
-		entity.HasOwner = false
-		if err := e.writer.UpdateEntity(dm.ID, entity); err != nil {
-			return fmt.Errorf("failed to drop store owner: %w", err)
-		}
-		e.invalidateDomainModelsCache()
-		fmt.Fprintf(e.output, "Disabled store owner on entity %s\n", s.Name)
-
-	case ast.AlterEntityDropStoreChangedBy:
-		entity.HasChangedBy = false
-		if err := e.writer.UpdateEntity(dm.ID, entity); err != nil {
-			return fmt.Errorf("failed to drop store changed by: %w", err)
-		}
-		e.invalidateDomainModelsCache()
-		fmt.Fprintf(e.output, "Disabled store changed by on entity %s\n", s.Name)
-
-	case ast.AlterEntityDropStoreCreatedDate:
-		entity.HasCreatedDate = false
-		if err := e.writer.UpdateEntity(dm.ID, entity); err != nil {
-			return fmt.Errorf("failed to drop store created date: %w", err)
-		}
-		e.invalidateDomainModelsCache()
-		fmt.Fprintf(e.output, "Disabled store created date on entity %s\n", s.Name)
-
-	case ast.AlterEntityDropStoreChangedDate:
-		entity.HasChangedDate = false
-		if err := e.writer.UpdateEntity(dm.ID, entity); err != nil {
-			return fmt.Errorf("failed to drop store changed date: %w", err)
-		}
-		e.invalidateDomainModelsCache()
-		fmt.Fprintf(e.output, "Disabled store changed date on entity %s\n", s.Name)
 
 	case ast.AlterEntitySetPosition:
 		if s.Position == nil {

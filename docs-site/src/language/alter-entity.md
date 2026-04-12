@@ -89,26 +89,20 @@ ALTER ENTITY Sales.Customer
   SET DOCUMENTATION 'Customer master data for the Sales module';
 ```
 
-## SET/DROP STORE (System Attributes)
+## ADD/DROP System Attributes
 
-Enable or disable auditing system attributes:
+System attributes use the same ADD/DROP syntax as regular attributes:
 
 ```sql
--- Enable owner tracking (adds System.owner association)
-ALTER ENTITY Sales.Order SET STORE OWNER;
+-- Add system attributes
+ALTER ENTITY Sales.Order ADD ATTRIBUTE Owner: AutoOwner;
+ALTER ENTITY Sales.Order ADD ATTRIBUTE ChangedBy: AutoChangedBy;
+ALTER ENTITY Sales.Order ADD ATTRIBUTE CreatedDate: AutoCreatedDate;
+ALTER ENTITY Sales.Order ADD ATTRIBUTE ChangedDate: AutoChangedDate;
 
--- Enable changed-by tracking (adds System.changedBy association)
-ALTER ENTITY Sales.Order SET STORE CHANGED BY;
-
--- Enable created-date tracking (adds CreatedDate: DateTime)
-ALTER ENTITY Sales.Order SET STORE CREATED DATE;
-
--- Enable changed-date tracking (adds ChangedDate: DateTime)
-ALTER ENTITY Sales.Order SET STORE CHANGED DATE;
-
--- Disable any of the above
-ALTER ENTITY Sales.Order DROP STORE OWNER;
-ALTER ENTITY Sales.Order DROP STORE CHANGED DATE;
+-- Drop system attributes (by name)
+ALTER ENTITY Sales.Order DROP ATTRIBUTE Owner;
+ALTER ENTITY Sales.Order DROP ATTRIBUTE ChangedDate;
 ```
 
 ## ADD/DROP EVENT HANDLER
@@ -169,11 +163,6 @@ ALTER ENTITY <Module>.<Entity>
 ALTER ENTITY <Module>.<Entity>
   SET POSITION (<x>, <y>)
 
-ALTER ENTITY <Module>.<Entity>
-  SET STORE OWNER|CHANGED BY|CREATED DATE|CHANGED DATE
-
-ALTER ENTITY <Module>.<Entity>
-  DROP STORE OWNER|CHANGED BY|CREATED DATE|CHANGED DATE
 ```
 
 ## See Also

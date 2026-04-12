@@ -68,11 +68,8 @@ Modifies an existing entity without full replacement.
 | Drop event handler | `ALTER ENTITY Module.Name DROP EVENT HANDLER ON BEFORE COMMIT;` | |
 | Set documentation | `ALTER ENTITY Module.Name SET DOCUMENTATION 'text';` | |
 | Set position | `ALTER ENTITY Module.Name SET POSITION (100, 200);` | Canvas position |
-| Enable owner tracking | `ALTER ENTITY Module.Name SET STORE OWNER;` | Adds System.owner association |
-| Enable changed-by tracking | `ALTER ENTITY Module.Name SET STORE CHANGED BY;` | Adds System.changedBy association |
-| Enable created-date tracking | `ALTER ENTITY Module.Name SET STORE CREATED DATE;` | Adds CreatedDate attribute |
-| Enable changed-date tracking | `ALTER ENTITY Module.Name SET STORE CHANGED DATE;` | Adds ChangedDate attribute |
-| Disable any of the above | `ALTER ENTITY Module.Name DROP STORE OWNER\|CHANGED BY\|CREATED DATE\|CHANGED DATE;` | |
+| Add system attribute | `ALTER ENTITY Module.Name ADD ATTRIBUTE Owner: AutoOwner;` | Same syntax as regular attributes |
+| Drop system attribute | `ALTER ENTITY Module.Name DROP ATTRIBUTE Owner;` | Drop by system attribute name |
 
 **Example:**
 ```sql

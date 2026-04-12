@@ -66,15 +66,7 @@ const (
 	AlterEntitySetComment                             // SET COMMENT
 	AlterEntityAddIndex                               // ADD INDEX
 	AlterEntityDropIndex                              // DROP INDEX
-	AlterEntitySetStoreOwner                          // SET STORE OWNER
-	AlterEntitySetStoreChangedBy                      // SET STORE CHANGED BY
-	AlterEntitySetStoreCreatedDate                    // SET STORE CREATED DATE
-	AlterEntitySetStoreChangedDate                    // SET STORE CHANGED DATE
-	AlterEntityDropStoreOwner                         // DROP STORE OWNER
-	AlterEntityDropStoreChangedBy                     // DROP STORE CHANGED BY
-	AlterEntityDropStoreCreatedDate                   // DROP STORE CREATED DATE
-	AlterEntityDropStoreChangedDate                   // DROP STORE CHANGED DATE
-	AlterEntitySetPosition                            // SET POSITION (x, y)
+	AlterEntitySetPosition // SET POSITION (x, y)
 	AlterEntityAddEventHandler                        // ADD EVENT HANDLER ON BEFORE/AFTER CREATE/COMMIT/DELETE/ROLLBACK CALL Mod.MF
 	AlterEntityDropEventHandler                       // DROP EVENT HANDLER ON BEFORE/AFTER CREATE/COMMIT/DELETE/ROLLBACK
 )

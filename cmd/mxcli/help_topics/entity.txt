@@ -56,11 +56,9 @@ System Attributes (auditing):
     ChangedDate: AutoChangedDate
   );
 
-  Use ALTER ENTITY to toggle on existing entities:
-    ALTER ENTITY MyModule.Entity SET STORE OWNER;
-    ALTER ENTITY MyModule.Entity DROP STORE CHANGED DATE;
-
-  To toggle on existing entities, use ALTER ENTITY SET/DROP STORE.
+  Add/drop on existing entities with ALTER ENTITY:
+    ALTER ENTITY MyModule.Entity ADD ATTRIBUTE Owner: AutoOwner;
+    ALTER ENTITY MyModule.Entity DROP ATTRIBUTE ChangedDate;
 
 Complete Example:
   CREATE PERSISTENT ENTITY MyModule.Customer (

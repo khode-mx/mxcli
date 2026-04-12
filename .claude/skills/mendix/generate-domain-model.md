@@ -222,12 +222,12 @@ CREATE PERSISTENT ENTITY Sales.Order (
 );
 ```
 
-To enable/disable on existing entities, use ALTER ENTITY:
+To enable/disable on existing entities, use ALTER ENTITY ADD/DROP ATTRIBUTE:
 
 ```sql
-ALTER ENTITY Sales.Order SET STORE OWNER;
-ALTER ENTITY Sales.Order SET STORE CHANGED DATE;
-ALTER ENTITY Sales.Order DROP STORE CHANGED BY;
+ALTER ENTITY Sales.Order ADD ATTRIBUTE Owner: AutoOwner;
+ALTER ENTITY Sales.Order ADD ATTRIBUTE ChangedDate: AutoChangedDate;
+ALTER ENTITY Sales.Order DROP ATTRIBUTE ChangedBy;
 ```
 
 **When to use auditing:**

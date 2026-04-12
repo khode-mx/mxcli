@@ -120,8 +120,8 @@ CREATE PERSISTENT ENTITY Sales.Order (
 Toggle on existing entities with ALTER ENTITY:
 
 ```sql
-ALTER ENTITY Sales.Order SET STORE OWNER;
-ALTER ENTITY Sales.Order DROP STORE CHANGED DATE;
+ALTER ENTITY Sales.Order ADD ATTRIBUTE Owner: AutoOwner;
+ALTER ENTITY Sales.Order DROP ATTRIBUTE ChangedDate;
 ```
 
 ## Annotations
