@@ -221,8 +221,11 @@ func parseEntity(raw map[string]any) *domainmodel.Entity {
 		}
 	}
 
-	// Parse event handlers
-	handlers := extractBsonArray(raw["EventHandlers"])
+	// Parse event handlers — field is "Events" in BSON (not "EventHandlers")
+	handlers := extractBsonArray(raw["Events"])
+	if len(handlers) == 0 {
+		handlers = extractBsonArray(raw["EventHandlers"]) // fallback for older format
+	}
 	for _, h := range handlers {
 		if handlerMap, ok := h.(map[string]any); ok {
 			handler := parseEventHandler(handlerMap)
@@ -685,7 +688,11 @@ func parseEventHandler(raw map[string]any) *domainmodel.EventHandler {
 
 	handler.ID = model.ID(extractBsonID(raw["$ID"]))
 	handler.Moment = domainmodel.EventMoment(extractString(raw["Moment"]))
-	handler.Event = domainmodel.EventType(extractString(raw["Event"]))
+	// BSON field is "Type" (e.g., "Commit", "Create", "Delete", "RollBack")
+	handler.Event = domainmodel.EventType(extractString(raw["Type"]))
+	if handler.Event == "" {
+		handler.Event = domainmodel.EventType(extractString(raw["Event"])) // fallback
+	}
 	// Microflow can be either a binary ID (BY_ID_REFERENCE) or a string (BY_NAME_REFERENCE)
 	if mfStr, ok := raw["Microflow"].(string); ok {
 		handler.MicroflowName = mfStr
@@ -693,7 +700,11 @@ func parseEventHandler(raw map[string]any) *domainmodel.EventHandler {
 		handler.MicroflowID = model.ID(extractBsonID(raw["Microflow"]))
 	}
 	handler.RaiseErrorOnFalse = extractBool(raw["RaiseErrorOnFalse"], false)
-	handler.PassEventObject = extractBool(raw["PassEventObject"], true)
+	// BSON field is "SendInputParameter" (not "PassEventObject")
+	handler.PassEventObject = extractBool(raw["SendInputParameter"], true)
+	if _, ok := raw["PassEventObject"]; ok {
+		handler.PassEventObject = extractBool(raw["PassEventObject"], true) // fallback
+	}
 
 	return handler
 }

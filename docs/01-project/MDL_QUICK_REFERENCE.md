@@ -64,7 +64,7 @@ Modifies an existing entity without full replacement.
 | Rename attribute | `ALTER ENTITY Module.Name RENAME OldName TO NewName;` | |
 | Add index | `ALTER ENTITY Module.Name ADD INDEX (Col1 [ASC\|DESC], ...);` | |
 | Drop index | `ALTER ENTITY Module.Name DROP INDEX (Col1, ...);` | |
-| Add event handler | `ALTER ENTITY Module.Name ADD EVENT HANDLER ON BEFORE COMMIT CALL Mod.MF [RAISE ERROR];` | Moments: BEFORE/AFTER, Events: CREATE/COMMIT/DELETE/ROLLBACK |
+| Add event handler | `ALTER ENTITY Module.Name ADD EVENT HANDLER ON BEFORE COMMIT CALL Mod.MF($currentObject) [RAISE ERROR];` | `($currentObject)` or `()`, RAISE ERROR only on BEFORE |
 | Drop event handler | `ALTER ENTITY Module.Name DROP EVENT HANDLER ON BEFORE COMMIT;` | |
 | Set documentation | `ALTER ENTITY Module.Name SET DOCUMENTATION 'text';` | |
 | Set position | `ALTER ENTITY Module.Name SET POSITION (100, 200);` | Canvas position |

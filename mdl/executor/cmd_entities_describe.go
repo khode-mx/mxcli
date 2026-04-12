@@ -401,18 +401,24 @@ func (e *Executor) describeEntity(name ast.QualifiedName) error {
 				if mfName == "" {
 					continue
 				}
-				raise := ""
-				if eh.RaiseErrorOnFalse {
-					raise = " RAISE ERROR"
-				}
 				eventName := string(eh.Event)
 				if eventName == "RollBack" {
 					eventName = "ROLLBACK"
 				} else {
 					eventName = strings.ToUpper(eventName)
 				}
-				fmt.Fprintf(e.output, "\nON %s %s CALL %s%s",
-					strings.ToUpper(string(eh.Moment)), eventName, mfName, raise)
+				// Show parameter: ($currentObject) or ()
+				paramStr := "()"
+				if eh.PassEventObject {
+					paramStr = "($currentObject)"
+				}
+				var options string
+				// RAISE ERROR only applies to Before handlers (they return Boolean)
+				if eh.RaiseErrorOnFalse && strings.EqualFold(string(eh.Moment), "Before") {
+					options = " RAISE ERROR"
+				}
+				fmt.Fprintf(e.output, "\nON %s %s CALL %s%s%s",
+					strings.ToUpper(string(eh.Moment)), eventName, mfName, paramStr, options)
 			}
 
 			fmt.Fprintln(e.output, ";")

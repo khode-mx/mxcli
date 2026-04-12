@@ -70,3 +70,26 @@ CREATE OR MODIFY PERSISTENT ENTITY SysAttrTest.TempRecord (
 -- Disable both flags
 ALTER ENTITY SysAttrTest.TempRecord DROP STORE OWNER;
 ALTER ENTITY SysAttrTest.TempRecord DROP STORE CREATED DATE;
+
+-- ============================================================================
+-- Example 5: Entity with event handlers
+-- ============================================================================
+
+CREATE MICROFLOW SysAttrTest.ACT_ValidateOrder ($Order: SysAttrTest.AuditedRecord)
+RETURNS Boolean
+BEGIN
+  RETURN true;
+END;
+
+CREATE MICROFLOW SysAttrTest.ACT_AfterCommitOrder ($Order: SysAttrTest.AuditedRecord)
+BEGIN
+  RETURN empty;
+END;
+
+-- RAISE ERROR: only valid on BEFORE handlers (microflow returns Boolean, false = abort)
+ALTER ENTITY SysAttrTest.AuditedRecord
+  ADD EVENT HANDLER ON BEFORE COMMIT CALL SysAttrTest.ACT_ValidateOrder RAISE ERROR;
+
+-- AFTER handlers cannot RAISE ERROR (microflow returns Void)
+ALTER ENTITY SysAttrTest.AuditedRecord
+  ADD EVENT HANDLER ON AFTER COMMIT CALL SysAttrTest.ACT_AfterCommitOrder;

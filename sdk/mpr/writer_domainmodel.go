@@ -666,7 +666,7 @@ func serializeEntity(e *domainmodel.Entity, moduleName string, pv *version.Proje
 		{Key: "GUID", Value: entityGUID},
 		{Key: "Location", Value: location},
 		{Key: "Indexes", Value: indexes},
-		{Key: "EventHandlers", Value: serializeEventHandlers(e.EventHandlers)},
+		{Key: "Events", Value: serializeEventHandlers(e.EventHandlers)},
 	}
 
 	// Add Source for view entities (references a ViewEntitySourceDocument)
@@ -736,7 +736,7 @@ func serializeEventHandlers(handlers []*domainmodel.EventHandler) bson.A {
 }
 
 // serializeEventHandler serializes a single EventHandler to BSON.
-// $Type is "DomainModels$EventHandler". Microflow uses BY_NAME (string) reference.
+// $Type is "DomainModels$EntityEvent". Microflow uses BY_NAME (string) reference.
 func serializeEventHandler(eh *domainmodel.EventHandler) bson.D {
 	ehID := string(eh.ID)
 	if ehID == "" {
@@ -761,12 +761,12 @@ func serializeEventHandler(eh *domainmodel.EventHandler) bson.D {
 	}
 	return bson.D{
 		{Key: "$ID", Value: idToBsonBinary(ehID)},
-		{Key: "$Type", Value: "DomainModels$EventHandler"},
-		{Key: "Moment", Value: moment},
-		{Key: "Event", Value: event},
+		{Key: "$Type", Value: "DomainModels$EntityEvent"},
 		{Key: "Microflow", Value: microflowRef},
+		{Key: "Moment", Value: moment},
 		{Key: "RaiseErrorOnFalse", Value: eh.RaiseErrorOnFalse},
-		{Key: "PassEventObject", Value: eh.PassEventObject},
+		{Key: "SendInputParameter", Value: eh.PassEventObject},
+		{Key: "Type", Value: event},
 	}
 }
 

@@ -550,9 +550,10 @@ entityOption
     | eventHandlerDefinition
     ;
 
-// Entity event handler: ON BEFORE/AFTER CREATE/COMMIT/DELETE/ROLLBACK CALL Mod.Microflow [RAISE ERROR]
+// Entity event handler: ON BEFORE/AFTER CREATE/COMMIT/DELETE/ROLLBACK CALL Mod.Microflow($currentObject) [RAISE ERROR]
+// Empty parens () = don't pass object, ($currentObject) = pass object, no parens = pass object (default)
 eventHandlerDefinition
-    : ON eventMoment eventType CALL qualifiedName (RAISE ERROR)?
+    : ON eventMoment eventType CALL qualifiedName (LPAREN VARIABLE? RPAREN)? (RAISE ERROR)?
     ;
 
 eventMoment

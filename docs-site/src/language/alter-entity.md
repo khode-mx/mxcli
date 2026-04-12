@@ -111,6 +111,37 @@ ALTER ENTITY Sales.Order DROP STORE OWNER;
 ALTER ENTITY Sales.Order DROP STORE CHANGED DATE;
 ```
 
+## ADD/DROP EVENT HANDLER
+
+Register microflows to run before or after entity operations:
+
+```sql
+-- Before commit: validates and can abort (RAISE ERROR)
+ALTER ENTITY Sales.Order
+  ADD EVENT HANDLER ON BEFORE COMMIT CALL Sales.ValidateOrder($currentObject) RAISE ERROR;
+
+-- After commit: runs after successful commit (no RAISE ERROR)
+ALTER ENTITY Sales.Order
+  ADD EVENT HANDLER ON AFTER COMMIT CALL Sales.LogOrderChange($currentObject);
+
+-- Without passing the entity object
+ALTER ENTITY Sales.Order
+  ADD EVENT HANDLER ON AFTER CREATE CALL Sales.NotifyNewOrder();
+
+-- Remove an event handler
+ALTER ENTITY Sales.Order
+  DROP EVENT HANDLER ON BEFORE COMMIT;
+```
+
+| Moment | Returns | RAISE ERROR | Use case |
+|--------|---------|-------------|----------|
+| `BEFORE` | Boolean | Yes — aborts on `false` | Validation, permission checks |
+| `AFTER` | Void | No | Logging, notifications, side effects |
+
+Events: `CREATE`, `COMMIT`, `DELETE`, `ROLLBACK`
+
+Parameter: `($currentObject)` passes the entity to the microflow, `()` does not.
+
 ## Syntax Summary
 
 ```sql

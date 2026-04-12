@@ -126,6 +126,15 @@ func buildEventHandler(ctx parser.IEventHandlerDefinitionContext) *ast.EventHand
 	if qn := ehCtx.QualifiedName(); qn != nil {
 		eh.Microflow = buildQualifiedName(qn)
 	}
+	// Handle optional parentheses: () = no object, ($var) = pass object, no parens = pass object (default)
+	if ehCtx.LPAREN() != nil {
+		if ehCtx.VARIABLE() != nil {
+			eh.PassEventObject = true
+		} else {
+			// Empty parens () = don't pass object
+			eh.PassEventObject = false
+		}
+	}
 	if ehCtx.RAISE() != nil {
 		eh.RaiseErrorOnFalse = true
 	}
