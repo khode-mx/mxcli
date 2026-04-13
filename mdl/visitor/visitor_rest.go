@@ -22,8 +22,15 @@ func (b *Builder) ExitCreateRestClientStatement(ctx *parser.CreateRestClientStat
 
 	// Parse service-level properties (BaseUrl, Authentication, Folder)
 	for _, propCtx := range ctx.AllRestClientProperty() {
-		pc := propCtx.(*parser.RestClientPropertyContext)
-		key := strings.ToLower(identifierOrKeywordText(pc.IdentifierOrKeyword().(*parser.IdentifierOrKeywordContext)))
+		pc, ok := propCtx.(*parser.RestClientPropertyContext)
+		if !ok || pc == nil {
+			continue
+		}
+		iok := pc.IdentifierOrKeyword()
+		if iok == nil {
+			continue
+		}
+		key := strings.ToLower(identifierOrKeywordText(iok.(*parser.IdentifierOrKeywordContext)))
 		switch key {
 		case "baseurl":
 			if sl := pc.STRING_LITERAL(); sl != nil {
@@ -37,7 +44,10 @@ func (b *Builder) ExitCreateRestClientStatement(ctx *parser.CreateRestClientStat
 			if pc.BASIC() != nil {
 				authDef := &ast.RestAuthDef{Scheme: "BASIC"}
 				for _, subProp := range pc.AllRestClientProperty() {
-					sp := subProp.(*parser.RestClientPropertyContext)
+					sp, spOk := subProp.(*parser.RestClientPropertyContext)
+					if !spOk || sp == nil || sp.IdentifierOrKeyword() == nil {
+						continue
+					}
 					subKey := strings.ToLower(identifierOrKeywordText(sp.IdentifierOrKeyword().(*parser.IdentifierOrKeywordContext)))
 					if sl := sp.STRING_LITERAL(); sl != nil {
 						switch subKey {
@@ -56,7 +66,10 @@ func (b *Builder) ExitCreateRestClientStatement(ctx *parser.CreateRestClientStat
 
 	// Parse operations
 	for _, opCtx := range ctx.AllRestClientOperation() {
-		oc := opCtx.(*parser.RestClientOperationContext)
+		oc, ok := opCtx.(*parser.RestClientOperationContext)
+		if !ok || oc == nil {
+			continue
+		}
 		opDef := parseRestClientOperation(oc)
 		stmt.Operations = append(stmt.Operations, opDef)
 	}
@@ -91,7 +104,10 @@ func parseRestClientOperation(ctx *parser.RestClientOperationContext) *ast.RestO
 
 	// Parse properties
 	for _, propCtx := range ctx.AllRestClientOpProp() {
-		pc := propCtx.(*parser.RestClientOpPropContext)
+		pc, ok := propCtx.(*parser.RestClientOpPropContext)
+		if !ok || pc == nil {
+			continue
+		}
 		parseRestClientOpProp(pc, op)
 	}
 
@@ -100,6 +116,9 @@ func parseRestClientOperation(ctx *parser.RestClientOperationContext) *ast.RestO
 
 // parseRestClientOpProp dispatches a single operation property to the right handler.
 func parseRestClientOpProp(ctx *parser.RestClientOpPropContext, op *ast.RestOperationDef) {
+	if ctx == nil {
+		return
+	}
 	// Determine key name from the identifierOrKeyword
 	iokCtx := ctx.IdentifierOrKeyword()
 	if iokCtx == nil {
