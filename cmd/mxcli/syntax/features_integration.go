@@ -252,4 +252,73 @@ func init() {
 		Example: "CREATE JAVA ACTION Utils.FormatCurrency(\n  Amount: Decimal NOT NULL\n) RETURNS String\nEXPOSED AS 'Format Currency' IN 'Formatting'\nAS $$\nreturn String.format(\"%.2f\", Amount);\n$$;\n\n-- Generic entity validator with type parameter\nCREATE JAVA ACTION Utils.IsValid(\n  EntityType: ENTITY <pEntity> NOT NULL,\n  Obj: pEntity NOT NULL\n) RETURNS Boolean\nAS $$\nreturn Obj != null;\n$$;",
 		SeeAlso: []string{"java-action"},
 	})
+
+	// ── AI Agents ──────────────────────────────────────────────────────
+
+	Register(SyntaxFeature{
+		Path:    "agents",
+		Summary: "AI agent documents — Model, Knowledge Base, Consumed MCP Service, Agent (requires AgentEditorCommons, Mendix 11.9+)",
+		Keywords: []string{
+			"agent", "agents", "model", "knowledge base", "mcp service",
+			"agent editor", "llm", "ai", "genai", "mxcloudgenai",
+		},
+		Syntax:  "LIST MODELS [IN Module];\nLIST KNOWLEDGE BASES [IN Module];\nLIST CONSUMED MCP SERVICES [IN Module];\nLIST AGENTS [IN Module];\nDESCRIBE MODEL Module.Name;\nCREATE MODEL Module.Name (Provider: MxCloudGenAI, Key: Module.ApiKey);\nCREATE KNOWLEDGE BASE Module.Name (Provider: MxCloudGenAI, Key: Module.KBKey);\nCREATE CONSUMED MCP SERVICE Module.Name (ProtocolVersion: v2025_03_26, ...);\nCREATE AGENT Module.Name (UsageType: Task|Chat, Model: Module.MyModel, SystemPrompt: '...') { ... };\nDROP AGENT Module.Name;",
+		Example: "CREATE MODEL MyModule.GPT4 (\n  Provider: MxCloudGenAI,\n  Key: MyModule.ModelApiKey\n);\n\nCREATE AGENT MyModule.Summarizer (\n  UsageType: Task,\n  Model: MyModule.GPT4,\n  SystemPrompt: 'Summarize in 3 sentences.',\n  UserPrompt: 'Enter text.'\n);",
+		SeeAlso: []string{"agents.model", "agents.knowledge-base", "agents.mcp-service", "agents.agent"},
+	})
+
+	Register(SyntaxFeature{
+		Path:    "agents.model",
+		Summary: "CREATE/DROP MODEL documents for AI agents",
+		Keywords: []string{"create model", "drop model", "describe model", "list models", "provider", "mxcloudgenai"},
+		Syntax:  "CREATE [OR MODIFY] MODEL Module.Name (\n  Provider: MxCloudGenAI,\n  Key: Module.ApiKeyConstant\n);\nDESCRIBE MODEL Module.Name;\nLIST MODELS [IN Module];\nDROP MODEL Module.Name;",
+		Example: "create model MyModule.GPT4 (\n  Provider: MxCloudGenAI,\n  Key: MyModule.ModelApiKey\n);",
+		SeeAlso: []string{"agents"},
+	})
+
+	Register(SyntaxFeature{
+		Path:    "agents.knowledge-base",
+		Summary: "CREATE/DROP KNOWLEDGE BASE documents for AI agents",
+		Keywords: []string{"create knowledge base", "drop knowledge base", "knowledge base", "kb", "rag"},
+		Syntax:  "CREATE [OR MODIFY] KNOWLEDGE BASE Module.Name (\n  Provider: MxCloudGenAI,\n  Key: Module.KBApiKeyConstant\n);\nDESCRIBE KNOWLEDGE BASE Module.Name;\nLIST KNOWLEDGE BASES [IN Module];\nDROP KNOWLEDGE BASE Module.Name;",
+		Example: "create knowledge base MyModule.ProductDocs (\n  Provider: MxCloudGenAI,\n  Key: MyModule.KBApiKey\n);",
+		SeeAlso: []string{"agents"},
+	})
+
+	Register(SyntaxFeature{
+		Path:    "agents.mcp-service",
+		Summary: "CREATE/DROP CONSUMED MCP SERVICE documents for AI agents",
+		Keywords: []string{"consumed mcp service", "mcp", "mcp service", "protocol version"},
+		Syntax:  "CREATE [OR MODIFY] CONSUMED MCP SERVICE Module.Name (\n  ProtocolVersion: v2025_03_26,\n  Version: '1.0',\n  ConnectionTimeoutSeconds: 30,\n  Documentation: 'description'\n);\nDESCRIBE CONSUMED MCP SERVICE Module.Name;\nLIST CONSUMED MCP SERVICES [IN Module];\nDROP CONSUMED MCP SERVICE Module.Name;",
+		Example: "create consumed mcp service MyModule.WebSearch (\n  ProtocolVersion: v2025_03_26,\n  Version: '1.0',\n  ConnectionTimeoutSeconds: 30\n);",
+		SeeAlso: []string{"agents"},
+	})
+
+	Register(SyntaxFeature{
+		Path:    "agents.agent",
+		Summary: "CREATE/DROP AGENT documents with variables, tools, KB tools, and MCP service tools",
+		Keywords: []string{
+			"create agent", "drop agent", "usagetype", "systemprompt", "userprompt",
+			"variables", "toolchoice", "temperature", "topp", "maxtokens",
+		},
+		Syntax: `CREATE [OR MODIFY] AGENT Module.Name (
+  UsageType: Task|Chat,
+  Model: Module.MyModel,
+  [Description: 'text',]
+  [MaxTokens: N,]
+  [Temperature: 0.7,]
+  [TopP: 0.9,]
+  [ToolChoice: Auto|None|Required,]
+  [Variables: ("Key": EntityAttribute|String),]
+  SystemPrompt: 'prompt or $$multi-line$$',
+  [UserPrompt: 'prompt']
+)
+{
+  [MCP SERVICE Module.ServiceName { Enabled: true }]
+  [KNOWLEDGE BASE AliaName { Source: Module.KB, Collection: 'col', MaxResults: 5, Enabled: true }]
+  [TOOL MicroflowName { Description: 'desc', Enabled: true }]
+};`,
+		Example: "create agent MyModule.Assistant (\n  UsageType: Chat,\n  Model: MyModule.GPT4,\n  SystemPrompt: $$You are a helpful assistant.$$,\n  UserPrompt: 'Ask me anything.'\n)\n{\n  MCP SERVICE MyModule.WebSearch { Enabled: true }\n};",
+		SeeAlso: []string{"agents", "agents.model", "agents.knowledge-base", "agents.mcp-service"},
+	})
 }
