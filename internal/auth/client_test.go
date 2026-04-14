@@ -66,31 +66,36 @@ func TestAuthTransport_UnknownHost(t *testing.T) {
 	}
 }
 
-func TestAuthTransport_401WrapsAsUnauthenticated(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusUnauthorized)
-	}))
-	defer ts.Close()
+func TestAuthTransport_UnauthorizedStatusesWrap(t *testing.T) {
+	// Mendix returns 401 when no credential is valid and 403 for
+	// invalid/expired PATs (per portal docs). Both wrap as
+	// ErrUnauthenticated.
+	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden} {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(status)
+		}))
 
-	target, _ := url.Parse(ts.URL)
-	cred := &Credential{Profile: "default", Scheme: SchemePAT, Token: "bad"}
-	client := &http.Client{
-		Transport: &authTransport{
-			cred:  cred,
-			inner: &rewriteTransport{target: target, inner: http.DefaultTransport},
-		},
-	}
+		target, _ := url.Parse(ts.URL)
+		cred := &Credential{Profile: "default", Scheme: SchemePAT, Token: "bad"}
+		client := &http.Client{
+			Transport: &authTransport{
+				cred:  cred,
+				inner: &rewriteTransport{target: target, inner: http.DefaultTransport},
+			},
+		}
 
-	resp, err := client.Get("https://marketplace-api.mendix.com/foo")
-	if resp != nil {
-		resp.Body.Close()
-	}
-	var unauth *ErrUnauthenticated
-	if !errors.As(err, &unauth) {
-		t.Fatalf("expected ErrUnauthenticated, got %v", err)
-	}
-	if unauth.Profile != "default" {
-		t.Errorf("expected profile=default in error, got %q", unauth.Profile)
+		resp, err := client.Get("https://marketplace-api.mendix.com/foo")
+		if resp != nil {
+			resp.Body.Close()
+		}
+		var unauth *ErrUnauthenticated
+		if !errors.As(err, &unauth) {
+			t.Errorf("status %d: expected ErrUnauthenticated, got %v", status, err)
+		}
+		if unauth != nil && unauth.Profile != "default" {
+			t.Errorf("status %d: expected profile=default, got %q", status, unauth.Profile)
+		}
+		ts.Close()
 	}
 }
 

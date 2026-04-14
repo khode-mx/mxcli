@@ -15,29 +15,65 @@ This creates friction in two areas:
 
 ## API Discovery
 
-The Mendix Marketplace REST API is at:
+Validated against a real PAT on 2026-04-14 (see `scripts/auth-discovery-spike.sh`).
 
+**Base URL:** `https://marketplace-api.mendix.com`
+
+(An earlier draft of this proposal pointed at `appstore.home.mendix.com/rest/packagesapi/v2/`.
+That host is a different service and does not accept PAT auth at all. The correct marketplace
+host is `marketplace-api.mendix.com`.)
+
+**Auth:** `Authorization: MxToken <pat>`. PATs are created at
+<https://user-settings.mendix.com/> (Developer Settings → Personal Access Tokens).
+Invalid/missing PAT returns 401 or 403 with a JSON error body; malformed tokens
+may be rejected at the gateway with 400.
+
+### Validated Endpoints
+
+| Endpoint | Returns | Purpose |
+|----------|---------|---------|
+| `GET /v1/content` | `{"items": [content, ...]}` | List marketplace content |
+| `GET /v1/content?search=<query>` | same list shape | Search (query accepted; filter behavior TBD) |
+| `GET /v1/content/{id}` | single content object | Module/widget detail |
+| `GET /v1/content/{id}/versions` | `{"items": [version, ...]}` | Available versions with compatibility metadata |
+
+### Response Shapes
+
+**Content object** (from `/v1/content` and `/v1/content/{id}`):
+
+```jsonc
+{
+  "contentId": 2888,
+  "publisher": "Mendix",
+  "type": "Module",             // or "Widget", "Theme", etc.
+  "categories": [{"name": "Data"}],
+  "supportCategory": "Platform", // or "Community", "Deprecated", ...
+  "licenseUrl": "http://www.apache.org/licenses/LICENSE-2.0.html",
+  "isPrivate": false,
+  // ...more fields including latest version info (not yet fully mapped)
+}
 ```
-https://appstore.home.mendix.com/rest/packagesapi/v2/
+
+**Version object** (from `/v1/content/{id}/versions`):
+
+```jsonc
+{
+  "name": "Database Connector",
+  "versionId": "f7c2bddf-05a3-4db0-8185-e7adf6c6d4af",  // uuid
+  "versionNumber": "7.0.2",
+  "minSupportedMendixVersion": "10.24.11",               // enables version-compat filtering
+  "publicationDate": "2025-12-12T08:08:53.880Z"
+  // release notes, download URL(s) TBD — need to inspect full response
+}
 ```
 
-All endpoints return `401 Unauthorized` without authentication. Mendix uses header-based auth on its platform APIs:
+### Open Endpoint Questions
 
-| Auth Pattern | Headers | Used By |
-|---|---|---|
-| API Key | `Mendix-UserName` + `Mendix-ApiKey` | Deploy API, Team Server |
-| PAT | `Authorization: MxToken <token>` | Platform APIs |
-
-The exact auth scheme for the marketplace API needs validation with real credentials.
-
-### Discovered Endpoints (to validate)
-
-| Endpoint | Purpose |
-|----------|---------|
-| `GET /rest/packagesapi/v2/packages/{id}` | Module metadata (name, versions, AppStoreGuid) |
-| `GET /rest/packagesapi/v2/packages/{id}/versions` | List available versions |
-| `GET /rest/packagesapi/v2/packages/{id}/versions/{ver}/download` | Download .mpk |
-| `GET /rest/packagesapi/v2/packages?search=keyword` | Search marketplace |
+- **Download URL**: The `.mpk` download path is not yet identified. Candidates to probe next:
+  `/v1/content/{id}/versions/{versionId}/download`, a `downloadUrl` field inside the version
+  object, or a separate binary host referenced by the version response.
+- **Search semantics**: `?search=database` accepted without error but truncated output made
+  it unclear whether the result set was actually filtered vs. returned unchanged.
 
 ### Known Component IDs
 

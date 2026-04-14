@@ -16,6 +16,33 @@ Each of these APIs uses a different authentication header scheme, and today `mxc
 
 This proposal specifies a shared `internal/auth` package and `mxcli auth` command set that every platform-API consumer can use.
 
+## Spike Results (2026-04-14)
+
+Validated against real credentials. See `scripts/auth-discovery-spike.sh`.
+
+- **Marketplace lives at `marketplace-api.mendix.com`, not `appstore.home.mendix.com`.**
+  The older host is a different service that does not accept PAT auth at all.
+- **PAT works as documented** — `Authorization: MxToken <pat>` (capital M, capital T)
+  against `marketplace-api.mendix.com/v1/content` returns 200 with a well-formed JSON
+  list. Catalog host also accepts the same header; paths TBD.
+- **401 and 403** are both "credential rejected" — our `authTransport` wraps either
+  as `ErrUnauthenticated`. A malformed token may return 400 at the gateway (nginx)
+  with an HTML body; we do not treat 400 as an auth failure since it is a client
+  error, not an auth rejection.
+- **No API key needed for marketplace.** The earlier assumption that marketplace
+  required the Deploy-API-style `Mendix-UserName` + `Mendix-ApiKey` scheme was wrong.
+  PAT is sufficient for both Content API and marketplace.
+
+`internal/auth/scheme.go` host map now lists:
+
+```go
+"marketplace-api.mendix.com": SchemePAT,
+"catalog.mendix.com":         SchemePAT,
+```
+
+API key (`SchemeAPIKey`) is still reserved for the Deploy API follow-up work;
+marketplace no longer needs it.
+
 ## Mendix Authentication Schemes
 
 Based on current Mendix documentation (2026-04):
