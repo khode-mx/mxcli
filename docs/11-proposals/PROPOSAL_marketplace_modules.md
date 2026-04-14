@@ -201,10 +201,12 @@ func importMarketplaceModule(t *testing.T, componentID string, mprPath string) {
 
 ### Phase 2: Authentication
 
+See dedicated proposal: [`PROPOSAL_platform_auth.md`](PROPOSAL_platform_auth.md). The auth layer is shared with Deploy API and future platform-API consumers.
+
 - `mxcli auth login/logout/status` commands
-- Credential storage at `~/.mxcli/auth.json`
+- Credential storage at `~/.mxcli/auth.json` (plus OS keychain)
 - Environment variable support for CI
-- Authenticated HTTP client factory
+- Authenticated HTTP client factory with per-host scheme routing (PAT for Content API / marketplace; API key for Deploy API)
 
 ### Phase 3: Install & Download
 
