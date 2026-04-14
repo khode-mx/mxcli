@@ -2400,6 +2400,7 @@ createRestClientStatement
 
 restClientProperty
     : identifierOrKeyword COLON STRING_LITERAL                       // BaseUrl: '...', Username: '...'
+    | identifierOrKeyword COLON VARIABLE                             // Username: $Constant (stored as Rest$ConstantValue)
     | identifierOrKeyword COLON NONE                                 // Authentication: NONE
     | identifierOrKeyword COLON BASIC LPAREN restClientProperty (COMMA restClientProperty)* RPAREN
     ;

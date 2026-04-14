@@ -49,13 +49,19 @@ func (b *Builder) ExitCreateRestClientStatement(ctx *parser.CreateRestClientStat
 						continue
 					}
 					subKey := strings.ToLower(identifierOrKeywordText(sp.IdentifierOrKeyword().(*parser.IdentifierOrKeywordContext)))
+					var val string
 					if sl := sp.STRING_LITERAL(); sl != nil {
-						switch subKey {
-						case "username":
-							authDef.Username = unquoteString(sl.GetText())
-						case "password":
-							authDef.Password = unquoteString(sl.GetText())
-						}
+						val = unquoteString(sl.GetText())
+					} else if v := sp.VARIABLE(); v != nil {
+						// $Constant reference — keep the $ prefix so writer knows
+						// to serialize as Rest$ConstantValue
+						val = v.GetText()
+					}
+					switch subKey {
+					case "username":
+						authDef.Username = val
+					case "password":
+						authDef.Password = val
 					}
 				}
 				stmt.Authentication = authDef
