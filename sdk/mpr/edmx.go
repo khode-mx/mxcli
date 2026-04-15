@@ -44,6 +44,13 @@ type EdmProperty struct {
 	Nullable  *bool  // nil = not specified (default true)
 	MaxLength string // e.g. "200", "max"
 	Scale     string // e.g. "variable"
+
+	// Capability annotations (OData Core V1). When true, the property is not
+	// settable by the client:
+	//   Computed  = server-computed, not settable on create or update.
+	//   Immutable = settable on create, but not on update.
+	Computed  bool
+	Immutable bool
 }
 
 // EdmNavigationProperty represents a navigation property (association).
@@ -75,6 +82,12 @@ type EdmEntitySet struct {
 	// Org.OData.Capabilities.V1.{Insert,Update}Restrictions/Non*NavigationProperties.
 	NonInsertableNavigationProperties []string
 	NonUpdatableNavigationProperties  []string
+
+	// Property names listed under
+	// Org.OData.Capabilities.V1.{Insert,Update}Restrictions/Non*Properties.
+	// Structural properties named here cannot be set on insert / update.
+	NonInsertableProperties []string
+	NonUpdatableProperties  []string
 }
 
 // EdmAction represents an OData4 action or OData3 function import.
@@ -279,6 +292,14 @@ func parseXmlEntityType(et *xmlEntityType) *EdmEntityType {
 			v := p.Nullable != "false"
 			prop.Nullable = &v
 		}
+		for _, ann := range p.Annotations {
+			switch ann.Term {
+			case "Org.OData.Core.V1.Computed":
+				prop.Computed = ann.Bool == "" || ann.Bool == "true"
+			case "Org.OData.Core.V1.Immutable":
+				prop.Immutable = ann.Bool == "" || ann.Bool == "true"
+			}
+		}
 		entityType.Properties = append(entityType.Properties, prop)
 	}
 
@@ -326,6 +347,10 @@ func applyCapabilityAnnotations(es *EdmEntitySet, annotations []xmlCapabilitiesA
 					if pv.Collection != nil {
 						es.NonInsertableNavigationProperties = pv.Collection.NavigationPropertyPaths
 					}
+				case "NonInsertableProperties":
+					if pv.Collection != nil {
+						es.NonInsertableProperties = pv.Collection.PropertyPaths
+					}
 				}
 			}
 		case "Org.OData.Capabilities.V1.UpdateRestrictions":
@@ -339,6 +364,10 @@ func applyCapabilityAnnotations(es *EdmEntitySet, annotations []xmlCapabilitiesA
 				case "NonUpdatableNavigationProperties":
 					if pv.Collection != nil {
 						es.NonUpdatableNavigationProperties = pv.Collection.NavigationPropertyPaths
+					}
+				case "NonUpdatableProperties":
+					if pv.Collection != nil {
+						es.NonUpdatableProperties = pv.Collection.PropertyPaths
 					}
 				}
 			}
@@ -458,7 +487,7 @@ type xmlEntitySet struct {
 // <PropertyValue Property="NonInsertableNavigationProperties"><Collection>
 // <NavigationPropertyPath>Trips</NavigationPropertyPath></Collection></PropertyValue>.
 type xmlCapabilitiesAnnotation struct {
-	Term   string                  `xml:"Term,attr"`
+	Term   string                 `xml:"Term,attr"`
 	Record *xmlCapabilitiesRecord `xml:"Record"`
 }
 
@@ -467,13 +496,14 @@ type xmlCapabilitiesRecord struct {
 }
 
 type xmlCapabilitiesPropertyValue struct {
-	Property               string                              `xml:"Property,attr"`
-	Bool                   string                              `xml:"Bool,attr"`
-	Collection             *xmlCapabilitiesCollection          `xml:"Collection"`
+	Property   string                     `xml:"Property,attr"`
+	Bool       string                     `xml:"Bool,attr"`
+	Collection *xmlCapabilitiesCollection `xml:"Collection"`
 }
 
 type xmlCapabilitiesCollection struct {
 	NavigationPropertyPaths []string `xml:"NavigationPropertyPath"`
+	PropertyPaths           []string `xml:"PropertyPath"`
 }
 
 type xmlFunctionImport struct {
