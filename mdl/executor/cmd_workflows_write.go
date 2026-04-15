@@ -675,11 +675,25 @@ func autoBindActivitiesInFlow(ctx *ExecContext, activities []workflows.WorkflowA
 }
 
 // autoBindCallMicroflow resolves microflow parameters and auto-generates ParameterMappings.
+// Also ensures a default VoidConditionOutcome exists (required by Mendix runtime — CE6686).
 func autoBindCallMicroflow(ctx *ExecContext, task *workflows.CallMicroflowTask) {
 	// Sanitize name
 	task.Name = sanitizeActivityName(task.Name)
 
-	// Skip if already has parameter mappings
+	// Auto-generate Default outcome if no outcomes specified.
+	// This must run regardless of whether parameter mappings exist,
+	// because the Mendix runtime requires a VoidConditionOutcome on
+	// every CallMicroflowTask (CE6686: "outcomes do not match").
+	if len(task.Outcomes) == 0 {
+		outcome := &workflows.VoidConditionOutcome{
+			Flow: &workflows.Flow{},
+		}
+		outcome.BaseElement.ID = model.ID(types.GenerateID())
+		outcome.Flow.BaseElement.ID = model.ID(types.GenerateID())
+		task.Outcomes = append(task.Outcomes, outcome)
+	}
+
+	// Skip parameter auto-binding if already has explicit mappings
 	if len(task.ParameterMappings) > 0 {
 		return
 	}
@@ -712,16 +726,6 @@ func autoBindCallMicroflow(ctx *ExecContext, task *workflows.CallMicroflowTask) 
 			}
 			mapping.BaseElement.ID = model.ID(types.GenerateID())
 			task.ParameterMappings = append(task.ParameterMappings, mapping)
-		}
-
-		// Auto-generate Default outcome if no outcomes specified
-		if len(task.Outcomes) == 0 {
-			outcome := &workflows.VoidConditionOutcome{
-				Flow: &workflows.Flow{},
-			}
-			outcome.BaseElement.ID = model.ID(types.GenerateID())
-			outcome.Flow.BaseElement.ID = model.ID(types.GenerateID())
-			task.Outcomes = append(task.Outcomes, outcome)
 		}
 		break
 	}
