@@ -756,6 +756,47 @@ func (e *Executor) describeModule(moduleName string, withAll bool) error {
 		}
 	}
 
+	// Output agent-editor documents. Order matches referential dependencies:
+	// Model / KnowledgeBase / ConsumedMCPService first (leaves), Agent last
+	// (may reference the others via its TOOL / KNOWLEDGE BASE / MCP SERVICE
+	// blocks).
+	if models, err := e.reader.ListAgentEditorModels(); err == nil {
+		for _, m := range models {
+			if moduleContainers[m.ContainerID] {
+				if err := e.describeAgentEditorModel(ast.QualifiedName{Module: moduleName, Name: m.Name}); err == nil {
+					fmt.Fprintln(e.output)
+				}
+			}
+		}
+	}
+	if kbs, err := e.reader.ListAgentEditorKnowledgeBases(); err == nil {
+		for _, kb := range kbs {
+			if moduleContainers[kb.ContainerID] {
+				if err := e.describeAgentEditorKnowledgeBase(ast.QualifiedName{Module: moduleName, Name: kb.Name}); err == nil {
+					fmt.Fprintln(e.output)
+				}
+			}
+		}
+	}
+	if svcs, err := e.reader.ListAgentEditorConsumedMCPServices(); err == nil {
+		for _, svc := range svcs {
+			if moduleContainers[svc.ContainerID] {
+				if err := e.describeAgentEditorConsumedMCPService(ast.QualifiedName{Module: moduleName, Name: svc.Name}); err == nil {
+					fmt.Fprintln(e.output)
+				}
+			}
+		}
+	}
+	if agents, err := e.reader.ListAgentEditorAgents(); err == nil {
+		for _, a := range agents {
+			if moduleContainers[a.ContainerID] {
+				if err := e.describeAgentEditorAgent(ast.QualifiedName{Module: moduleName, Name: a.Name}); err == nil {
+					fmt.Fprintln(e.output)
+				}
+			}
+		}
+	}
+
 	fmt.Fprintln(e.output, "/")
 	return nil
 }
