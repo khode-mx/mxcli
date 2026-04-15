@@ -35,6 +35,16 @@ func (l *errorListener) SyntaxError(_ antlr.Recognizer, _ any, line, column int,
 // enhanceErrorMessage checks if an error message indicates a reserved keyword
 // was used as an identifier and provides a more helpful message.
 func enhanceErrorMessage(msg string) string {
+	// Check for quoted attribute names after READ/WRITE in a GRANT clause.
+	// Users often write `READ "Attr1", "Attr2"` instead of the correct
+	// `READ (Attr1, Attr2)` — the grammar expects unquoted identifiers in parens.
+	if looksLikeQuotedGrantAttribute(msg) {
+		return fmt.Sprintf("%s\n\n  Attribute-level GRANT uses unquoted identifiers inside parentheses,\n"+
+			"  not quoted strings. Comma-separate multiple attributes:\n"+
+			"    GRANT Mod.Role ON Mod.Entity (READ (Attr1, Attr2), WRITE (Attr1));  (correct)\n"+
+			"    GRANT Mod.Role ON Mod.Entity (READ \"Attr1\", \"Attr2\");            (wrong — causes parse error)", msg)
+	}
+
 	// Check for unescaped apostrophe in string literals first.
 	// When 'it's here' is parsed, ANTLR sees 'it' as a complete string, then
 	// the leftover characters (like "s", "ll", "t") appear as unexpected tokens.
@@ -84,6 +94,26 @@ func enhanceErrorMessage(msg string) string {
 	}
 
 	return msg
+}
+
+// looksLikeQuotedGrantAttribute detects ANTLR errors from `READ "Attr"` /
+// `WRITE "Attr"` — a common mistake where users quote attribute names instead
+// of using the correct `READ (Attr1, Attr2)` identifier list.
+//
+// Typical ANTLR shapes:
+//   - no viable alternative at input 'READ"Attr1"'
+//   - no viable alternative at input 'WRITE"Attr1"'
+//   - mismatched input '"Attr"' expecting {CREATE, DELETE, READ, WRITE}
+func looksLikeQuotedGrantAttribute(msg string) bool {
+	if strings.Contains(msg, `input 'READ"`) || strings.Contains(msg, `input 'WRITE"`) {
+		return true
+	}
+	// Quoted string appearing where a GRANT access right is expected.
+	if strings.Contains(msg, `expecting {CREATE, DELETE, READ, WRITE}`) &&
+		(strings.Contains(msg, `input '"`) || strings.Contains(msg, `input "`)) {
+		return true
+	}
+	return false
 }
 
 // looksLikeUnescapedApostrophe detects ANTLR errors that are likely caused by

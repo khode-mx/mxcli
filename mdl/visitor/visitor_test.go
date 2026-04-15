@@ -1111,6 +1111,65 @@ END;`
 	}
 }
 
+func TestEnhanceErrorMessage_QuotedGrantAttribute(t *testing.T) {
+	tests := []struct {
+		name     string
+		msg      string
+		wantHint bool
+	}{
+		{
+			name:     "READ with quoted attribute",
+			msg:      `line 1:51 no viable alternative at input 'READ"Attr1"'`,
+			wantHint: true,
+		},
+		{
+			name:     "WRITE with quoted attribute",
+			msg:      `line 1:75 no viable alternative at input 'WRITE"Attr1"'`,
+			wantHint: true,
+		},
+		{
+			name:     "quoted string where access right expected",
+			msg:      `mismatched input '"Attr2"' expecting {CREATE, DELETE, READ, WRITE}`,
+			wantHint: true,
+		},
+		{
+			name:     "unrelated error does not trigger",
+			msg:      `no viable alternative at input 'CREATE PERSISTENT'`,
+			wantHint: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := enhanceErrorMessage(tt.msg)
+			hasHint := strings.Contains(result, "Attribute-level GRANT")
+			if hasHint != tt.wantHint {
+				t.Errorf("expected hint=%v\n  input:  %s\n  output: %s", tt.wantHint, tt.msg, result)
+			}
+		})
+	}
+}
+
+func TestParseError_QuotedGrantAttribute(t *testing.T) {
+	input := `GRANT Mod.Role ON Mod.Entity (READ "Attr1", "Attr2");`
+	_, errs := Build(input)
+	if len(errs) == 0 {
+		t.Fatal("expected parse errors for quoted GRANT attribute")
+	}
+	found := false
+	for _, err := range errs {
+		if strings.Contains(err.Error(), "Attribute-level GRANT") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected GRANT-attribute hint in error messages, got:\n")
+		for _, err := range errs {
+			t.Errorf("  %v", err)
+		}
+	}
+}
+
 // TestEnumDefaultQuotedIdentifier verifies that quoted identifiers in enum
 // DEFAULT values are unquoted correctly (issue #11 / BUG-004).
 // e.g. DEFAULT MaisonElegance."FormSubmissionStatus".StatusNew should store
