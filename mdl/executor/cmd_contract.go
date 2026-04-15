@@ -884,12 +884,15 @@ func (e *Executor) createNavigationAssociations(
 	esMap map[string]string,
 	serviceRef string,
 ) int {
-	// Build per-entity-type lookup of nav property name → restricted flags.
+	// Build per-entity-type lookup of nav property name → restricted flags,
+	// plus a direct entity-set lookup so we can read the base Insertable /
+	// Updatable defaults for the FROM entity.
 	type navRestrictions struct {
 		nonInsertable map[string]bool
 		nonUpdatable  map[string]bool
 	}
 	restrictionsByType := make(map[string]navRestrictions)
+	esByType := make(map[string]*mpr.EdmEntitySet)
 	for _, es := range doc.EntitySets {
 		r := navRestrictions{
 			nonInsertable: make(map[string]bool),
@@ -902,6 +905,7 @@ func (e *Executor) createNavigationAssociations(
 			r.nonUpdatable[name] = true
 		}
 		restrictionsByType[es.EntityType] = r
+		esByType[es.EntityType] = es
 	}
 	// Build a lookup from EDMX type qualified name → existing Mendix entity.
 	// An entity type matches by its EntitySet name when present, otherwise by
@@ -983,13 +987,21 @@ func (e *Executor) createNavigationAssociations(
 					assocType = domainmodel.AssociationTypeReferenceSet
 				}
 
-				// Apply per-association capability defaults. For top-level
-				// entities (entity-set source), Studio Pro defaults
-				// UpdatableFromParent=false because link updates happen via
-				// the foreign key on the entity, not by updating the nav
-				// property. For contained/derived types, both default to true.
+				// Per-association capability defaults. For a top-level FROM
+				// entity (has its own entity set), CreatableFromParent /
+				// UpdatableFromParent follow the entity set's Insertable /
+				// Updatable annotations — silent metadata means the service
+				// doesn't advertise write support, so default to false.
+				// For contained/derived FROM entities (no entity set), both
+				// default to true because the relationship is mutated via
+				// the parent's write flow. Per-nav overrides from
+				// Non{Insertable,Updatable}NavigationProperties still apply.
 				creatable := true
-				updatable := !parentEnt.Persistable
+				updatable := true
+				if es, ok := esByType[parentQN]; ok {
+					creatable = es.Insertable != nil && *es.Insertable
+					updatable = es.Updatable != nil && *es.Updatable
+				}
 				if r, ok := restrictionsByType[parentQN]; ok {
 					if r.nonInsertable[np.Name] {
 						creatable = false
