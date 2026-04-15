@@ -342,6 +342,8 @@ COLUMN colActions (Caption: 'Actions') {
 | `DataSource: $Variable` | Variable bound (requires DATAVIEW parent with entity) |
 | `DataSource: MICROFLOW Module.GetData()` | Microflow datasource |
 | `DataSource: SELECTION widgetName` | Listen to selection from another widget |
+| `DataSource: ASSOCIATION Path` | Retrieve by association from context (ByAssociation) |
+| `DataSource: $currentObject/Module.Assoc` | Sugar for `ASSOCIATION` — same semantics, reads more naturally |
 
 **With WHERE and SORT BY (inline in DataSource):**
 ```sql
@@ -804,7 +806,6 @@ The following features are NOT implemented in mxcli and require manual configura
 
 | Feature | Workaround |
 |---------|------------|
-| `DataSource: ASSOCIATION` | Use `DATABASE` with WHERE constraint, or microflow datasource |
 | Nested dataviews filtering by parent | Use microflow datasource or configure in Studio Pro |
 | Complex conditional visibility | Configure visibility rules in Studio Pro |
 | Widget-level security | Configure access rules in Studio Pro |

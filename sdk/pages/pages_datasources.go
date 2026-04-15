@@ -78,7 +78,8 @@ func (ListenToWidgetSource) isDataSource() {}
 // AssociationSource retrieves data via association.
 type AssociationSource struct {
 	model.BaseElement
-	EntityPath string `json:"entityPath"`
+	EntityPath      string `json:"entityPath"`               // "Module.Assoc" or "Module.Assoc/Module.DestEntity"
+	ContextVariable string `json:"contextVariable,omitempty"` // page parameter name (without $) — empty for $currentObject
 }
 
 func (AssociationSource) isDataSource() {}

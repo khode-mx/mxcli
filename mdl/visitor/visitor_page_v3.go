@@ -615,7 +615,14 @@ func buildDataSourceV3(ctx parser.IDataSourceExprV3Context) *ast.DataSourceV3 {
 	dsCtx := ctx.(*parser.DataSourceExprV3Context)
 	ds := &ast.DataSourceV3{}
 
-	if v := dsCtx.VARIABLE(); v != nil {
+	if v := dsCtx.VARIABLE(); v != nil && dsCtx.SLASH() != nil {
+		// $currentObject/Module.Assoc — ByAssociation data source (sugar for ASSOCIATION Path)
+		ds.Type = "association"
+		ds.ContextVariable = strings.TrimPrefix(v.GetText(), "$")
+		if pathCtx := dsCtx.AssociationPathV3(); pathCtx != nil {
+			ds.Reference = buildAssociationPathV3(pathCtx)
+		}
+	} else if v := dsCtx.VARIABLE(); v != nil {
 		// $ParamName
 		ds.Type = "parameter"
 		ds.Reference = v.GetText()
@@ -663,8 +670,8 @@ func buildDataSourceV3(ctx parser.IDataSourceExprV3Context) *ast.DataSourceV3 {
 	} else if dsCtx.ASSOCIATION() != nil {
 		// ASSOCIATION Path
 		ds.Type = "association"
-		if pathCtx := dsCtx.AttributePathV3(); pathCtx != nil {
-			ds.Reference = buildAttributePathV3(pathCtx)
+		if pathCtx := dsCtx.AssociationPathV3(); pathCtx != nil {
+			ds.Reference = buildAssociationPathV3(pathCtx)
 		}
 	} else if dsCtx.SELECTION() != nil {
 		// SELECTION widgetName
@@ -796,6 +803,20 @@ func buildAttributeListV3(ctx parser.IAttributeListV3Context) []string {
 	}
 
 	return attrs
+}
+
+// buildAssociationPathV3 builds an association path string from a parser context.
+// Format: "Module.Assoc" or "Module.Assoc/Module.Entity" — qualified names separated by /.
+func buildAssociationPathV3(ctx parser.IAssociationPathV3Context) string {
+	if ctx == nil {
+		return ""
+	}
+	apc := ctx.(*parser.AssociationPathV3Context)
+	var parts []string
+	for _, qn := range apc.AllQualifiedName() {
+		parts = append(parts, getQualifiedNameText(qn))
+	}
+	return strings.Join(parts, "/")
 }
 
 // buildAttributePathV3 builds an attribute path string.

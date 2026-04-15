@@ -86,7 +86,7 @@ LISTVIEW widgetName (DataSource: DATABASE Module.Entity, PageSize: 10) {
 
 Used inside the detail form to show related/associated data.
 
-**Note:** `DataSource: ASSOCIATION` is not yet fully implemented. Use `DATABASE` with a microflow datasource for related data.
+**Nested list by association:** Use `DataSource: $currentObject/Module.Assoc` (or the explicit `DataSource: ASSOCIATION Path` form) inside a parent DATAVIEW. Both forms produce the same BSON (ByAssociation data source). Example: `DATAGRID lines (DataSource: $currentObject/Order_OrderLine)` inside a `DATAVIEW dv (DataSource: DATABASE Order)`.
 
 ## Complete Example
 

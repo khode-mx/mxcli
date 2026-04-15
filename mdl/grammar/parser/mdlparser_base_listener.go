@@ -1538,6 +1538,12 @@ func (s *BaseMDLParserListener) EnterDataSourceExprV3(ctx *DataSourceExprV3Conte
 // ExitDataSourceExprV3 is called when production dataSourceExprV3 is exited.
 func (s *BaseMDLParserListener) ExitDataSourceExprV3(ctx *DataSourceExprV3Context) {}
 
+// EnterAssociationPathV3 is called when production associationPathV3 is entered.
+func (s *BaseMDLParserListener) EnterAssociationPathV3(ctx *AssociationPathV3Context) {}
+
+// ExitAssociationPathV3 is called when production associationPathV3 is exited.
+func (s *BaseMDLParserListener) ExitAssociationPathV3(ctx *AssociationPathV3Context) {}
+
 // EnterActionExprV3 is called when production actionExprV3 is entered.
 func (s *BaseMDLParserListener) EnterActionExprV3(ctx *ActionExprV3Context) {}
 

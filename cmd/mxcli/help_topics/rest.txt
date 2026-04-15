@@ -140,6 +140,24 @@ JSON STRUCTURES & MAPPINGS
 MICROFLOW ACTIONS
 -----------------
 
+  -- Call a REST client operation (fire and forget)
+  SEND REST REQUEST Module.API.GetData;
+
+  -- With query/path parameters and output variable
+  $Result = SEND REST REQUEST Module.API.GetForecast
+    WITH ($latitude = toString(51.92), $longitude = toString(4.48),
+          $units = 'metric');
+
+  -- With request body (for POST/PUT/PATCH operations)
+  $Result = SEND REST REQUEST Module.API.CreateItem BODY $NewItem;
+
+  -- After any SEND REST REQUEST, response is in $latestHttpResponse:
+  --   $latestHttpResponse/Content     (String — response body)
+  --   $latestHttpResponse/StatusCode  (Integer)
+
+  -- Transform JSON with a data transformer (Mendix 11.9+)
+  $Simplified = TRANSFORM $RawJson WITH Module.SimplifyTransformer;
+
   -- Import from mapping (JSON string → entities)
   $Pet = IMPORT FROM MAPPING Module.IMM_Pet($JsonContent);
 

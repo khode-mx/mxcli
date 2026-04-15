@@ -733,6 +733,9 @@ type MDLParserListener interface {
 	// EnterDataSourceExprV3 is called when entering the dataSourceExprV3 production.
 	EnterDataSourceExprV3(c *DataSourceExprV3Context)
 
+	// EnterAssociationPathV3 is called when entering the associationPathV3 production.
+	EnterAssociationPathV3(c *AssociationPathV3Context)
+
 	// EnterActionExprV3 is called when entering the actionExprV3 production.
 	EnterActionExprV3(c *ActionExprV3Context)
 
@@ -2001,6 +2004,9 @@ type MDLParserListener interface {
 
 	// ExitDataSourceExprV3 is called when exiting the dataSourceExprV3 production.
 	ExitDataSourceExprV3(c *DataSourceExprV3Context)
+
+	// ExitAssociationPathV3 is called when exiting the associationPathV3 production.
+	ExitAssociationPathV3(c *AssociationPathV3Context)
 
 	// ExitActionExprV3 is called when exiting the actionExprV3 production.
 	ExitActionExprV3(c *ActionExprV3Context)
