@@ -50,6 +50,21 @@ CREATE REST CLIENT
   CREATE OR MODIFY REST CLIENT Module.Api ( ... ) { ... };  -- Update existing
   DROP REST CLIENT Module.Api;
 
+IMPORT REST CLIENT FROM OPENAPI
+--------------------------------
+
+  -- Import a consumed REST service from an OpenAPI 3.0 JSON spec:
+  IMPORT REST CLIENT Module.YourAPI FROM OPENAPI '/specs/openapi.json';
+
+  -- Idempotent: replace an existing service with the same name:
+  IMPORT OR REPLACE REST CLIENT Module.YourAPI FROM OPENAPI '/specs/openapi.json';
+
+  -- Preview what will be created (no project needed):
+  DESCRIBE OPENAPI FILE '/specs/openapi.json';
+
+  The raw spec is stored in the service document (Rest$OpenApiFile.Content),
+  matching Studio Pro's import behavior. Requires Mendix 10.1+.
+
   Authentication: NONE | BASIC (Username: '...', Password: '...')
   Body: JSON FROM $var | TEMPLATE '...' | MAPPING Entity { jsonField = Attr, ... }
   Response: JSON AS $var | STRING AS $var | FILE AS $var | STATUS AS $var | NONE

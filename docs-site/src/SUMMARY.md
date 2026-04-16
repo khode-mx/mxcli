@@ -250,6 +250,8 @@
 - [Workflow Statements](reference/workflow/README.md)
   - [CREATE WORKFLOW](reference/workflow/create-workflow.md)
   - [DROP WORKFLOW](reference/workflow/drop-workflow.md)
+- [REST Client Statements](reference/rest-client/README.md)
+  - [IMPORT REST CLIENT FROM OPENAPI](reference/rest-client/import-rest-client.md)
 - [OData and Integration Statements](reference/odata/README.md)
 - [Business Event Statements](reference/business-event/README.md)
   - [CREATE BUSINESS EVENT SERVICE](reference/business-event/create-business-event-service.md)

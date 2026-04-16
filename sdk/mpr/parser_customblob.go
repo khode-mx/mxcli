@@ -99,12 +99,12 @@ func (r *Reader) parseAgentEditorModel(unitID, containerID string, contents []by
 			DisplayName    string `json:"displayName"`
 			Provider       string `json:"provider"`
 			ProviderFields struct {
-				Environment  string                    `json:"environment"`
-				DeepLinkURL  string                    `json:"deepLinkURL"`
-				KeyID        string                    `json:"keyId"`
-				KeyName      string                    `json:"keyName"`
-				ResourceName string                    `json:"resourceName"`
-				Key          *agenteditor.ConstantRef  `json:"key"`
+				Environment  string                   `json:"environment"`
+				DeepLinkURL  string                   `json:"deepLinkURL"`
+				KeyID        string                   `json:"keyId"`
+				KeyName      string                   `json:"keyName"`
+				ResourceName string                   `json:"resourceName"`
+				Key          *agenteditor.ConstantRef `json:"key"`
 			} `json:"providerFields"`
 		}
 		if err := json.Unmarshal([]byte(wrap.Contents), &payload); err != nil {

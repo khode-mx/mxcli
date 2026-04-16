@@ -1718,6 +1718,14 @@ func (s *BaseMDLParserListener) EnterCreateRestClientStatement(ctx *CreateRestCl
 func (s *BaseMDLParserListener) ExitCreateRestClientStatement(ctx *CreateRestClientStatementContext) {
 }
 
+// EnterImportRestClientStatement is called when production importRestClientStatement is entered.
+func (s *BaseMDLParserListener) EnterImportRestClientStatement(ctx *ImportRestClientStatementContext) {
+}
+
+// ExitImportRestClientStatement is called when production importRestClientStatement is exited.
+func (s *BaseMDLParserListener) ExitImportRestClientStatement(ctx *ImportRestClientStatementContext) {
+}
+
 // EnterRestClientProperty is called when production restClientProperty is entered.
 func (s *BaseMDLParserListener) EnterRestClientProperty(ctx *RestClientPropertyContext) {}
 

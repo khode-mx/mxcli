@@ -111,6 +111,11 @@ func (r *Reader) parseConsumedRestService(unitID, containerID string, contents [
 		}
 	}
 
+	// Parse OpenApiFile (Rest$OpenApiFile sub-document — set when imported from a spec)
+	if openApiMap := extractBsonMap(raw["OpenApiFile"]); openApiMap != nil {
+		svc.OpenApiContent = extractString(openApiMap["Content"])
+	}
+
 	// Parse Operations
 	ops := extractBsonArray(raw["Operations"])
 	for _, op := range ops {
@@ -169,6 +174,10 @@ func parseRestOperation(opMap map[string]any) *model.RestClientOperation {
 				Name:     extractString(pMap["Name"]),
 				DataType: extractRestDataType(pMap["DataType"]),
 			}
+			// TestValue is set by Studio Pro when a service is imported from an OpenAPI spec.
+			if tvMap := extractBsonMap(pMap["TestValue"]); tvMap != nil {
+				param.TestValue = extractString(tvMap["Value"])
+			}
 			op.Parameters = append(op.Parameters, param)
 		}
 	}
@@ -182,6 +191,14 @@ func parseRestOperation(opMap map[string]any) *model.RestClientOperation {
 				DataType: extractRestDataType(qMap["DataType"]),
 			}
 			op.QueryParameters = append(op.QueryParameters, param)
+		}
+	}
+
+	// Parse Tags (informational, added by Studio Pro for OpenAPI imports)
+	tags := extractBsonArray(opMap["Tags"])
+	for _, t := range tags {
+		if s, ok := t.(string); ok {
+			op.Tags = append(op.Tags, s)
 		}
 	}
 

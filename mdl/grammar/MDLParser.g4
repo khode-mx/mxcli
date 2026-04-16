@@ -2404,6 +2404,26 @@ createRestClientStatement
       LBRACE restClientOperation* RBRACE
     ;
 
+/**
+ * IMPORT REST CLIENT Module.Name FROM OPENAPI '/path/to/spec.json'
+ *
+ * Reads an OpenAPI 3.0 JSON spec from disk and creates a consumed REST service
+ * document in the project. The raw spec is stored in the OpenApiFile.Content
+ * BSON field (exactly as Studio Pro does).
+ *
+ * IMPORT OR REPLACE ... — idempotent: drops the existing service first if found.
+ *
+ * Example:
+ *   IMPORT REST CLIENT Integrations.CapitalAPI FROM OPENAPI '/specs/capital.json';
+ *   IMPORT OR REPLACE REST CLIENT Integrations.CapitalAPI FROM OPENAPI '/specs/capital.json';
+ *   IMPORT REST CLIENT Integrations.CapitalAPI FROM OPENAPI '/specs/capital.json'
+ *     SET BaseUrl: 'https://api.example.com', Authentication: BASIC (Username: 'u', Password: 'p');
+ */
+importRestClientStatement
+    : IMPORT (OR REPLACE)? REST CLIENT qualifiedName FROM OPENAPI STRING_LITERAL
+      (SET restClientProperty (COMMA restClientProperty)*)?
+    ;
+
 restClientProperty
     : identifierOrKeyword COLON STRING_LITERAL                       // BaseUrl: '...', Username: '...'
     | identifierOrKeyword COLON VARIABLE                             // Username: $Constant (stored as Rest$ConstantValue)
@@ -3063,6 +3083,7 @@ describeStatement
     | DESCRIBE EXPORT MAPPING qualifiedName             // DESCRIBE EXPORT MAPPING Module.Name
     | DESCRIBE REST CLIENT qualifiedName                // DESCRIBE REST CLIENT Module.Name
     | DESCRIBE PUBLISHED REST SERVICE qualifiedName    // DESCRIBE PUBLISHED REST SERVICE Module.Name
+    | DESCRIBE OPENAPI FILE_KW STRING_LITERAL          // DESCRIBE OPENAPI FILE '/path/spec.json' (no project needed)
     | DESCRIBE DATA TRANSFORMER qualifiedName          // DESCRIBE DATA TRANSFORMER Module.Name
     | DESCRIBE FRAGMENT identifierOrKeyword            // DESCRIBE FRAGMENT Name
     ;
@@ -3264,6 +3285,7 @@ utilityStatement
     | defineFragmentStatement
     | sqlStatement
     | importStatement
+    | importRestClientStatement
     | helpStatement
     ;
 
@@ -3757,7 +3779,7 @@ keyword
     | PARAMETER | PARAMETERS | PATH | PUBLISH | PUBLISHED
     | REQUEST | RESOURCE | RESPONSE | REST | SEND | SERVICE | SERVICES
     | SOURCE_KW | TIMEOUT | VERSION | XML
-    | FILE_KW | LINK | DYNAMIC
+    | FILE_KW | LINK | DYNAMIC | OPENAPI
 
     // HTTP methods
     | GET | POST | PUT | PATCH

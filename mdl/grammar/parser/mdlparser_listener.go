@@ -820,6 +820,9 @@ type MDLParserListener interface {
 	// EnterCreateRestClientStatement is called when entering the createRestClientStatement production.
 	EnterCreateRestClientStatement(c *CreateRestClientStatementContext)
 
+	// EnterImportRestClientStatement is called when entering the importRestClientStatement production.
+	EnterImportRestClientStatement(c *ImportRestClientStatementContext)
+
 	// EnterRestClientProperty is called when entering the restClientProperty production.
 	EnterRestClientProperty(c *RestClientPropertyContext)
 
@@ -2091,6 +2094,9 @@ type MDLParserListener interface {
 
 	// ExitCreateRestClientStatement is called when exiting the createRestClientStatement production.
 	ExitCreateRestClientStatement(c *CreateRestClientStatementContext)
+
+	// ExitImportRestClientStatement is called when exiting the importRestClientStatement production.
+	ExitImportRestClientStatement(c *ImportRestClientStatementContext)
 
 	// ExitRestClientProperty is called when exiting the restClientProperty production.
 	ExitRestClientProperty(c *RestClientPropertyContext)

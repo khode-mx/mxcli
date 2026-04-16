@@ -4,6 +4,19 @@ All notable changes to mxcli will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **IMPORT REST CLIENT FROM OPENAPI** — Create a consumed REST service from an OpenAPI 3.0 JSON spec: `IMPORT REST CLIENT Module.Name FROM OPENAPI '/path/spec.json'`
+- **IMPORT OR REPLACE REST CLIENT** — Idempotent variant that replaces an existing service with the same name
+- **DESCRIBE OPENAPI FILE** — Preview an OpenAPI spec as MDL without a project connection: `DESCRIBE OPENAPI FILE '/path/spec.json'`
+- **IMPORT REST CLIENT … SET** — Optional `SET BaseUrl: '...'` and `SET Authentication: BASIC (...)` overrides for specs without servers or securitySchemes
+
+### Fixed
+
+- **DELETE/HEAD body stripping** — Specs with a `requestBody` on DELETE or HEAD operations (e.g. `deleteTask`) now correctly produce `Rest$RestOperationMethodWithoutBody`, matching Studio Pro's behavior
+
 ## [0.6.0] - 2026-04-09
 
 ### Added

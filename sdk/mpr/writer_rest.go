@@ -61,6 +61,17 @@ func (w *Writer) serializeConsumedRestService(svc *model.ConsumedRestService) ([
 		doc["AuthenticationScheme"] = serializeRestAuthScheme(svc.Authentication)
 	}
 
+	// OpenApiFile: set when the service was imported from an OpenAPI spec.
+	if svc.OpenApiContent != "" {
+		doc["OpenApiFile"] = bson.M{
+			"$ID":     idToBsonBinary(generateUUID()),
+			"$Type":   "Rest$OpenApiFile",
+			"Content": svc.OpenApiContent,
+		}
+	} else {
+		doc["OpenApiFile"] = nil
+	}
+
 	// Operations: versioned array
 	ops := bson.A{int32(2)}
 	for _, op := range svc.Operations {
@@ -163,6 +174,16 @@ func serializeRestOperation(op *model.RestClientOperation) bson.M {
 		doc["ResponseHandling"] = serializeRestImplicitMappingResponse(op.ResponseEntity, op.ResponseMappings)
 	} else {
 		doc["ResponseHandling"] = serializeRestResponseHandling(op.ResponseType)
+	}
+
+	// Tags: written only when present (added by Studio Pro for OpenAPI imports).
+	// Version prefix int32(1) matches the Studio Pro-generated BSON.
+	if len(op.Tags) > 0 {
+		tags := bson.A{int32(1)}
+		for _, t := range op.Tags {
+			tags = append(tags, t)
+		}
+		doc["Tags"] = tags
 	}
 
 	return doc
@@ -354,13 +375,23 @@ func serializeRestHeader(h *model.RestClientHeader) bson.M {
 // serializeRestParameter creates a Rest$OperationParameter BSON object.
 // This is the correct type for consumed REST operation parameters
 // (distinct from Rest$RestOperationParameter used in published REST services).
+// includeTestValue should be true for parameters originating from OpenAPI imports,
+// matching the TestValue sub-document that Studio Pro writes.
 func serializeRestParameter(p *model.RestClientParameter) bson.M {
-	return bson.M{
+	doc := bson.M{
 		"$ID":      idToBsonBinary(generateUUID()),
 		"$Type":    "Rest$OperationParameter",
 		"Name":     p.Name,
 		"DataType": serializeRestDataType(p.DataType),
 	}
+	// TestValue is written when the parameter was set (including empty string from OpenAPI import).
+	// We write it whenever the field is explicitly set on the parameter.
+	doc["TestValue"] = bson.M{
+		"$ID":   idToBsonBinary(generateUUID()),
+		"$Type": "Rest$StringValue",
+		"Value": p.TestValue,
+	}
+	return doc
 }
 
 // serializeRestQueryParameter creates a Rest$QueryParameter BSON object.
@@ -378,11 +409,13 @@ func serializeRestQueryParameter(p *model.RestClientParameter) bson.M {
 
 // serializeRestResponseHandling creates a polymorphic ResponseHandling BSON object.
 // Uses Rest$NoResponseHandling for all types to avoid CE0061 (ImplicitMappingResponseHandling
-// requires entity mapping which isn't supported yet). ContentType is set to enable roundtripping.
+// requires entity mapping which isn't supported yet). ContentType and StatusCode are set to
+// match what Studio Pro writes (StatusCode: 200 is always present in Studio Pro output).
 func serializeRestResponseHandling(responseType string) bson.M {
 	doc := bson.M{
-		"$ID":   idToBsonBinary(generateUUID()),
-		"$Type": "Rest$NoResponseHandling",
+		"$ID":        idToBsonBinary(generateUUID()),
+		"$Type":      "Rest$NoResponseHandling",
+		"StatusCode": int32(200),
 	}
 	switch strings.ToUpper(responseType) {
 	case "JSON":
@@ -454,19 +487,19 @@ func (w *Writer) serializePublishedRestService(svc *model.PublishedRestService) 
 		ops := bson.A{int32(2)}
 		for _, op := range res.Operations {
 			opDoc := bson.M{
-				"$ID":         idToBsonBinary(GenerateID()),
-				"$Type":       "Rest$PublishedRestServiceOperation",
-				"HttpMethod":  httpMethodToMendix(op.HTTPMethod),
-				"Path":        op.Path,
-				"Microflow":   op.Microflow,
-				"Summary":     op.Summary,
-				"Deprecated":  op.Deprecated,
-				"Commit":      "Yes",
-				"Documentation": "",
-				"ExportMapping": "",
-				"ImportMapping": "",
+				"$ID":                  idToBsonBinary(GenerateID()),
+				"$Type":                "Rest$PublishedRestServiceOperation",
+				"HttpMethod":           httpMethodToMendix(op.HTTPMethod),
+				"Path":                 op.Path,
+				"Microflow":            op.Microflow,
+				"Summary":              op.Summary,
+				"Deprecated":           op.Deprecated,
+				"Commit":               "Yes",
+				"Documentation":        "",
+				"ExportMapping":        "",
+				"ImportMapping":        "",
 				"ObjectHandlingBackup": "Create",
-				"Parameters":  serializePublishedRestParams(op.Path, op.Microflow, op.Parameters),
+				"Parameters":           serializePublishedRestParams(op.Path, op.Microflow, op.Parameters),
 			}
 			ops = append(ops, opDoc)
 		}
@@ -481,21 +514,21 @@ func (w *Writer) serializePublishedRestService(svc *model.PublishedRestService) 
 	}
 
 	doc := bson.M{
-		"$ID":                    idToBsonBinary(string(svc.ID)),
-		"$Type":                  "Rest$PublishedRestService",
-		"Name":                   svc.Name,
-		"Documentation":          "",
-		"Excluded":               svc.Excluded,
-		"ExportLevel":            "Hidden",
-		"Path":                   svc.Path,
-		"Version":                svc.Version,
-		"ServiceName":            svc.ServiceName,
-		"AllowedRoles":           makeMendixStringArray(svc.AllowedRoles),
-		"AuthenticationTypes":    bson.A{int32(2)},
+		"$ID":                     idToBsonBinary(string(svc.ID)),
+		"$Type":                   "Rest$PublishedRestService",
+		"Name":                    svc.Name,
+		"Documentation":           "",
+		"Excluded":                svc.Excluded,
+		"ExportLevel":             "Hidden",
+		"Path":                    svc.Path,
+		"Version":                 svc.Version,
+		"ServiceName":             svc.ServiceName,
+		"AllowedRoles":            makeMendixStringArray(svc.AllowedRoles),
+		"AuthenticationTypes":     bson.A{int32(2)},
 		"AuthenticationMicroflow": "",
-		"CorsConfiguration":      nil,
-		"Parameters":             bson.A{int32(2)},
-		"Resources":              resources,
+		"CorsConfiguration":       nil,
+		"Parameters":              bson.A{int32(2)},
+		"Resources":               resources,
 	}
 
 	return bson.Marshal(doc)

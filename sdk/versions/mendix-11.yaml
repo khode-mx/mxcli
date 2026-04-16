@@ -104,6 +104,10 @@ features:
     rest_client_basic:
       min_version: "10.1.0"
       mdl: "CREATE REST CLIENT Module.Name ..."
+    rest_client_openapi_import:
+      min_version: "10.1.0"
+      mdl: "IMPORT REST CLIENT Module.Name FROM OPENAPI '/path/spec.json'"
+      notes: "Stores raw OpenAPI spec in Rest$OpenApiFile.Content BSON field"
     rest_client_query_params:
       min_version: "11.0.0"
       mdl: "CREATE REST CLIENT with query parameters"

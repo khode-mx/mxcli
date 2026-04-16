@@ -5,10 +5,12 @@ package executor
 import (
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	"github.com/mendixlabs/mxcli/mdl/openapi"
 	"github.com/mendixlabs/mxcli/model"
 )
 
@@ -441,10 +443,10 @@ func convertMappingEntries(entries []ast.RestMappingEntry, importDirection bool)
 			// Value mapping — direction determines which side is attribute vs JSON field
 			m := &model.RestResponseMapping{}
 			if importDirection {
-				m.Attribute = e.Left   // EntityAttr = jsonField
+				m.Attribute = e.Left // EntityAttr = jsonField
 				m.ExposedName = e.Right
 			} else {
-				m.Attribute = e.Right  // jsonField = EntityAttr
+				m.Attribute = e.Right // jsonField = EntityAttr
 				m.ExposedName = e.Left
 			}
 			result = append(result, m)
@@ -482,6 +484,114 @@ func (e *Executor) dropRestClient(stmt *ast.DropRestClientStmt) error {
 	}
 
 	return fmt.Errorf("REST client not found: %s", stmt.Name)
+}
+
+// importRestClient handles IMPORT [OR REPLACE] REST CLIENT Module.Name FROM OPENAPI '/path'.
+func (e *Executor) importRestClient(stmt *ast.ImportRestClientStmt) error {
+	if e.writer == nil {
+		return fmt.Errorf("not connected to a project (read-only mode)")
+	}
+
+	// Version pre-check: OpenAPI import field requires 10.1+
+	if err := e.checkFeature("integration", "rest_client_openapi_import",
+		"IMPORT REST CLIENT FROM OPENAPI",
+		"upgrade your project to Mendix 10.1+"); err != nil {
+		return err
+	}
+
+	// Read the spec file
+	specBytes, err := os.ReadFile(stmt.SpecPath)
+	if err != nil {
+		return fmt.Errorf("failed to read OpenAPI spec %q: %w", stmt.SpecPath, err)
+	}
+
+	// Parse the spec into a ConsumedRestService
+	svc, err := openapi.ParseSpec(specBytes)
+	if err != nil {
+		return fmt.Errorf("failed to parse OpenAPI spec %q: %w", stmt.SpecPath, err)
+	}
+
+	// Apply SET overrides (BaseUrl, Authentication) — these take priority over spec-derived values
+	if stmt.BaseUrlOverride != "" {
+		svc.BaseUrl = stmt.BaseUrlOverride
+	}
+	if stmt.AuthOverride != nil {
+		svc.Authentication = &model.RestAuthentication{
+			Scheme:   stmt.AuthOverride.Scheme,
+			Username: stmt.AuthOverride.Username,
+			Password: stmt.AuthOverride.Password,
+		}
+	}
+
+	// Set name and module
+	moduleName := stmt.Name.Module
+	module, err := e.findModule(moduleName)
+	if err != nil {
+		return fmt.Errorf("module not found: %s", moduleName)
+	}
+	svc.Name = stmt.Name.Name
+
+	// Resolve folder if specified
+	containerID := module.ID
+	if stmt.Folder != "" {
+		folderID, err := e.resolveFolder(module.ID, stmt.Folder)
+		if err != nil {
+			return fmt.Errorf("failed to resolve folder %q: %w", stmt.Folder, err)
+		}
+		containerID = folderID
+	}
+	svc.ContainerID = containerID
+
+	// Check for an existing service with the same name
+	existingServices, _ := e.reader.ListConsumedRestServices()
+	h, err := e.getHierarchy()
+	if err != nil {
+		return fmt.Errorf("failed to build hierarchy: %w", err)
+	}
+	for _, existing := range existingServices {
+		existModID := h.FindModuleID(existing.ContainerID)
+		existModName := h.GetModuleName(existModID)
+		if strings.EqualFold(existModName, moduleName) && strings.EqualFold(existing.Name, stmt.Name.Name) {
+			if stmt.Replace {
+				if err := e.writer.DeleteConsumedRestService(existing.ID); err != nil {
+					return fmt.Errorf("failed to delete existing REST client: %w", err)
+				}
+			} else {
+				return fmt.Errorf("REST client already exists: %s.%s (use IMPORT OR REPLACE to overwrite)", moduleName, stmt.Name.Name)
+			}
+		}
+	}
+
+	// Write to project
+	if err := e.writer.CreateConsumedRestService(svc); err != nil {
+		return fmt.Errorf("failed to create REST client: %w", err)
+	}
+
+	fmt.Fprintf(e.output, "Imported REST client: %s.%s (%d operations from %s)\n",
+		moduleName, svc.Name, len(svc.Operations), stmt.SpecPath)
+	return nil
+}
+
+// describeOpenapiFile handles DESCRIBE OPENAPI FILE '/path'.
+// This is a read-only command: it parses the spec and outputs a CREATE REST CLIENT
+// preview without connecting to any project.
+func (e *Executor) describeOpenapiFile(stmt *ast.DescribeOpenapiFileStmt) error {
+	specBytes, err := os.ReadFile(stmt.SpecPath)
+	if err != nil {
+		return fmt.Errorf("failed to read OpenAPI spec %q: %w", stmt.SpecPath, err)
+	}
+
+	svc, err := openapi.ParseSpec(specBytes)
+	if err != nil {
+		return fmt.Errorf("failed to parse OpenAPI spec %q: %w", stmt.SpecPath, err)
+	}
+
+	// Use a placeholder qualified name for the preview output
+	svc.Name = "PreviewName"
+	// Suppress the stored OpenApiContent from the describe output (it's huge)
+	svc.OpenApiContent = ""
+
+	return e.outputConsumedRestServiceMDL(svc, "Module")
 }
 
 // formatRestAuthValue formats an authentication value for MDL output.

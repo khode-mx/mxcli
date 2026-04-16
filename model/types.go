@@ -573,11 +573,11 @@ type ServiceOperation struct {
 // PublishedRestService represents a Rest$PublishedRestService document.
 type PublishedRestService struct {
 	BaseElement
-	ContainerID ID                       `json:"containerId"`
-	Name        string                   `json:"name"`
-	Path        string                   `json:"path,omitempty"`
-	Version     string                   `json:"version,omitempty"`
-	ServiceName string                   `json:"serviceName,omitempty"`
+	ContainerID  ID                       `json:"containerId"`
+	Name         string                   `json:"name"`
+	Path         string                   `json:"path,omitempty"`
+	Version      string                   `json:"version,omitempty"`
+	ServiceName  string                   `json:"serviceName,omitempty"`
 	Excluded     bool                     `json:"excluded,omitempty"`
 	AllowedRoles []string                 `json:"allowedRoles,omitempty"`
 	Resources    []*PublishedRestResource `json:"resources,omitempty"`
@@ -625,6 +625,10 @@ type ConsumedRestService struct {
 	BaseUrl        string                 `json:"baseUrl"`
 	Authentication *RestAuthentication    `json:"authentication,omitempty"`
 	Operations     []*RestClientOperation `json:"operations,omitempty"`
+	// OpenApiContent holds the raw OpenAPI JSON/YAML text stored in the
+	// Rest$OpenApiFile sub-document. Empty string when the service was created
+	// by hand (not imported from a spec). Set by IMPORT REST CLIENT FROM OPENAPI.
+	OpenApiContent string `json:"openApiContent,omitempty"`
 }
 
 // GetName returns the service's name.
@@ -658,9 +662,11 @@ type RestClientOperation struct {
 	BodyMappings     []*RestResponseMapping `json:"bodyMappings,omitempty"` // export mapping tree (Entity → JSON) for EXPORT_MAPPING bodies
 	ResponseType     string                 `json:"responseType"`           // "JSON", "STRING", "FILE", "STATUS", "NONE", "MAPPING"
 	ResponseVariable string                 `json:"responseVariable,omitempty"`
-	ResponseEntity   string                 `json:"responseEntity,omitempty"`              // target entity for implicit mapping response
-	ResponseMappings []*RestResponseMapping `json:"responseMappings,omitempty"`            // JSON field → entity attribute
-	Timeout          int                    `json:"timeout,omitempty"`                     // 0 = default (300s)
+	ResponseEntity   string                 `json:"responseEntity,omitempty"`   // target entity for implicit mapping response
+	ResponseMappings []*RestResponseMapping `json:"responseMappings,omitempty"` // JSON field → entity attribute
+	Timeout          int                    `json:"timeout,omitempty"`          // 0 = default (300s)
+	// Tags holds the OpenAPI tags for this operation (informational, from Studio Pro import).
+	Tags []string `json:"tags,omitempty"`
 }
 
 // RestResponseMapping represents one element in a response mapping tree.
@@ -668,9 +674,9 @@ type RestClientOperation struct {
 // (Entity set, with its own Children).
 type RestResponseMapping struct {
 	// Value mapping: maps a JSON field to an entity attribute
-	Attribute   string `json:"attribute,omitempty"`   // entity attribute short name
-	ExposedName string `json:"exposedName"`           // JSON field name
-	JsonPath    string `json:"jsonPath,omitempty"`     // e.g. "(Object)|args|queryparam_1"
+	Attribute   string `json:"attribute,omitempty"` // entity attribute short name
+	ExposedName string `json:"exposedName"`         // JSON field name
+	JsonPath    string `json:"jsonPath,omitempty"`  // e.g. "(Object)|args|queryparam_1"
 
 	// Object mapping: nested entity linked by association
 	Entity      string                 `json:"entity,omitempty"`      // child entity (e.g. "RestDemo.Args")
@@ -680,8 +686,9 @@ type RestResponseMapping struct {
 
 // RestClientParameter represents a path or query parameter.
 type RestClientParameter struct {
-	Name     string `json:"name"`     // parameter name (without $ prefix)
-	DataType string `json:"dataType"` // "String", "Integer", "Boolean", "Decimal"
+	Name      string `json:"name"`                // parameter name (without $ prefix)
+	DataType  string `json:"dataType"`            // "String", "Integer", "Boolean", "Decimal"
+	TestValue string `json:"testValue,omitempty"` // Studio Pro test value (empty string when imported from OpenAPI)
 }
 
 // RestClientHeader represents an HTTP header in a REST client operation.

@@ -131,6 +131,49 @@ CREATE OR MODIFY REST CLIENT Module.ClientName ...  -- idempotent
 
 ---
 
+## Importing from OpenAPI
+
+When an OpenAPI 3.0 JSON spec is available, use `IMPORT REST CLIENT` instead of writing
+`CREATE REST CLIENT` by hand. The spec is parsed automatically and stored in the service
+document — exactly as Studio Pro does.
+
+```sql
+-- Import from an OpenAPI 3.0 JSON spec file
+IMPORT REST CLIENT Module.YourAPI FROM OPENAPI '/path/to/openapi.json';
+
+-- Idempotent: replace an existing service with the same name
+IMPORT OR REPLACE REST CLIENT Module.YourAPI FROM OPENAPI '/path/to/openapi.json';
+
+-- Override BaseUrl (use when spec has no servers array)
+IMPORT REST CLIENT Module.YourAPI FROM OPENAPI '/path/to/openapi.json'
+  SET BaseUrl: 'https://api.example.com';
+
+-- Override BaseUrl and Authentication together
+IMPORT OR REPLACE REST CLIENT Module.YourAPI FROM OPENAPI '/path/to/openapi.json'
+  SET BaseUrl: 'https://api.example.com',
+      Authentication: BASIC (Username: '$Module.ApiUser', Password: '$Module.ApiPass');
+
+-- Preview what will be generated (no project connection needed)
+DESCRIBE OPENAPI FILE '/path/to/openapi.json';
+```
+
+**What gets set from the spec:**
+- `BaseUrl` ← `servers[0].url` (trailing slash stripped)
+- One operation per `paths[path][method]` entry
+  - `Name` ← `operationId` (sanitized to valid identifier; fallback: `METHOD_path_slug`)
+  - `Path` ← OpenAPI path (same `{param}` placeholder format as Mendix)
+  - `Parameters` ← `in: path` parameters (type mapped to Mendix types)
+  - `QueryParameters` ← `in: query` parameters
+  - `BodyType: JSON` ← when `requestBody` is present
+  - `ResponseType: JSON` ← when a 200/201 response exists; otherwise `NONE`
+  - `Timeout: 300` ← Mendix default
+  - `Tags` ← OpenAPI tags (stored on operation; informational)
+- `OpenApiFile.Content` ← raw spec JSON (stored as-is, same as Studio Pro)
+
+**Requirements:** Mendix 10.1+.
+
+---
+
 ## Approach 2: REST CALL (Inline HTTP)
 
 Call an HTTP endpoint directly from a microflow — no REST client document needed. Best for one-off calls, dynamic URLs, or low-level control.

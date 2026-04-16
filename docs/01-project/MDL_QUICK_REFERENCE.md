@@ -448,6 +448,9 @@ CREATE OR REPLACE NAVIGATION Responsive
 | Create client | See syntax below | Property-based `{}` syntax |
 | Create or modify | `CREATE OR MODIFY REST CLIENT ...` | Replaces existing |
 | Drop client | `DROP REST CLIENT Module.Name;` | |
+| Import from OpenAPI | `IMPORT REST CLIENT Module.Name FROM OPENAPI '/path/spec.json';` | Creates service from OpenAPI 3.0 JSON spec; requires 10.1+ |
+| Import or replace | `IMPORT OR REPLACE REST CLIENT Module.Name FROM OPENAPI '/path/spec.json';` | Idempotent — replaces existing service |
+| Preview OpenAPI spec | `DESCRIBE OPENAPI FILE '/path/spec.json';` | No project needed; outputs CREATE preview |
 
 ```sql
 CREATE REST CLIENT Module.Api (

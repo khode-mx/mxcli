@@ -194,6 +194,8 @@ func (e *Executor) executeInner(stmt ast.Statement) error {
 		return e.createRestClient(s)
 	case *ast.DropRestClientStmt:
 		return e.dropRestClient(s)
+	case *ast.ImportRestClientStmt:
+		return e.importRestClient(s)
 
 	// Published REST service statements
 	case *ast.CreatePublishedRestServiceStmt:
@@ -234,6 +236,8 @@ func (e *Executor) executeInner(stmt ast.Statement) error {
 		return e.execDescribe(s)
 	case *ast.DescribeCatalogTableStmt:
 		return e.execDescribeCatalogTable(s)
+	case *ast.DescribeOpenapiFileStmt:
+		return e.describeOpenapiFile(s)
 
 	// Styling statements
 	case *ast.ShowDesignPropertiesStmt:

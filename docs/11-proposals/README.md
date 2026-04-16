@@ -91,6 +91,7 @@ Playwright Testing ◄──── Playwright CLI
 | [Runtime Admin Port](proposal-runtime-admin-port.md) | Proposed | Expose M2EE admin API: hot reload, CSS reload, microflow debugging | Admin API Runtime |
 | [OData Services](odata-services-proposal.md) | Proposed | Consumed + published OData services, external entities | — |
 | [Import Associations](PROPOSAL_import_associations.md) | Draft | LINK clause in IMPORT for mapping source columns to entity associations | — |
+| [Import REST Client from OpenAPI](PROPOSAL_import_rest_client_from_openapi.md) | Proposed | `IMPORT REST CLIENT Module.Name FROM OPENAPI '/path'` — generate consumed REST service from OpenAPI 3.0 spec | Consumed REST Services |
 | [Marketplace Modules](PROPOSAL_marketplace_modules.md) | Draft | `mxcli marketplace install/search/info` for downloading marketplace modules | — |
 
 ### Infrastructure & Code Quality

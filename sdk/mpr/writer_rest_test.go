@@ -275,6 +275,38 @@ func TestSerializeRestOperationNoResponse(t *testing.T) {
 	}
 }
 
+func TestSerializeRestOperationDeleteNoBody(t *testing.T) {
+	// DELETE with BodyType set should still serialize as WithoutBody — matches Studio Pro behavior.
+	// The OpenAPI parser strips requestBody for DELETE/HEAD before setting BodyType,
+	// but the writer should also be safe if BodyType somehow reaches it.
+	op := &model.RestClientOperation{
+		Name:         "DeleteTask",
+		HttpMethod:   "DELETE",
+		Path:         "/tasks/{taskId}",
+		BodyType:     "", // parser strips body for DELETE — BodyType must be empty
+		ResponseType: "NONE",
+		Parameters: []*model.RestClientParameter{
+			{Name: "taskId", DataType: "String"},
+		},
+	}
+
+	result := serializeRestOperation(op)
+
+	method, ok := result["Method"].(bson.M)
+	if !ok {
+		t.Fatalf("Method: expected bson.M, got %T", result["Method"])
+	}
+	if method["$Type"] != "Rest$RestOperationMethodWithoutBody" {
+		t.Errorf("Method.$Type: expected WithoutBody for DELETE, got %v", method["$Type"])
+	}
+	if method["HttpMethod"] != "Delete" {
+		t.Errorf("Method.HttpMethod: expected Delete, got %v", method["HttpMethod"])
+	}
+	if _, hasBody := method["Body"]; hasBody {
+		t.Error("Method.Body: must not be present for DELETE operation")
+	}
+}
+
 func TestSerializeRestOperationQueryParams(t *testing.T) {
 	op := &model.RestClientOperation{
 		Name:       "SearchPets",
@@ -310,6 +342,152 @@ func TestSerializeRestOperationQueryParams(t *testing.T) {
 	}
 	if usage["$Type"] != "Rest$RequiredQueryParameterUsage" {
 		t.Errorf("ParameterUsage.$Type: expected RequiredQueryParameterUsage, got %v", usage["$Type"])
+	}
+}
+
+func TestSerializeConsumedRestServiceWithOpenApiContent(t *testing.T) {
+	w := &Writer{}
+	rawSpec := `{"openapi":"3.0.0","info":{"title":"Test"},"paths":{}}`
+	svc := &model.ConsumedRestService{
+		BaseElement:    model.BaseElement{ID: "test-oaf-id"},
+		ContainerID:    "test-module-id",
+		Name:           "TestAPI",
+		BaseUrl:        "https://api.example.com",
+		OpenApiContent: rawSpec,
+	}
+
+	data, err := w.serializeConsumedRestService(svc)
+	if err != nil {
+		t.Fatalf("serialize failed: %v", err)
+	}
+
+	var raw map[string]any
+	if err := bson.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+
+	// OpenApiFile sub-document must be present with correct $Type
+	oaf, ok := raw["OpenApiFile"].(map[string]any)
+	if !ok {
+		t.Fatalf("OpenApiFile: expected map, got %T", raw["OpenApiFile"])
+	}
+	assertField(t, oaf, "$Type", "Rest$OpenApiFile")
+	assertField(t, oaf, "Content", rawSpec)
+	if oaf["$ID"] == nil {
+		t.Error("OpenApiFile.$ID must not be nil")
+	}
+}
+
+func TestSerializeConsumedRestServiceNoOpenApiContent(t *testing.T) {
+	w := &Writer{}
+	svc := &model.ConsumedRestService{
+		BaseElement: model.BaseElement{ID: "test-no-oaf-id"},
+		ContainerID: "test-module-id",
+		Name:        "ManualAPI",
+		BaseUrl:     "https://api.example.com",
+		// OpenApiContent intentionally empty
+	}
+
+	data, err := w.serializeConsumedRestService(svc)
+	if err != nil {
+		t.Fatalf("serialize failed: %v", err)
+	}
+
+	var raw map[string]any
+	if err := bson.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+
+	// OpenApiFile should be nil when no content provided
+	if raw["OpenApiFile"] != nil {
+		t.Errorf("OpenApiFile: expected nil for manual REST client, got %v", raw["OpenApiFile"])
+	}
+}
+
+func TestSerializeRestOperationWithTags(t *testing.T) {
+	op := &model.RestClientOperation{
+		Name:         "ListItems",
+		HttpMethod:   "GET",
+		Path:         "/items",
+		Tags:         []string{"Items", "Read"},
+		ResponseType: "JSON",
+		Timeout:      300,
+	}
+
+	result := serializeRestOperation(op)
+
+	// Tags array: [int32(1), "Items", "Read"] — one tag per position after prefix
+	tags, ok := result["Tags"].(bson.A)
+	if !ok {
+		t.Fatalf("Tags: expected bson.A, got %T", result["Tags"])
+	}
+	if len(tags) != 3 { // prefix + 2 tags
+		t.Fatalf("Tags length: expected 3 (prefix+2), got %d", len(tags))
+	}
+	if tags[0] != int32(1) {
+		t.Errorf("Tags[0] prefix: expected int32(1), got %v", tags[0])
+	}
+	if tags[1] != "Items" {
+		t.Errorf("Tags[1]: expected Items, got %v", tags[1])
+	}
+	if tags[2] != "Read" {
+		t.Errorf("Tags[2]: expected Read, got %v", tags[2])
+	}
+}
+
+func TestSerializeRestOperationNoResponseHasStatusCode(t *testing.T) {
+	op := &model.RestClientOperation{
+		Name:         "DeleteItem",
+		HttpMethod:   "DELETE",
+		Path:         "/items/{id}",
+		ResponseType: "NONE",
+		Timeout:      300,
+	}
+
+	result := serializeRestOperation(op)
+
+	respHandling, ok := result["ResponseHandling"].(bson.M)
+	if !ok {
+		t.Fatalf("ResponseHandling: expected bson.M, got %T", result["ResponseHandling"])
+	}
+	assertField(t, respHandling, "$Type", "Rest$NoResponseHandling")
+	// Studio Pro always writes StatusCode: 200 on NoResponseHandling
+	if respHandling["StatusCode"] != int32(200) {
+		t.Errorf("ResponseHandling.StatusCode: expected int32(200), got %v (%T)", respHandling["StatusCode"], respHandling["StatusCode"])
+	}
+}
+
+func TestSerializeRestParameterHasTestValue(t *testing.T) {
+	op := &model.RestClientOperation{
+		Name:       "GetItem",
+		HttpMethod: "GET",
+		Path:       "/items/{id}",
+		Parameters: []*model.RestClientParameter{
+			{Name: "id", DataType: "String"},
+		},
+		ResponseType: "JSON",
+		Timeout:      300,
+	}
+
+	result := serializeRestOperation(op)
+
+	params := extractBsonArray(result["Parameters"])
+	if len(params) != 1 {
+		t.Fatalf("Parameters: expected 1, got %d", len(params))
+	}
+	p0, ok := params[0].(bson.M)
+	if !ok {
+		t.Fatalf("Parameters[0]: expected bson.M, got %T", params[0])
+	}
+	// TestValue must always be present (Studio Pro writes Rest$StringValue with empty Value)
+	tv, ok := p0["TestValue"].(bson.M)
+	if !ok {
+		t.Fatalf("TestValue: expected bson.M, got %T", p0["TestValue"])
+	}
+	assertField(t, tv, "$Type", "Rest$StringValue")
+	assertField(t, tv, "Value", "")
+	if tv["$ID"] == nil {
+		t.Error("TestValue.$ID must not be nil")
 	}
 }
 

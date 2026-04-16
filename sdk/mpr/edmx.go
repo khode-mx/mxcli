@@ -458,7 +458,7 @@ type xmlEntitySet struct {
 // <PropertyValue Property="NonInsertableNavigationProperties"><Collection>
 // <NavigationPropertyPath>Trips</NavigationPropertyPath></Collection></PropertyValue>.
 type xmlCapabilitiesAnnotation struct {
-	Term   string                  `xml:"Term,attr"`
+	Term   string                 `xml:"Term,attr"`
 	Record *xmlCapabilitiesRecord `xml:"Record"`
 }
 
@@ -467,9 +467,9 @@ type xmlCapabilitiesRecord struct {
 }
 
 type xmlCapabilitiesPropertyValue struct {
-	Property               string                              `xml:"Property,attr"`
-	Bool                   string                              `xml:"Bool,attr"`
-	Collection             *xmlCapabilitiesCollection          `xml:"Collection"`
+	Property   string                     `xml:"Property,attr"`
+	Bool       string                     `xml:"Bool,attr"`
+	Collection *xmlCapabilitiesCollection `xml:"Collection"`
 }
 
 type xmlCapabilitiesCollection struct {

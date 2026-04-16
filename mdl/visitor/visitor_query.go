@@ -813,6 +813,18 @@ func (b *Builder) ExitDescribeStatement(ctx *parser.DescribeStatementContext) {
 		return
 	}
 
+	// Handle DESCRIBE OPENAPI FILE '/path'
+	if ctx.OPENAPI() != nil {
+		specPath := ""
+		if sl := ctx.STRING_LITERAL(); sl != nil {
+			specPath = unquoteString(sl.GetText())
+		}
+		b.statements = append(b.statements, &ast.DescribeOpenapiFileStmt{
+			SpecPath: specPath,
+		})
+		return
+	}
+
 	// Handle DESCRIBE CATALOG.tablename
 	if ctx.CATALOG() != nil {
 		var tableName string

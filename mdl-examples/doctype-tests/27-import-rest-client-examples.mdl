@@ -1,0 +1,12 @@
+-- IMPORT REST CLIENT FROM OPENAPI — syntax check examples
+-- These statements check parser correctness only.
+-- At runtime, a real spec file path and project connection are required.
+
+-- Preview an OpenAPI spec as MDL (no project needed at syntax-check time):
+-- DESCRIBE OPENAPI FILE '/path/to/openapi.json';
+
+-- Import a consumed REST service from an OpenAPI 3.0 JSON spec:
+-- IMPORT REST CLIENT Integrations.YourAPI FROM OPENAPI '/specs/openapi.json';
+
+-- Idempotent variant — replaces an existing service with the same name:
+-- IMPORT OR REPLACE REST CLIENT Integrations.YourAPI FROM OPENAPI '/specs/openapi.json';
