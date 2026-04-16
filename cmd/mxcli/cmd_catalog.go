@@ -15,8 +15,12 @@ import (
 
 var catalogCmd = &cobra.Command{
 	Use:   "catalog",
-	Short: "Search and manage Mendix Catalog services",
-	Long: `Search for data sources and services registered in Mendix Catalog.
+	Short: "Search and manage Mendix Catalog services (catalog.mendix.com)",
+	Long: `Search for data sources and services registered in Mendix Catalog (catalog.mendix.com).
+
+NOTE: This is the external Mendix Catalog service, NOT the MDL CATALOG keyword.
+  - CLI catalog commands: Search external service registry (requires auth)
+  - MDL CATALOG keyword: Query local project metadata (SELECT ... FROM CATALOG.entities)
 
 Requires authentication via Personal Access Token (PAT). Create a PAT at:
   https://user-settings.mendix.com/

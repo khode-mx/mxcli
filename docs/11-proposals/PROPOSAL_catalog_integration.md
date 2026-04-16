@@ -4,6 +4,8 @@
 **Date:** 2026-04-16  
 **Author:** Generated with Claude Code  
 
+**⚠️ TERMINOLOGY NOTE:** This proposal covers the **external Mendix Catalog service** at catalog.mendix.com (CLI: `mxcli catalog search`), which is separate from the **MDL CATALOG keyword** used for querying local project metadata (`SELECT ... FROM CATALOG.entities`). The two concepts are unrelated despite sharing the name "catalog".
+
 ## Problem
 
 Mendix Catalog (catalog.mendix.com) is the centralized registry for discovering data sources and services across an organization's landscape. It indexes OData services, REST APIs, SOAP services, and Business Events published by Mendix applications and external systems.

@@ -1,6 +1,8 @@
 # Browse Integration Services and Contracts
 
-This skill covers discovering external services, browsing cached contracts, and querying integration assets via the catalog.
+This skill covers discovering external services, browsing cached contracts, and querying integration assets via the **MDL CATALOG** (local project metadata).
+
+**⚠️ NOTE:** This covers the **MDL CATALOG keyword** (`SELECT ... FROM CATALOG.entities`), NOT the **Mendix Catalog CLI** (`mxcli catalog search`). See `.claude/skills/mendix/catalog-search.md` for the external service registry.
 
 ## When to Use This Skill
 

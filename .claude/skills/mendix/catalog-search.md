@@ -1,6 +1,8 @@
-# Catalog Search
+# Catalog Search (Mendix Platform Service Registry)
 
-Search and discover services registered in Mendix Catalog programmatically.
+Search and discover services registered in **Mendix Catalog** (catalog.mendix.com) programmatically.
+
+**⚠️ NOTE:** This is the **external Mendix Catalog service** (CLI: `mxcli catalog search`), NOT the **MDL CATALOG keyword** which queries local project metadata tables (`SELECT ... FROM CATALOG.entities`). See `.claude/skills/mendix/browse-integrations.md` for MDL CATALOG queries.
 
 ## Authentication Required
 
@@ -142,7 +144,26 @@ Phase 2 (not yet implemented):
 
 See GitHub issue #213 for architecture discussion.
 
+## Disambiguation: Two Different "Catalogs"
+
+**Mendix Catalog** (this skill):
+- **What**: External service registry at catalog.mendix.com
+- **CLI**: `mxcli catalog search "customer"`, `mxcli catalog show <uuid>`
+- **Purpose**: Discover OData/REST/SOAP services across your organization
+- **Requires**: Platform authentication (PAT token)
+- **Data source**: Mendix cloud service
+
+**MDL CATALOG keyword** (different concept):
+- **What**: Local project metadata tables in the mxcli SQLite database
+- **MDL syntax**: `SELECT ... FROM CATALOG.entities`, `SHOW CATALOG TABLES`
+- **Purpose**: Query project structure (entities, microflows, pages, etc.)
+- **Requires**: `REFRESH CATALOG` command (no auth needed)
+- **Data source**: Your local .mpr file
+
+See `.claude/skills/mendix/browse-integrations.md` for MDL CATALOG usage.
+
 ## Related
 
 - Platform authentication: `.claude/skills/mendix/platform-auth.md`
 - OData client creation: `.claude/skills/mendix/odata-data-sharing.md`
+- MDL CATALOG queries: `.claude/skills/mendix/browse-integrations.md`
