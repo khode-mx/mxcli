@@ -662,18 +662,21 @@ func (pb *pageBuilder) resolveAssociationDestination(assocQN, contextEntity stri
 		return ""
 	}
 	for _, dm := range domainModels {
+		// Module-scope the search: only look at the domain model whose module name
+		// matches the first segment of the qualified association name. Association
+		// names are not unique across the project (e.g., both AssocGrid and ODataSvc
+		// can have an "OrderLine_Order" association) — without this check, we'd
+		// pick the wrong one.
+		if pb.moduleNameByID(dm.ContainerID) != modName {
+			continue
+		}
 		for _, a := range dm.Associations {
 			if a.Name != assocName {
 				continue
 			}
 			// Resolve entity qualified names for ParentID and ChildID.
-			// Entity IDs are unique across the project; look up the entity
-			// in any domain model.
 			parentEntity := pb.entityQNByID(a.ParentID)
 			childEntity := pb.entityQNByID(a.ChildID)
-			// Module-scope safety: the association module must match the first
-			// segment of the qualified name we were given.
-			_ = modName
 			// The "destination" is the end OPPOSITE to the context.
 			if contextEntity != "" {
 				if contextEntity == childEntity {

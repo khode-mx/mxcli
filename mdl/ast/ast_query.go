@@ -90,6 +90,9 @@ const (
 	ShowImportMappings        // SHOW IMPORT MAPPINGS [IN module]
 	ShowExportMappings        // SHOW EXPORT MAPPINGS [IN module]
 	ShowModels                // SHOW MODELS [IN module] (agent-editor Model documents)
+	ShowAgents                // SHOW AGENTS [IN module] (agent-editor Agent documents)
+	ShowKnowledgeBases        // SHOW KNOWLEDGE BASES [IN module] (agent-editor KB documents)
+	ShowConsumedMCPServices   // SHOW CONSUMED MCP SERVICES [IN module] (agent-editor MCP documents)
 )
 
 // String returns the human-readable name of the show object type.
@@ -217,6 +220,12 @@ func (t ShowObjectType) String() string {
 		return "EXPORT MAPPINGS"
 	case ShowModels:
 		return "MODELS"
+	case ShowAgents:
+		return "AGENTS"
+	case ShowKnowledgeBases:
+		return "KNOWLEDGE BASES"
+	case ShowConsumedMCPServices:
+		return "CONSUMED MCP SERVICES"
 	default:
 		return "UNKNOWN"
 	}
@@ -295,6 +304,9 @@ const (
 	DescribeImportMapping        // DESCRIBE IMPORT MAPPING Module.Name
 	DescribeExportMapping        // DESCRIBE EXPORT MAPPING Module.Name
 	DescribeModel                // DESCRIBE MODEL Module.Name (agent-editor Model document)
+	DescribeAgent                // DESCRIBE AGENT Module.Name (agent-editor Agent document)
+	DescribeKnowledgeBase        // DESCRIBE KNOWLEDGE BASE Module.Name (agent-editor KB document)
+	DescribeConsumedMCPService   // DESCRIBE CONSUMED MCP SERVICE Module.Name (agent-editor MCP document)
 )
 
 // String returns the human-readable name of the describe object type.
@@ -370,6 +382,12 @@ func (t DescribeObjectType) String() string {
 		return "EXPORT MAPPING"
 	case DescribeModel:
 		return "MODEL"
+	case DescribeAgent:
+		return "AGENT"
+	case DescribeKnowledgeBase:
+		return "KNOWLEDGE BASE"
+	case DescribeConsumedMCPService:
+		return "CONSUMED MCP SERVICE"
 	default:
 		return "UNKNOWN"
 	}

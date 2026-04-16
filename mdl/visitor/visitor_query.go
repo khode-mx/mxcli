@@ -478,6 +478,39 @@ func (b *Builder) ExitShowStatement(ctx *parser.ShowStatementContext) {
 			}
 		}
 		b.statements = append(b.statements, stmt)
+	} else if ctx.AGENTS() != nil {
+		// SHOW AGENTS [IN module] (agent-editor Agent documents)
+		stmt := &ast.ShowStmt{ObjectType: ast.ShowAgents}
+		if ctx.IN() != nil {
+			if qn := ctx.QualifiedName(); qn != nil {
+				stmt.InModule = getQualifiedNameText(qn)
+			} else if id := ctx.IDENTIFIER(); id != nil {
+				stmt.InModule = id.GetText()
+			}
+		}
+		b.statements = append(b.statements, stmt)
+	} else if ctx.KNOWLEDGE() != nil && ctx.BASES() != nil {
+		// SHOW KNOWLEDGE BASES [IN module] (agent-editor KB documents)
+		stmt := &ast.ShowStmt{ObjectType: ast.ShowKnowledgeBases}
+		if ctx.IN() != nil {
+			if qn := ctx.QualifiedName(); qn != nil {
+				stmt.InModule = getQualifiedNameText(qn)
+			} else if id := ctx.IDENTIFIER(); id != nil {
+				stmt.InModule = id.GetText()
+			}
+		}
+		b.statements = append(b.statements, stmt)
+	} else if ctx.CONSUMED() != nil && ctx.MCP() != nil && ctx.SERVICES() != nil {
+		// SHOW CONSUMED MCP SERVICES [IN module]
+		stmt := &ast.ShowStmt{ObjectType: ast.ShowConsumedMCPServices}
+		if ctx.IN() != nil {
+			if qn := ctx.QualifiedName(); qn != nil {
+				stmt.InModule = getQualifiedNameText(qn)
+			} else if id := ctx.IDENTIFIER(); id != nil {
+				stmt.InModule = id.GetText()
+			}
+		}
+		b.statements = append(b.statements, stmt)
 	} else if ctx.PUBLISHED() != nil && ctx.REST() != nil && ctx.SERVICES() != nil {
 		// SHOW PUBLISHED REST SERVICES [IN module] - must come before REST CLIENTS check
 		stmt := &ast.ShowStmt{ObjectType: ast.ShowPublishedRestServices}
@@ -635,10 +668,14 @@ func (b *Builder) ExitDescribeStatement(ctx *parser.DescribeStatementContext) {
 		return
 	}
 
-	// Handle DESCRIBE MODULE specially (uses IDENTIFIER not qualifiedName)
+	// Handle DESCRIBE MODULE specially (uses identifierOrKeyword — accepts
+	// module names that happen to match a keyword, like "Agents").
 	if ctx.MODULE() != nil {
 		var moduleName string
-		if id := ctx.IDENTIFIER(); id != nil {
+		if iok := ctx.IdentifierOrKeyword(); iok != nil {
+			moduleName = iok.GetText()
+		} else if id := ctx.IDENTIFIER(); id != nil {
+			// Fallback for older grammar versions.
 			moduleName = id.GetText()
 		}
 		b.statements = append(b.statements, &ast.DescribeStmt{
@@ -891,6 +928,24 @@ func (b *Builder) ExitDescribeStatement(ctx *parser.DescribeStatementContext) {
 		// DESCRIBE MODEL Module.Name (agent-editor Model document)
 		b.statements = append(b.statements, &ast.DescribeStmt{
 			ObjectType: ast.DescribeModel,
+			Name:       name,
+		})
+	} else if ctx.AGENT() != nil {
+		// DESCRIBE AGENT Module.Name (agent-editor Agent document)
+		b.statements = append(b.statements, &ast.DescribeStmt{
+			ObjectType: ast.DescribeAgent,
+			Name:       name,
+		})
+	} else if ctx.KNOWLEDGE() != nil && ctx.BASE() != nil {
+		// DESCRIBE KNOWLEDGE BASE Module.Name
+		b.statements = append(b.statements, &ast.DescribeStmt{
+			ObjectType: ast.DescribeKnowledgeBase,
+			Name:       name,
+		})
+	} else if ctx.CONSUMED() != nil && ctx.MCP() != nil && ctx.SERVICE() != nil {
+		// DESCRIBE CONSUMED MCP SERVICE Module.Name
+		b.statements = append(b.statements, &ast.DescribeStmt{
+			ObjectType: ast.DescribeConsumedMCPService,
 			Name:       name,
 		})
 	} else if ctx.REST() != nil && ctx.CLIENT() != nil {

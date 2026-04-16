@@ -550,19 +550,35 @@ func (e *Executor) createExternalEntities(s *ast.CreateExternalEntitiesStmt) err
 				})
 			}
 
-			// Default Updatable for attributes follows the entity-set's
-			// UpdateRestrictions when available; otherwise falls back to true
-			// for non-top-level entities and false for top-level (matching
-			// TripPin's pattern where attributes are read-only on writable
-			// entity sets but mutable on contained types).
-			defaultUpdatable := !isTopLevel
+			// Default Creatable / Updatable for attributes. For top-level
+			// entities the default follows the entity set's Insert/Update
+			// restrictions — missing annotations mean read-only (Mendix
+			// Studio Pro applies the same conservative default, and
+			// mxbuild treats silent metadata as non-writable). For
+			// non-top-level (contained/derived) entities both default to
+			// true, matching Studio Pro's output where contained types are
+			// mutated via their parent's write flow.
+			defaultCreatable := false
+			defaultUpdatable := false
+			if !isTopLevel {
+				defaultCreatable = true
+				defaultUpdatable = true
+			}
+			if entitySet != nil && entitySet.Insertable != nil {
+				defaultCreatable = *entitySet.Insertable
+			}
 			if entitySet != nil && entitySet.Updatable != nil {
 				defaultUpdatable = *entitySet.Updatable
 			}
-			// Default Creatable for attributes follows InsertRestrictions.
-			defaultCreatable := true
-			if entitySet != nil && entitySet.Insertable != nil {
-				defaultCreatable = *entitySet.Insertable
+			nonInsertable := make(map[string]bool)
+			nonUpdatable := make(map[string]bool)
+			if entitySet != nil {
+				for _, name := range entitySet.NonInsertableProperties {
+					nonInsertable[name] = true
+				}
+				for _, name := range entitySet.NonUpdatableProperties {
+					nonUpdatable[name] = true
+				}
 			}
 
 			// Build attributes from merged properties
@@ -584,6 +600,15 @@ func (e *Executor) createExternalEntities(s *ast.CreateExternalEntitiesStmt) err
 					continue
 				}
 
+				creatable := defaultCreatable
+				updatable := defaultUpdatable
+				if nonInsertable[p.Name] || p.Computed {
+					creatable = false
+				}
+				if nonUpdatable[p.Name] || p.Computed || p.Immutable {
+					updatable = false
+				}
+
 				attrName := attrNameForOData(p.Name, et.Name)
 				attr := &domainmodel.Attribute{
 					Name:       attrName,
@@ -592,8 +617,8 @@ func (e *Executor) createExternalEntities(s *ast.CreateExternalEntitiesStmt) err
 					RemoteType: p.Type,
 					Filterable: true,
 					Sortable:   true,
-					Creatable:  defaultCreatable,
-					Updatable:  defaultUpdatable,
+					Creatable:  creatable,
+					Updatable:  updatable,
 				}
 				attr.ID = model.ID(mpr.GenerateID())
 				attrs = append(attrs, attr)
@@ -1059,14 +1084,15 @@ func applyExternalEntityFields(
 		ent.Persistable = true
 		ent.RemoteEntitySet = entitySet.Name
 		ent.Countable = true
-		// Capabilities default to true unless the entity set's annotations
-		// say otherwise.
-		ent.Creatable = entitySet.Insertable == nil || *entitySet.Insertable
-		ent.Updatable = entitySet.Updatable == nil || *entitySet.Updatable
-		// Deletable defaults to false in TripPin and most read-mostly OData
-		// services, so default to the annotation value when present and to
-		// false otherwise.
+		// Capabilities default to false when the entity set's Capabilities
+		// annotations are absent. Silent metadata means the service doesn't
+		// advertise write support, so Mendix treats it as read-only — this
+		// matches Studio Pro's behaviour and mxbuild's validation rules.
+		// Rest$ODataRemoteEntitySource has no Updatable field; updatability
+		// is expressed per attribute via Rest$ODataMappedValue.
+		ent.Creatable = entitySet.Insertable != nil && *entitySet.Insertable
 		ent.Deletable = entitySet.Deletable != nil && *entitySet.Deletable
+		ent.Updatable = false
 		ent.SkipSupported = true
 		ent.TopSupported = true
 		ent.CreateChangeLocally = false

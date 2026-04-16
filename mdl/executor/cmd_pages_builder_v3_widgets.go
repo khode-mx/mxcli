@@ -126,6 +126,14 @@ func (pb *pageBuilder) buildDataGridV3(w *ast.WidgetV3) (*pages.CustomWidget, er
 		switch strings.ToUpper(child.Type) {
 		case "COLUMN":
 			attr := child.GetAttribute()
+			// Sugar: when no explicit Attribute: property is given, fall back to
+			// the column's name. This lets `COLUMN Sku (Caption: 'SKU')` work
+			// without repeating `Attribute: Sku`. If the name starts with a
+			// lowercase prefix like "col" (convention for decoration), it won't
+			// resolve to a real attribute — and mx check will flag it later.
+			if attr == "" && child.Name != "" {
+				attr = child.Name
+			}
 			col := ast.DataGridColumnDef{
 				Attribute:  attr,
 				Caption:    child.GetCaption(),

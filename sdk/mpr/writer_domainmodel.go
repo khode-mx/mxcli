@@ -928,7 +928,6 @@ func serializeODataRemoteEntitySource(e *domainmodel.Entity) bson.D {
 		bson.E{Key: "SkipSupported", Value: e.SkipSupported},
 		bson.E{Key: "SourceDocument", Value: e.RemoteServiceName},
 		bson.E{Key: "TopSupported", Value: e.TopSupported},
-		bson.E{Key: "Updatable", Value: e.Updatable},
 	)
 	return doc
 }

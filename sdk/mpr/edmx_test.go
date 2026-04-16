@@ -242,6 +242,149 @@ func TestParseEdmxEmpty(t *testing.T) {
 	}
 }
 
+const testCapabilitiesMetadata = `<?xml version="1.0" encoding="utf-8"?>
+<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx">
+  <edmx:DataServices>
+    <Schema Namespace="DefaultNamespace" xmlns="http://docs.oasis-open.org/odata/ns/edm">
+      <EntityType Name="Order">
+        <Key><PropertyRef Name="OrderId" /></Key>
+        <Property Name="OrderId" Type="Edm.Int64" Nullable="false">
+          <Annotation Term="Org.OData.Core.V1.Computed" Bool="true" />
+        </Property>
+        <Property Name="OrderNumber" Type="Edm.String" MaxLength="32">
+          <Annotation Term="Org.OData.Core.V1.Immutable" Bool="true" />
+        </Property>
+        <Property Name="CustomerName" Type="Edm.String" MaxLength="200" />
+      </EntityType>
+      <EntityType Name="OrderLine">
+        <Key><PropertyRef Name="LineId" /></Key>
+        <Property Name="LineId" Type="Edm.Int64" Nullable="false" />
+      </EntityType>
+      <EntityContainer Name="Container">
+        <EntitySet Name="Orders" EntityType="DefaultNamespace.Order">
+          <Annotation Term="Org.OData.Capabilities.V1.InsertRestrictions">
+            <Record>
+              <PropertyValue Property="Insertable" Bool="true" />
+              <PropertyValue Property="NonInsertableProperties">
+                <Collection>
+                  <PropertyPath>OrderId</PropertyPath>
+                </Collection>
+              </PropertyValue>
+              <PropertyValue Property="NonInsertableNavigationProperties">
+                <Collection>
+                  <NavigationPropertyPath>Lines</NavigationPropertyPath>
+                </Collection>
+              </PropertyValue>
+            </Record>
+          </Annotation>
+          <Annotation Term="Org.OData.Capabilities.V1.UpdateRestrictions">
+            <Record>
+              <PropertyValue Property="Updatable" Bool="true" />
+              <PropertyValue Property="NonUpdatableProperties">
+                <Collection>
+                  <PropertyPath>OrderId</PropertyPath>
+                  <PropertyPath>OrderNumber</PropertyPath>
+                </Collection>
+              </PropertyValue>
+            </Record>
+          </Annotation>
+          <Annotation Term="Org.OData.Capabilities.V1.DeleteRestrictions">
+            <Record><PropertyValue Property="Deletable" Bool="true" /></Record>
+          </Annotation>
+        </EntitySet>
+        <EntitySet Name="OrderLines" EntityType="DefaultNamespace.OrderLine" />
+      </EntityContainer>
+    </Schema>
+  </edmx:DataServices>
+</edmx:Edmx>`
+
+func TestParseEdmxCapabilityAnnotations(t *testing.T) {
+	doc, err := ParseEdmx(testCapabilitiesMetadata)
+	if err != nil {
+		t.Fatalf("ParseEdmx failed: %v", err)
+	}
+
+	// Find the Orders entity set.
+	var orders *EdmEntitySet
+	for _, es := range doc.EntitySets {
+		if es.Name == "Orders" {
+			orders = es
+		}
+	}
+	if orders == nil {
+		t.Fatal("Orders entity set not found")
+	}
+
+	if orders.Insertable == nil || !*orders.Insertable {
+		t.Errorf("Orders.Insertable = %v, want true", orders.Insertable)
+	}
+	if orders.Updatable == nil || !*orders.Updatable {
+		t.Errorf("Orders.Updatable = %v, want true", orders.Updatable)
+	}
+	if orders.Deletable == nil || !*orders.Deletable {
+		t.Errorf("Orders.Deletable = %v, want true", orders.Deletable)
+	}
+
+	wantNonIns := []string{"OrderId"}
+	if !stringSliceEqual(orders.NonInsertableProperties, wantNonIns) {
+		t.Errorf("NonInsertableProperties = %v, want %v", orders.NonInsertableProperties, wantNonIns)
+	}
+	wantNonUpd := []string{"OrderId", "OrderNumber"}
+	if !stringSliceEqual(orders.NonUpdatableProperties, wantNonUpd) {
+		t.Errorf("NonUpdatableProperties = %v, want %v", orders.NonUpdatableProperties, wantNonUpd)
+	}
+	wantNonInsNav := []string{"Lines"}
+	if !stringSliceEqual(orders.NonInsertableNavigationProperties, wantNonInsNav) {
+		t.Errorf("NonInsertableNavigationProperties = %v, want %v", orders.NonInsertableNavigationProperties, wantNonInsNav)
+	}
+
+	// OrderLines has no annotations → all flags unset.
+	var lines *EdmEntitySet
+	for _, es := range doc.EntitySets {
+		if es.Name == "OrderLines" {
+			lines = es
+		}
+	}
+	if lines == nil {
+		t.Fatal("OrderLines entity set not found")
+	}
+	if lines.Insertable != nil || lines.Updatable != nil || lines.Deletable != nil {
+		t.Errorf("OrderLines should have nil capability flags, got Insertable=%v Updatable=%v Deletable=%v",
+			lines.Insertable, lines.Updatable, lines.Deletable)
+	}
+
+	// Per-property Computed/Immutable annotations.
+	order := doc.FindEntityType("DefaultNamespace.Order")
+	if order == nil {
+		t.Fatal("Order entity type not found")
+	}
+	propByName := map[string]*EdmProperty{}
+	for _, p := range order.Properties {
+		propByName[p.Name] = p
+	}
+	if !propByName["OrderId"].Computed {
+		t.Errorf("OrderId.Computed = false, want true")
+	}
+	if !propByName["OrderNumber"].Immutable {
+		t.Errorf("OrderNumber.Immutable = false, want true")
+	}
+	if propByName["CustomerName"].Computed || propByName["CustomerName"].Immutable {
+		t.Errorf("CustomerName should have no capability flags")
+	}
+}
+
+func stringSliceEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func TestResolveNavType(t *testing.T) {
 	tests := []struct {
 		input    string

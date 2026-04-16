@@ -2918,6 +2918,9 @@ showStatement
     | showOrList JAVASCRIPT ACTIONS (IN (qualifiedName | IDENTIFIER))?
     | showOrList IMAGE COLLECTION (IN (qualifiedName | IDENTIFIER))?
     | showOrList MODELS (IN (qualifiedName | IDENTIFIER))?
+    | showOrList AGENTS (IN (qualifiedName | IDENTIFIER))?
+    | showOrList KNOWLEDGE BASES (IN (qualifiedName | IDENTIFIER))?
+    | showOrList CONSUMED MCP SERVICES (IN (qualifiedName | IDENTIFIER))?
     | showOrList JSON STRUCTURES (IN (qualifiedName | IDENTIFIER))?
     | showOrList IMPORT MAPPINGS (IN (qualifiedName | IDENTIFIER))?
     | showOrList EXPORT MAPPINGS (IN (qualifiedName | IDENTIFIER))?
@@ -3036,7 +3039,7 @@ describeStatement
     | DESCRIBE CONSTANT qualifiedName
     | DESCRIBE JAVA ACTION qualifiedName
     | DESCRIBE JAVASCRIPT ACTION qualifiedName
-    | DESCRIBE MODULE IDENTIFIER (WITH ALL)?  // DESCRIBE MODULE Name [WITH ALL] - optionally include all objects
+    | DESCRIBE MODULE identifierOrKeyword (WITH ALL)?  // DESCRIBE MODULE Name [WITH ALL] - optionally include all objects
     | DESCRIBE MODULE ROLE qualifiedName        // DESCRIBE MODULE ROLE Module.RoleName
     | DESCRIBE USER ROLE STRING_LITERAL          // DESCRIBE USER ROLE 'Administrator'
     | DESCRIBE DEMO USER STRING_LITERAL          // DESCRIBE DEMO USER 'demo_admin'
@@ -3053,6 +3056,9 @@ describeStatement
     | DESCRIBE FRAGMENT FROM SNIPPET qualifiedName WIDGET identifierOrKeyword  // DESCRIBE FRAGMENT FROM SNIPPET Module.Snippet WIDGET name
     | DESCRIBE IMAGE COLLECTION qualifiedName           // DESCRIBE IMAGE COLLECTION Module.Name
     | DESCRIBE MODEL qualifiedName                      // DESCRIBE MODEL Module.Name (agent-editor)
+    | DESCRIBE AGENT qualifiedName                      // DESCRIBE AGENT Module.Name (agent-editor)
+    | DESCRIBE KNOWLEDGE BASE qualifiedName             // DESCRIBE KNOWLEDGE BASE Module.Name
+    | DESCRIBE CONSUMED MCP SERVICE qualifiedName       // DESCRIBE CONSUMED MCP SERVICE Module.Name
     | DESCRIBE JSON STRUCTURE qualifiedName              // DESCRIBE JSON STRUCTURE Module.Name
     | DESCRIBE IMPORT MAPPING qualifiedName             // DESCRIBE IMPORT MAPPING Module.Name
     | DESCRIBE EXPORT MAPPING qualifiedName             // DESCRIBE EXPORT MAPPING Module.Name
@@ -3658,6 +3664,9 @@ keyword
     | ACTIONS | COLLECTION | FOLDER | LAYOUT | LAYOUTS | LOCAL | MODEL | MODELS | MODULE | MODULES
     | NOTEBOOK | NOTEBOOKS | PAGE | PAGES | PROJECT | SNIPPET | SNIPPETS
     | STORE | STRUCTURE | STRUCTURES | VIEW
+
+    // Agent editor
+    | AGENT | AGENTS | KNOWLEDGE | BASES | CONSUMED | MCP
 
     // Microflow / Nanoflow
     | MICROFLOW | MICROFLOWS | NANOFLOW | NANOFLOWS

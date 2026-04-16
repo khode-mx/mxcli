@@ -112,6 +112,12 @@ func (e *Executor) execShow(s *ast.ShowStmt) error {
 		return e.showImageCollections(s.InModule)
 	case ast.ShowModels:
 		return e.showAgentEditorModels(s.InModule)
+	case ast.ShowAgents:
+		return e.showAgentEditorAgents(s.InModule)
+	case ast.ShowKnowledgeBases:
+		return e.showAgentEditorKnowledgeBases(s.InModule)
+	case ast.ShowConsumedMCPServices:
+		return e.showAgentEditorConsumedMCPServices(s.InModule)
 	case ast.ShowRestClients:
 		return e.showRestClients(s.InModule)
 	case ast.ShowPublishedRestServices:
@@ -200,6 +206,12 @@ func (e *Executor) execDescribe(s *ast.DescribeStmt) error {
 			return e.describeImageCollection(s.Name)
 		case ast.DescribeModel:
 			return e.describeAgentEditorModel(s.Name)
+		case ast.DescribeAgent:
+			return e.describeAgentEditorAgent(s.Name)
+		case ast.DescribeKnowledgeBase:
+			return e.describeAgentEditorKnowledgeBase(s.Name)
+		case ast.DescribeConsumedMCPService:
+			return e.describeAgentEditorConsumedMCPService(s.Name)
 		case ast.DescribeRestClient:
 			return e.describeRestClient(s.Name)
 		case ast.DescribePublishedRestService:
@@ -279,6 +291,12 @@ func describeObjectTypeLabel(t ast.DescribeObjectType) string {
 		return "imagecollection"
 	case ast.DescribeModel:
 		return "model"
+	case ast.DescribeAgent:
+		return "agent"
+	case ast.DescribeKnowledgeBase:
+		return "knowledgebase"
+	case ast.DescribeConsumedMCPService:
+		return "consumedmcpservice"
 	case ast.DescribeRestClient:
 		return "restclient"
 	case ast.DescribePublishedRestService:
