@@ -60,40 +60,40 @@ type Owner struct {
 
 // EndpointDetails represents the full response from GET /endpoints/{uuid}.
 type EndpointDetails struct {
-	UUID                   string                `json:"uuid"`
-	Path                   string                `json:"path"`
-	Location               string                `json:"location"`
-	Discoverable           bool                  `json:"discoverable"`
-	Validated              bool                  `json:"validated"`
-	SecurityClassification string                `json:"securityClassification"`
-	Connections            int                   `json:"connections"`
-	LastUpdated            string                `json:"lastUpdated"`
-	ServiceVersion         ServiceVersion        `json:"serviceVersion"`
-	Environment            EnvironmentWithApp    `json:"environment"`
+	UUID                   string             `json:"uuid"`
+	Path                   string             `json:"path"`
+	Location               string             `json:"location"`
+	Discoverable           bool               `json:"discoverable"`
+	Validated              bool               `json:"validated"`
+	SecurityClassification string             `json:"securityClassification"`
+	Connections            int                `json:"connections"`
+	LastUpdated            string             `json:"lastUpdated"`
+	ServiceVersion         ServiceVersion     `json:"serviceVersion"`
+	Environment            EnvironmentWithApp `json:"environment"`
 }
 
 // EnvironmentWithApp extends Environment with nested Application (used in endpoint details).
 type EnvironmentWithApp struct {
-	Name     string      `json:"name"`
-	Location string      `json:"location"`
-	Type     string      `json:"type"`
-	UUID     string      `json:"uuid"`
+	Name        string      `json:"name"`
+	Location    string      `json:"location"`
+	Type        string      `json:"type"`
+	UUID        string      `json:"uuid"`
 	Application Application `json:"application"`
 }
 
 // ServiceVersion contains version-specific metadata and contract.
 type ServiceVersion struct {
-	Version         string           `json:"version"`
-	Description     string           `json:"description"`
-	UUID            string           `json:"uuid"`
-	PublishDate     string           `json:"publishDate"`
-	Type            string           `json:"type"` // "OData", "REST", "SOAP"
-	Contracts       []Contract       `json:"contracts"`
-	SecurityScheme  *SecurityScheme  `json:"securityScheme,omitempty"`
-	TotalEntities   int              `json:"totalEntities"`
-	Entities        []Entity         `json:"entities"`
-	TotalActions    int              `json:"totalActions"`
-	Actions         []Action         `json:"actions"`
+	Version        string          `json:"version"`
+	Description    string          `json:"description"`
+	UUID           string          `json:"uuid"`
+	PublishDate    string          `json:"publishDate"`
+	Type           string          `json:"type"` // "OData", "REST", "SOAP"
+	Contracts      []Contract      `json:"contracts"`
+	SecurityScheme *SecurityScheme `json:"securityScheme,omitempty"`
+	TotalEntities  int             `json:"totalEntities"`
+	Entities       []Entity        `json:"entities"`
+	TotalActions   int             `json:"totalActions"`
+	Actions        []Action        `json:"actions"`
 }
 
 // Contract represents an API contract (metadata, OpenAPI, WSDL, etc).
@@ -168,13 +168,13 @@ type Association struct {
 
 // Action represents an OData action or function.
 type Action struct {
-	Name                string      `json:"name"`
-	FullyQualifiedName  string      `json:"fullyQualifiedName"`
-	Summary             string      `json:"summary"`
-	Description         string      `json:"description"`
-	TotalParameters     int         `json:"totalParameters"`
-	Parameters          []Parameter `json:"parameters"`
-	ReturnType          *ReturnType `json:"returnType,omitempty"`
+	Name               string      `json:"name"`
+	FullyQualifiedName string      `json:"fullyQualifiedName"`
+	Summary            string      `json:"summary"`
+	Description        string      `json:"description"`
+	TotalParameters    int         `json:"totalParameters"`
+	Parameters         []Parameter `json:"parameters"`
+	ReturnType         *ReturnType `json:"returnType,omitempty"`
 }
 
 // Parameter represents an action/function parameter.
