@@ -4,6 +4,15 @@ All notable changes to mxcli will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **Local file metadata for OData clients** — `CREATE ODATA CLIENT` now supports `file://` URLs and relative paths for `MetadataUrl`, enabling offline development, reproducible testing, and version-pinned contracts (#206)
+- **Path normalization** — Relative paths in `MetadataUrl` are automatically converted to absolute `file://` URLs for Studio Pro compatibility
+- **ServiceUrl validation** — `ServiceUrl` parameter must now be a constant reference (e.g., `@Module.ConstantName`) to enforce Mendix best practice
+- **Shared URL utilities** — `internal/pathutil` package with `NormalizeURL()`, `URIToPath()`, and `PathFromURL()` for reuse across components
+
 ## [0.6.0] - 2026-04-09
 
 ### Added
