@@ -993,7 +993,13 @@ func (e *Executor) createODataClient(stmt *ast.CreateODataClientStmt) error {
 		if stmt.ServiceUrl != "" {
 			// ServiceUrl must be a constant reference (e.g., @Module.ConstantName)
 			if !strings.HasPrefix(stmt.ServiceUrl, "@") {
-				return fmt.Errorf("ServiceUrl must be a constant reference starting with '@' (e.g., '@Module.LocationConstant'), got: %s", stmt.ServiceUrl)
+				return fmt.Errorf(`ServiceUrl must now be a constant reference (e.g., '@Module.ApiLocation').
+Previously literal URLs were allowed; this enforces the Mendix best practice of externalizing configuration.
+Create a constant first:
+  CREATE CONSTANT Module.ApiLocation TYPE String DEFAULT 'https://api.example.com/';
+Then reference it:
+  ServiceUrl: '@Module.ApiLocation'
+Got: %s`, stmt.ServiceUrl)
 			}
 			cfg.OverrideLocation = true
 			cfg.CustomLocation = stmt.ServiceUrl
@@ -1022,7 +1028,7 @@ func (e *Executor) createODataClient(stmt *ast.CreateODataClientStmt) error {
 		}
 		newSvc.MetadataUrl = normalizedUrl
 
-		metadata, hash, err := fetchODataMetadata(normalizedUrl, mprDir)
+		metadata, hash, err := fetchODataMetadata(normalizedUrl)
 		if err != nil {
 			fmt.Fprintf(e.output, "Warning: could not fetch $metadata: %v\n", err)
 		} else if metadata != "" {
@@ -1427,46 +1433,26 @@ func astEntityDefToModel(def *ast.PublishedEntityDef) (*model.PublishedEntityTyp
 // fetchODataMetadata downloads or reads the $metadata document.
 // Supports:
 //   - https://... or http://... (HTTP fetch)
-//   - file:///abs/path (local absolute path)
-//   - ./path or path/file.xml (local relative path, resolved against mprDir)
+//   - file:///abs/path (local absolute path from normalized URL)
 //
 // Returns the metadata XML and its SHA-256 hash, or empty strings if the fetch fails.
-// If mprDir is empty and a relative path is given, resolves against cwd.
-func fetchODataMetadata(metadataUrl string, mprDir string) (metadata string, hash string, err error) {
+// Note: metadataUrl is expected to be already normalized by NormalizeURL() in createODataClient,
+// so all relative paths have been converted to absolute file:// URLs.
+func fetchODataMetadata(metadataUrl string) (metadata string, hash string, err error) {
 	if metadataUrl == "" {
 		return "", "", nil
 	}
 
 	var body []byte
 
-	// Detect if this is a local file path (file:// or not http/https)
-	isHTTP := strings.HasPrefix(metadataUrl, "http://") || strings.HasPrefix(metadataUrl, "https://")
+	// At this point, metadataUrl is already normalized by NormalizeURL() in createODataClient:
+	// - Relative paths have been converted to absolute file:// URLs
+	// - HTTP(S) URLs are unchanged
+	// So we only need to distinguish file:// vs HTTP(S)
 
-	if !isHTTP {
-		// Local file path - extract and resolve
-		filePath := metadataUrl
-		if strings.HasPrefix(metadataUrl, "file://") {
-			filePath = pathutil.URIToPath(metadataUrl)
-			if filePath == "" {
-				return "", "", fmt.Errorf("invalid file:// URI: %s", metadataUrl)
-			}
-		}
-
-		// Resolve relative paths
-		if !filepath.IsAbs(filePath) {
-			if mprDir != "" {
-				filePath = filepath.Join(mprDir, filePath)
-			} else {
-				// No project loaded - use cwd
-				cwd, err := os.Getwd()
-				if err != nil {
-					return "", "", fmt.Errorf("failed to resolve relative path: %w", err)
-				}
-				filePath = filepath.Join(cwd, filePath)
-			}
-		}
-
-		// Read local file
+	filePath := pathutil.PathFromURL(metadataUrl)
+	if filePath != "" {
+		// Local file - read directly (path is already absolute)
 		body, err = os.ReadFile(filePath)
 		if err != nil {
 			return "", "", fmt.Errorf("failed to read local metadata file %s: %w", filePath, err)

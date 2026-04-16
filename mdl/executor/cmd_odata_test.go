@@ -20,41 +20,26 @@ func TestFetchODataMetadata_LocalFile(t *testing.T) {
 		t.Fatalf("Failed to create test metadata file: %v", err)
 	}
 
+	// Convert to proper file:// URL (RFC 8089 compliant)
+	fileURL, err := pathutil.NormalizeURL(metadataPath, tmpDir)
+	if err != nil {
+		t.Fatalf("Failed to normalize path: %v", err)
+	}
+
 	tests := []struct {
 		name        string
 		url         string
-		mprDir      string
 		wantErr     bool
 		errContains string
 	}{
 		{
-			name:    "absolute file:// URL",
-			url:     "file://" + metadataPath,
-			mprDir:  "",
-			wantErr: false,
-		},
-		{
-			name:    "absolute path without file://",
-			url:     metadataPath,
-			mprDir:  "",
-			wantErr: false,
-		},
-		{
-			name:    "relative path with mprDir",
-			url:     "metadata.xml",
-			mprDir:  tmpDir,
-			wantErr: false,
-		},
-		{
-			name:    "relative path with ./ prefix",
-			url:     "./metadata.xml",
-			mprDir:  tmpDir,
+			name:    "RFC 8089 file:// URL",
+			url:     fileURL,
 			wantErr: false,
 		},
 		{
 			name:        "nonexistent file",
 			url:         "file:///nonexistent/metadata.xml",
-			mprDir:      "",
 			wantErr:     true,
 			errContains: "failed to read local metadata file",
 		},
@@ -62,7 +47,7 @@ func TestFetchODataMetadata_LocalFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			metadata, hash, err := fetchODataMetadata(tt.url, tt.mprDir)
+			metadata, hash, err := fetchODataMetadata(tt.url)
 
 			if tt.wantErr {
 				if err == nil {
@@ -87,7 +72,7 @@ func TestFetchODataMetadata_LocalFile(t *testing.T) {
 			}
 
 			// Hash should be consistent
-			_, hash2, _ := fetchODataMetadata(tt.url, tt.mprDir)
+			_, hash2, _ := fetchODataMetadata(tt.url)
 			if hash != hash2 {
 				t.Errorf("Hash inconsistent between calls: %q vs %q", hash, hash2)
 			}
@@ -180,20 +165,24 @@ func TestNormalizeMetadataUrl(t *testing.T) {
 	}
 }
 
-func TestFetchODataMetadata_RelativePathWithoutProject(t *testing.T) {
-	// Create metadata file in current directory
+func TestFetchODataMetadata_LocalFileAbsolute(t *testing.T) {
+	// Create metadata file with absolute path
 	tmpDir := t.TempDir()
-	oldCwd, _ := os.Getwd()
-	defer os.Chdir(oldCwd)
-	os.Chdir(tmpDir)
 
 	metadataContent := `<?xml version="1.0"?><edmx:Edmx xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx" Version="4.0"></edmx:Edmx>`
-	if err := os.WriteFile("local.xml", []byte(metadataContent), 0644); err != nil {
+	filePath := filepath.Join(tmpDir, "local.xml")
+	if err := os.WriteFile(filePath, []byte(metadataContent), 0644); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	// Test with empty mprDir (should resolve against cwd)
-	metadata, hash, err := fetchODataMetadata("local.xml", "")
+	// Convert to file:// URL (simulates what NormalizeURL does)
+	fileURL := "file://" + filepath.ToSlash(filePath)
+	if !strings.HasPrefix(filePath, "/") {
+		// Windows: add leading slash for RFC 8089 compliance
+		fileURL = "file:///" + filepath.ToSlash(filePath)
+	}
+
+	metadata, hash, err := fetchODataMetadata(fileURL)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}

@@ -78,7 +78,13 @@ func NormalizeURL(rawURL string, baseDir string) (string, error) {
 	}
 
 	// Return as file:// URL with forward slashes (cross-platform)
-	return "file://" + filepath.ToSlash(absPath), nil
+	// RFC 8089 requires three slashes: file:///path or file:///C:/path
+	slashed := filepath.ToSlash(absPath)
+	if !strings.HasPrefix(slashed, "/") {
+		// Windows path like C:/Users/x needs leading slash: file:///C:/Users/x
+		slashed = "/" + slashed
+	}
+	return "file://" + slashed, nil
 }
 
 // PathFromURL extracts a filesystem path from a URL, handling both file:// URLs and HTTP(S) URLs.
