@@ -4,6 +4,12 @@ All notable changes to mxcli will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **mxcli catalog search** — Search Mendix Catalog for data sources and services with filters for service type, environment, and ownership (#213)
+
 ## [0.6.0] - 2026-04-09
 
 ### Added
