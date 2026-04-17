@@ -10,435 +10,435 @@ import "github.com/mendixlabs/mxcli/mdl/ast"
 // by direct function references.
 
 func registerConnectionHandlers(r *Registry) {
-	r.Register(&ast.ConnectStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execConnect(stmt.(*ast.ConnectStmt))
+	r.Register(&ast.ConnectStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execConnect(stmt.(*ast.ConnectStmt))
 	})
-	r.Register(&ast.DisconnectStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execDisconnect()
+	r.Register(&ast.DisconnectStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execDisconnect()
 	})
-	r.Register(&ast.StatusStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execStatus()
+	r.Register(&ast.StatusStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execStatus()
 	})
 }
 
 func registerModuleHandlers(r *Registry) {
-	r.Register(&ast.CreateModuleStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execCreateModule(stmt.(*ast.CreateModuleStmt))
+	r.Register(&ast.CreateModuleStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execCreateModule(stmt.(*ast.CreateModuleStmt))
 	})
-	r.Register(&ast.DropModuleStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execDropModule(stmt.(*ast.DropModuleStmt))
+	r.Register(&ast.DropModuleStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execDropModule(stmt.(*ast.DropModuleStmt))
 	})
 }
 
 func registerEnumerationHandlers(r *Registry) {
-	r.Register(&ast.CreateEnumerationStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execCreateEnumeration(stmt.(*ast.CreateEnumerationStmt))
+	r.Register(&ast.CreateEnumerationStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execCreateEnumeration(stmt.(*ast.CreateEnumerationStmt))
 	})
-	r.Register(&ast.AlterEnumerationStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execAlterEnumeration(stmt.(*ast.AlterEnumerationStmt))
+	r.Register(&ast.AlterEnumerationStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execAlterEnumeration(stmt.(*ast.AlterEnumerationStmt))
 	})
-	r.Register(&ast.DropEnumerationStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execDropEnumeration(stmt.(*ast.DropEnumerationStmt))
+	r.Register(&ast.DropEnumerationStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execDropEnumeration(stmt.(*ast.DropEnumerationStmt))
 	})
 }
 
 func registerConstantHandlers(r *Registry) {
-	r.Register(&ast.CreateConstantStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.createConstant(stmt.(*ast.CreateConstantStmt))
+	r.Register(&ast.CreateConstantStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.createConstant(stmt.(*ast.CreateConstantStmt))
 	})
-	r.Register(&ast.DropConstantStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.dropConstant(stmt.(*ast.DropConstantStmt))
+	r.Register(&ast.DropConstantStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.dropConstant(stmt.(*ast.DropConstantStmt))
 	})
 }
 
 func registerDatabaseConnectionHandlers(r *Registry) {
-	r.Register(&ast.CreateDatabaseConnectionStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.createDatabaseConnection(stmt.(*ast.CreateDatabaseConnectionStmt))
+	r.Register(&ast.CreateDatabaseConnectionStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.createDatabaseConnection(stmt.(*ast.CreateDatabaseConnectionStmt))
 	})
 }
 
 func registerEntityHandlers(r *Registry) {
-	r.Register(&ast.CreateEntityStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execCreateEntity(stmt.(*ast.CreateEntityStmt))
+	r.Register(&ast.CreateEntityStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execCreateEntity(stmt.(*ast.CreateEntityStmt))
 	})
-	r.Register(&ast.CreateViewEntityStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execCreateViewEntity(stmt.(*ast.CreateViewEntityStmt))
+	r.Register(&ast.CreateViewEntityStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execCreateViewEntity(stmt.(*ast.CreateViewEntityStmt))
 	})
-	r.Register(&ast.AlterEntityStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execAlterEntity(stmt.(*ast.AlterEntityStmt))
+	r.Register(&ast.AlterEntityStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execAlterEntity(stmt.(*ast.AlterEntityStmt))
 	})
-	r.Register(&ast.DropEntityStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execDropEntity(stmt.(*ast.DropEntityStmt))
+	r.Register(&ast.DropEntityStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execDropEntity(stmt.(*ast.DropEntityStmt))
 	})
 }
 
 func registerAssociationHandlers(r *Registry) {
-	r.Register(&ast.CreateAssociationStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execCreateAssociation(stmt.(*ast.CreateAssociationStmt))
+	r.Register(&ast.CreateAssociationStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execCreateAssociation(stmt.(*ast.CreateAssociationStmt))
 	})
-	r.Register(&ast.AlterAssociationStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execAlterAssociation(stmt.(*ast.AlterAssociationStmt))
+	r.Register(&ast.AlterAssociationStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execAlterAssociation(stmt.(*ast.AlterAssociationStmt))
 	})
-	r.Register(&ast.DropAssociationStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execDropAssociation(stmt.(*ast.DropAssociationStmt))
+	r.Register(&ast.DropAssociationStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execDropAssociation(stmt.(*ast.DropAssociationStmt))
 	})
 }
 
 func registerMicroflowHandlers(r *Registry) {
-	r.Register(&ast.CreateMicroflowStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execCreateMicroflow(stmt.(*ast.CreateMicroflowStmt))
+	r.Register(&ast.CreateMicroflowStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execCreateMicroflow(stmt.(*ast.CreateMicroflowStmt))
 	})
-	r.Register(&ast.DropMicroflowStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execDropMicroflow(stmt.(*ast.DropMicroflowStmt))
+	r.Register(&ast.DropMicroflowStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execDropMicroflow(stmt.(*ast.DropMicroflowStmt))
 	})
 }
 
 func registerPageHandlers(r *Registry) {
-	r.Register(&ast.CreatePageStmtV3{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execCreatePageV3(stmt.(*ast.CreatePageStmtV3))
+	r.Register(&ast.CreatePageStmtV3{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execCreatePageV3(stmt.(*ast.CreatePageStmtV3))
 	})
-	r.Register(&ast.DropPageStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execDropPage(stmt.(*ast.DropPageStmt))
+	r.Register(&ast.DropPageStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execDropPage(stmt.(*ast.DropPageStmt))
 	})
-	r.Register(&ast.CreateSnippetStmtV3{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execCreateSnippetV3(stmt.(*ast.CreateSnippetStmtV3))
+	r.Register(&ast.CreateSnippetStmtV3{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execCreateSnippetV3(stmt.(*ast.CreateSnippetStmtV3))
 	})
-	r.Register(&ast.DropSnippetStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execDropSnippet(stmt.(*ast.DropSnippetStmt))
+	r.Register(&ast.DropSnippetStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execDropSnippet(stmt.(*ast.DropSnippetStmt))
 	})
-	r.Register(&ast.DropJavaActionStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execDropJavaAction(stmt.(*ast.DropJavaActionStmt))
+	r.Register(&ast.DropJavaActionStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execDropJavaAction(stmt.(*ast.DropJavaActionStmt))
 	})
-	r.Register(&ast.CreateJavaActionStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execCreateJavaAction(stmt.(*ast.CreateJavaActionStmt))
+	r.Register(&ast.CreateJavaActionStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execCreateJavaAction(stmt.(*ast.CreateJavaActionStmt))
 	})
-	r.Register(&ast.DropFolderStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execDropFolder(stmt.(*ast.DropFolderStmt))
+	r.Register(&ast.DropFolderStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execDropFolder(stmt.(*ast.DropFolderStmt))
 	})
-	r.Register(&ast.MoveFolderStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execMoveFolder(stmt.(*ast.MoveFolderStmt))
+	r.Register(&ast.MoveFolderStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execMoveFolder(stmt.(*ast.MoveFolderStmt))
 	})
-	r.Register(&ast.MoveStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execMove(stmt.(*ast.MoveStmt))
+	r.Register(&ast.MoveStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execMove(stmt.(*ast.MoveStmt))
 	})
-	r.Register(&ast.RenameStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execRename(stmt.(*ast.RenameStmt))
+	r.Register(&ast.RenameStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execRename(stmt.(*ast.RenameStmt))
 	})
 }
 
 func registerSecurityHandlers(r *Registry) {
-	r.Register(&ast.CreateModuleRoleStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execCreateModuleRole(stmt.(*ast.CreateModuleRoleStmt))
+	r.Register(&ast.CreateModuleRoleStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execCreateModuleRole(stmt.(*ast.CreateModuleRoleStmt))
 	})
-	r.Register(&ast.DropModuleRoleStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execDropModuleRole(stmt.(*ast.DropModuleRoleStmt))
+	r.Register(&ast.DropModuleRoleStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execDropModuleRole(stmt.(*ast.DropModuleRoleStmt))
 	})
-	r.Register(&ast.CreateUserRoleStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execCreateUserRole(stmt.(*ast.CreateUserRoleStmt))
+	r.Register(&ast.CreateUserRoleStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execCreateUserRole(stmt.(*ast.CreateUserRoleStmt))
 	})
-	r.Register(&ast.AlterUserRoleStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execAlterUserRole(stmt.(*ast.AlterUserRoleStmt))
+	r.Register(&ast.AlterUserRoleStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execAlterUserRole(stmt.(*ast.AlterUserRoleStmt))
 	})
-	r.Register(&ast.DropUserRoleStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execDropUserRole(stmt.(*ast.DropUserRoleStmt))
+	r.Register(&ast.DropUserRoleStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execDropUserRole(stmt.(*ast.DropUserRoleStmt))
 	})
-	r.Register(&ast.GrantEntityAccessStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execGrantEntityAccess(stmt.(*ast.GrantEntityAccessStmt))
+	r.Register(&ast.GrantEntityAccessStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execGrantEntityAccess(stmt.(*ast.GrantEntityAccessStmt))
 	})
-	r.Register(&ast.RevokeEntityAccessStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execRevokeEntityAccess(stmt.(*ast.RevokeEntityAccessStmt))
+	r.Register(&ast.RevokeEntityAccessStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execRevokeEntityAccess(stmt.(*ast.RevokeEntityAccessStmt))
 	})
-	r.Register(&ast.GrantMicroflowAccessStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execGrantMicroflowAccess(stmt.(*ast.GrantMicroflowAccessStmt))
+	r.Register(&ast.GrantMicroflowAccessStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execGrantMicroflowAccess(stmt.(*ast.GrantMicroflowAccessStmt))
 	})
-	r.Register(&ast.RevokeMicroflowAccessStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execRevokeMicroflowAccess(stmt.(*ast.RevokeMicroflowAccessStmt))
+	r.Register(&ast.RevokeMicroflowAccessStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execRevokeMicroflowAccess(stmt.(*ast.RevokeMicroflowAccessStmt))
 	})
-	r.Register(&ast.GrantPageAccessStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execGrantPageAccess(stmt.(*ast.GrantPageAccessStmt))
+	r.Register(&ast.GrantPageAccessStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execGrantPageAccess(stmt.(*ast.GrantPageAccessStmt))
 	})
-	r.Register(&ast.RevokePageAccessStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execRevokePageAccess(stmt.(*ast.RevokePageAccessStmt))
+	r.Register(&ast.RevokePageAccessStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execRevokePageAccess(stmt.(*ast.RevokePageAccessStmt))
 	})
-	r.Register(&ast.GrantWorkflowAccessStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execGrantWorkflowAccess(stmt.(*ast.GrantWorkflowAccessStmt))
+	r.Register(&ast.GrantWorkflowAccessStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execGrantWorkflowAccess(stmt.(*ast.GrantWorkflowAccessStmt))
 	})
-	r.Register(&ast.RevokeWorkflowAccessStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execRevokeWorkflowAccess(stmt.(*ast.RevokeWorkflowAccessStmt))
+	r.Register(&ast.RevokeWorkflowAccessStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execRevokeWorkflowAccess(stmt.(*ast.RevokeWorkflowAccessStmt))
 	})
-	r.Register(&ast.AlterProjectSecurityStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execAlterProjectSecurity(stmt.(*ast.AlterProjectSecurityStmt))
+	r.Register(&ast.AlterProjectSecurityStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execAlterProjectSecurity(stmt.(*ast.AlterProjectSecurityStmt))
 	})
-	r.Register(&ast.CreateDemoUserStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execCreateDemoUser(stmt.(*ast.CreateDemoUserStmt))
+	r.Register(&ast.CreateDemoUserStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execCreateDemoUser(stmt.(*ast.CreateDemoUserStmt))
 	})
-	r.Register(&ast.DropDemoUserStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execDropDemoUser(stmt.(*ast.DropDemoUserStmt))
+	r.Register(&ast.DropDemoUserStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execDropDemoUser(stmt.(*ast.DropDemoUserStmt))
 	})
-	r.Register(&ast.UpdateSecurityStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execUpdateSecurity(stmt.(*ast.UpdateSecurityStmt))
+	r.Register(&ast.UpdateSecurityStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execUpdateSecurity(stmt.(*ast.UpdateSecurityStmt))
 	})
 }
 
 func registerNavigationHandlers(r *Registry) {
-	r.Register(&ast.AlterNavigationStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execAlterNavigation(stmt.(*ast.AlterNavigationStmt))
+	r.Register(&ast.AlterNavigationStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execAlterNavigation(stmt.(*ast.AlterNavigationStmt))
 	})
 }
 
 func registerImageHandlers(r *Registry) {
-	r.Register(&ast.CreateImageCollectionStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execCreateImageCollection(stmt.(*ast.CreateImageCollectionStmt))
+	r.Register(&ast.CreateImageCollectionStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execCreateImageCollection(stmt.(*ast.CreateImageCollectionStmt))
 	})
-	r.Register(&ast.DropImageCollectionStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execDropImageCollection(stmt.(*ast.DropImageCollectionStmt))
+	r.Register(&ast.DropImageCollectionStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execDropImageCollection(stmt.(*ast.DropImageCollectionStmt))
 	})
 }
 
 func registerWorkflowHandlers(r *Registry) {
-	r.Register(&ast.CreateWorkflowStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execCreateWorkflow(stmt.(*ast.CreateWorkflowStmt))
+	r.Register(&ast.CreateWorkflowStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execCreateWorkflow(stmt.(*ast.CreateWorkflowStmt))
 	})
-	r.Register(&ast.DropWorkflowStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execDropWorkflow(stmt.(*ast.DropWorkflowStmt))
+	r.Register(&ast.DropWorkflowStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execDropWorkflow(stmt.(*ast.DropWorkflowStmt))
 	})
-	r.Register(&ast.AlterWorkflowStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execAlterWorkflow(stmt.(*ast.AlterWorkflowStmt))
+	r.Register(&ast.AlterWorkflowStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execAlterWorkflow(stmt.(*ast.AlterWorkflowStmt))
 	})
 }
 
 func registerBusinessEventHandlers(r *Registry) {
-	r.Register(&ast.CreateBusinessEventServiceStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.createBusinessEventService(stmt.(*ast.CreateBusinessEventServiceStmt))
+	r.Register(&ast.CreateBusinessEventServiceStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.createBusinessEventService(stmt.(*ast.CreateBusinessEventServiceStmt))
 	})
-	r.Register(&ast.DropBusinessEventServiceStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.dropBusinessEventService(stmt.(*ast.DropBusinessEventServiceStmt))
+	r.Register(&ast.DropBusinessEventServiceStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.dropBusinessEventService(stmt.(*ast.DropBusinessEventServiceStmt))
 	})
 }
 
 func registerSettingsHandlers(r *Registry) {
-	r.Register(&ast.AlterSettingsStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.alterSettings(stmt.(*ast.AlterSettingsStmt))
+	r.Register(&ast.AlterSettingsStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.alterSettings(stmt.(*ast.AlterSettingsStmt))
 	})
-	r.Register(&ast.CreateConfigurationStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.createConfiguration(stmt.(*ast.CreateConfigurationStmt))
+	r.Register(&ast.CreateConfigurationStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.createConfiguration(stmt.(*ast.CreateConfigurationStmt))
 	})
-	r.Register(&ast.DropConfigurationStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.dropConfiguration(stmt.(*ast.DropConfigurationStmt))
+	r.Register(&ast.DropConfigurationStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.dropConfiguration(stmt.(*ast.DropConfigurationStmt))
 	})
 }
 
 func registerODataHandlers(r *Registry) {
-	r.Register(&ast.CreateODataClientStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.createODataClient(stmt.(*ast.CreateODataClientStmt))
+	r.Register(&ast.CreateODataClientStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.createODataClient(stmt.(*ast.CreateODataClientStmt))
 	})
-	r.Register(&ast.AlterODataClientStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.alterODataClient(stmt.(*ast.AlterODataClientStmt))
+	r.Register(&ast.AlterODataClientStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.alterODataClient(stmt.(*ast.AlterODataClientStmt))
 	})
-	r.Register(&ast.DropODataClientStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.dropODataClient(stmt.(*ast.DropODataClientStmt))
+	r.Register(&ast.DropODataClientStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.dropODataClient(stmt.(*ast.DropODataClientStmt))
 	})
-	r.Register(&ast.CreateODataServiceStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.createODataService(stmt.(*ast.CreateODataServiceStmt))
+	r.Register(&ast.CreateODataServiceStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.createODataService(stmt.(*ast.CreateODataServiceStmt))
 	})
-	r.Register(&ast.AlterODataServiceStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.alterODataService(stmt.(*ast.AlterODataServiceStmt))
+	r.Register(&ast.AlterODataServiceStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.alterODataService(stmt.(*ast.AlterODataServiceStmt))
 	})
-	r.Register(&ast.DropODataServiceStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.dropODataService(stmt.(*ast.DropODataServiceStmt))
+	r.Register(&ast.DropODataServiceStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.dropODataService(stmt.(*ast.DropODataServiceStmt))
 	})
 }
 
 func registerJSONStructureHandlers(r *Registry) {
-	r.Register(&ast.CreateJsonStructureStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execCreateJsonStructure(stmt.(*ast.CreateJsonStructureStmt))
+	r.Register(&ast.CreateJsonStructureStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execCreateJsonStructure(stmt.(*ast.CreateJsonStructureStmt))
 	})
-	r.Register(&ast.DropJsonStructureStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execDropJsonStructure(stmt.(*ast.DropJsonStructureStmt))
+	r.Register(&ast.DropJsonStructureStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execDropJsonStructure(stmt.(*ast.DropJsonStructureStmt))
 	})
 }
 
 func registerMappingHandlers(r *Registry) {
-	r.Register(&ast.CreateImportMappingStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execCreateImportMapping(stmt.(*ast.CreateImportMappingStmt))
+	r.Register(&ast.CreateImportMappingStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execCreateImportMapping(stmt.(*ast.CreateImportMappingStmt))
 	})
-	r.Register(&ast.DropImportMappingStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execDropImportMapping(stmt.(*ast.DropImportMappingStmt))
+	r.Register(&ast.DropImportMappingStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execDropImportMapping(stmt.(*ast.DropImportMappingStmt))
 	})
-	r.Register(&ast.CreateExportMappingStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execCreateExportMapping(stmt.(*ast.CreateExportMappingStmt))
+	r.Register(&ast.CreateExportMappingStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execCreateExportMapping(stmt.(*ast.CreateExportMappingStmt))
 	})
-	r.Register(&ast.DropExportMappingStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execDropExportMapping(stmt.(*ast.DropExportMappingStmt))
+	r.Register(&ast.DropExportMappingStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execDropExportMapping(stmt.(*ast.DropExportMappingStmt))
 	})
 }
 
 func registerRESTHandlers(r *Registry) {
-	r.Register(&ast.CreateRestClientStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.createRestClient(stmt.(*ast.CreateRestClientStmt))
+	r.Register(&ast.CreateRestClientStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.createRestClient(stmt.(*ast.CreateRestClientStmt))
 	})
-	r.Register(&ast.DropRestClientStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.dropRestClient(stmt.(*ast.DropRestClientStmt))
+	r.Register(&ast.DropRestClientStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.dropRestClient(stmt.(*ast.DropRestClientStmt))
 	})
-	r.Register(&ast.CreatePublishedRestServiceStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execCreatePublishedRestService(stmt.(*ast.CreatePublishedRestServiceStmt))
+	r.Register(&ast.CreatePublishedRestServiceStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execCreatePublishedRestService(stmt.(*ast.CreatePublishedRestServiceStmt))
 	})
-	r.Register(&ast.DropPublishedRestServiceStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execDropPublishedRestService(stmt.(*ast.DropPublishedRestServiceStmt))
+	r.Register(&ast.DropPublishedRestServiceStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execDropPublishedRestService(stmt.(*ast.DropPublishedRestServiceStmt))
 	})
-	r.Register(&ast.AlterPublishedRestServiceStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execAlterPublishedRestService(stmt.(*ast.AlterPublishedRestServiceStmt))
+	r.Register(&ast.AlterPublishedRestServiceStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execAlterPublishedRestService(stmt.(*ast.AlterPublishedRestServiceStmt))
 	})
-	r.Register(&ast.CreateExternalEntityStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execCreateExternalEntity(stmt.(*ast.CreateExternalEntityStmt))
+	r.Register(&ast.CreateExternalEntityStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execCreateExternalEntity(stmt.(*ast.CreateExternalEntityStmt))
 	})
-	r.Register(&ast.CreateExternalEntitiesStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.createExternalEntities(stmt.(*ast.CreateExternalEntitiesStmt))
+	r.Register(&ast.CreateExternalEntitiesStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.createExternalEntities(stmt.(*ast.CreateExternalEntitiesStmt))
 	})
-	r.Register(&ast.GrantODataServiceAccessStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execGrantODataServiceAccess(stmt.(*ast.GrantODataServiceAccessStmt))
+	r.Register(&ast.GrantODataServiceAccessStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execGrantODataServiceAccess(stmt.(*ast.GrantODataServiceAccessStmt))
 	})
-	r.Register(&ast.RevokeODataServiceAccessStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execRevokeODataServiceAccess(stmt.(*ast.RevokeODataServiceAccessStmt))
+	r.Register(&ast.RevokeODataServiceAccessStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execRevokeODataServiceAccess(stmt.(*ast.RevokeODataServiceAccessStmt))
 	})
-	r.Register(&ast.GrantPublishedRestServiceAccessStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execGrantPublishedRestServiceAccess(stmt.(*ast.GrantPublishedRestServiceAccessStmt))
+	r.Register(&ast.GrantPublishedRestServiceAccessStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execGrantPublishedRestServiceAccess(stmt.(*ast.GrantPublishedRestServiceAccessStmt))
 	})
-	r.Register(&ast.RevokePublishedRestServiceAccessStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execRevokePublishedRestServiceAccess(stmt.(*ast.RevokePublishedRestServiceAccessStmt))
+	r.Register(&ast.RevokePublishedRestServiceAccessStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execRevokePublishedRestServiceAccess(stmt.(*ast.RevokePublishedRestServiceAccessStmt))
 	})
 }
 
 func registerDataTransformerHandlers(r *Registry) {
-	r.Register(&ast.CreateDataTransformerStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execCreateDataTransformer(stmt.(*ast.CreateDataTransformerStmt))
+	r.Register(&ast.CreateDataTransformerStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execCreateDataTransformer(stmt.(*ast.CreateDataTransformerStmt))
 	})
-	r.Register(&ast.DropDataTransformerStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execDropDataTransformer(stmt.(*ast.DropDataTransformerStmt))
+	r.Register(&ast.DropDataTransformerStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execDropDataTransformer(stmt.(*ast.DropDataTransformerStmt))
 	})
 }
 
 func registerQueryHandlers(r *Registry) {
-	r.Register(&ast.ShowStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execShow(stmt.(*ast.ShowStmt))
+	r.Register(&ast.ShowStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execShow(stmt.(*ast.ShowStmt))
 	})
-	r.Register(&ast.ShowWidgetsStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execShowWidgets(stmt.(*ast.ShowWidgetsStmt))
+	r.Register(&ast.ShowWidgetsStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execShowWidgets(stmt.(*ast.ShowWidgetsStmt))
 	})
-	r.Register(&ast.UpdateWidgetsStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execUpdateWidgets(stmt.(*ast.UpdateWidgetsStmt))
+	r.Register(&ast.UpdateWidgetsStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execUpdateWidgets(stmt.(*ast.UpdateWidgetsStmt))
 	})
-	r.Register(&ast.SelectStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execCatalogQuery(stmt.(*ast.SelectStmt).Query)
+	r.Register(&ast.SelectStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execCatalogQuery(stmt.(*ast.SelectStmt).Query)
 	})
-	r.Register(&ast.DescribeStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execDescribe(stmt.(*ast.DescribeStmt))
+	r.Register(&ast.DescribeStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execDescribe(stmt.(*ast.DescribeStmt))
 	})
-	r.Register(&ast.DescribeCatalogTableStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execDescribeCatalogTable(stmt.(*ast.DescribeCatalogTableStmt))
+	r.Register(&ast.DescribeCatalogTableStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execDescribeCatalogTable(stmt.(*ast.DescribeCatalogTableStmt))
 	})
 	// NOTE: ShowFeaturesStmt was missing from the original type-switch
 	// (pre-existing bug). Adding it here to fix the dead-code path.
-	r.Register(&ast.ShowFeaturesStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execShowFeatures(stmt.(*ast.ShowFeaturesStmt))
+	r.Register(&ast.ShowFeaturesStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execShowFeatures(stmt.(*ast.ShowFeaturesStmt))
 	})
 }
 
 func registerStylingHandlers(r *Registry) {
-	r.Register(&ast.ShowDesignPropertiesStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execShowDesignProperties(stmt.(*ast.ShowDesignPropertiesStmt))
+	r.Register(&ast.ShowDesignPropertiesStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execShowDesignProperties(stmt.(*ast.ShowDesignPropertiesStmt))
 	})
-	r.Register(&ast.DescribeStylingStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execDescribeStyling(stmt.(*ast.DescribeStylingStmt))
+	r.Register(&ast.DescribeStylingStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execDescribeStyling(stmt.(*ast.DescribeStylingStmt))
 	})
-	r.Register(&ast.AlterStylingStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execAlterStyling(stmt.(*ast.AlterStylingStmt))
+	r.Register(&ast.AlterStylingStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execAlterStyling(stmt.(*ast.AlterStylingStmt))
 	})
 }
 
 func registerRepositoryHandlers(r *Registry) {
-	r.Register(&ast.UpdateStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execUpdate()
+	r.Register(&ast.UpdateStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execUpdate()
 	})
-	r.Register(&ast.RefreshStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execRefresh()
+	r.Register(&ast.RefreshStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execRefresh()
 	})
-	r.Register(&ast.RefreshCatalogStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execRefreshCatalogStmt(stmt.(*ast.RefreshCatalogStmt))
+	r.Register(&ast.RefreshCatalogStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execRefreshCatalogStmt(stmt.(*ast.RefreshCatalogStmt))
 	})
-	r.Register(&ast.SearchStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execSearch(stmt.(*ast.SearchStmt))
+	r.Register(&ast.SearchStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execSearch(stmt.(*ast.SearchStmt))
 	})
 }
 
 func registerSessionHandlers(r *Registry) {
-	r.Register(&ast.SetStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execSet(stmt.(*ast.SetStmt))
+	r.Register(&ast.SetStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execSet(stmt.(*ast.SetStmt))
 	})
-	r.Register(&ast.HelpStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execHelp()
+	r.Register(&ast.HelpStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execHelp()
 	})
-	r.Register(&ast.ExitStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execExit()
+	r.Register(&ast.ExitStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execExit()
 	})
-	r.Register(&ast.ExecuteScriptStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execExecuteScript(stmt.(*ast.ExecuteScriptStmt))
+	r.Register(&ast.ExecuteScriptStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execExecuteScript(stmt.(*ast.ExecuteScriptStmt))
 	})
 }
 
 func registerLintHandlers(r *Registry) {
-	r.Register(&ast.LintStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execLint(stmt.(*ast.LintStmt))
+	r.Register(&ast.LintStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execLint(stmt.(*ast.LintStmt))
 	})
 }
 
 func registerAlterPageHandlers(r *Registry) {
-	r.Register(&ast.AlterPageStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execAlterPage(stmt.(*ast.AlterPageStmt))
+	r.Register(&ast.AlterPageStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execAlterPage(stmt.(*ast.AlterPageStmt))
 	})
 }
 
 func registerFragmentHandlers(r *Registry) {
-	r.Register(&ast.DefineFragmentStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execDefineFragment(stmt.(*ast.DefineFragmentStmt))
+	r.Register(&ast.DefineFragmentStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execDefineFragment(stmt.(*ast.DefineFragmentStmt))
 	})
-	r.Register(&ast.DescribeFragmentFromStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.describeFragmentFrom(stmt.(*ast.DescribeFragmentFromStmt))
+	r.Register(&ast.DescribeFragmentFromStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.describeFragmentFrom(stmt.(*ast.DescribeFragmentFromStmt))
 	})
 }
 
 func registerSQLHandlers(r *Registry) {
-	r.Register(&ast.SQLConnectStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execSQLConnect(stmt.(*ast.SQLConnectStmt))
+	r.Register(&ast.SQLConnectStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execSQLConnect(stmt.(*ast.SQLConnectStmt))
 	})
-	r.Register(&ast.SQLDisconnectStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execSQLDisconnect(stmt.(*ast.SQLDisconnectStmt))
+	r.Register(&ast.SQLDisconnectStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execSQLDisconnect(stmt.(*ast.SQLDisconnectStmt))
 	})
-	r.Register(&ast.SQLConnectionsStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execSQLConnections()
+	r.Register(&ast.SQLConnectionsStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execSQLConnections()
 	})
-	r.Register(&ast.SQLQueryStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execSQLQuery(stmt.(*ast.SQLQueryStmt))
+	r.Register(&ast.SQLQueryStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execSQLQuery(stmt.(*ast.SQLQueryStmt))
 	})
-	r.Register(&ast.SQLShowTablesStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execSQLShowTables(stmt.(*ast.SQLShowTablesStmt))
+	r.Register(&ast.SQLShowTablesStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execSQLShowTables(stmt.(*ast.SQLShowTablesStmt))
 	})
-	r.Register(&ast.SQLShowViewsStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execSQLShowViews(stmt.(*ast.SQLShowViewsStmt))
+	r.Register(&ast.SQLShowViewsStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execSQLShowViews(stmt.(*ast.SQLShowViewsStmt))
 	})
-	r.Register(&ast.SQLShowFunctionsStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execSQLShowFunctions(stmt.(*ast.SQLShowFunctionsStmt))
+	r.Register(&ast.SQLShowFunctionsStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execSQLShowFunctions(stmt.(*ast.SQLShowFunctionsStmt))
 	})
-	r.Register(&ast.SQLDescribeTableStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execSQLDescribeTable(stmt.(*ast.SQLDescribeTableStmt))
+	r.Register(&ast.SQLDescribeTableStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execSQLDescribeTable(stmt.(*ast.SQLDescribeTableStmt))
 	})
-	r.Register(&ast.SQLGenerateConnectorStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execSQLGenerateConnector(stmt.(*ast.SQLGenerateConnectorStmt))
+	r.Register(&ast.SQLGenerateConnectorStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execSQLGenerateConnector(stmt.(*ast.SQLGenerateConnectorStmt))
 	})
 }
 
 func registerImportHandlers(r *Registry) {
-	r.Register(&ast.ImportStmt{}, func(e *Executor, stmt ast.Statement) error {
-		return e.execImport(stmt.(*ast.ImportStmt))
+	r.Register(&ast.ImportStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return ctx.executor.execImport(stmt.(*ast.ImportStmt))
 	})
 }
