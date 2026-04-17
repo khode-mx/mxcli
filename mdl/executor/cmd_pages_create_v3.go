@@ -62,7 +62,7 @@ func execCreatePageV3(ctx *ExecContext, s *ast.CreatePageStmtV3) error {
 		paramEntityNames: make(map[string]string),
 		execCache:        ctx.Cache,
 		fragments:        ctx.Fragments,
-		themeRegistry:    e.getThemeRegistry(),
+		themeRegistry:    ctx.GetThemeRegistry(),
 	}
 
 	page, err := pb.buildPageV3(s)
@@ -138,7 +138,7 @@ func execCreateSnippetV3(ctx *ExecContext, s *ast.CreateSnippetStmtV3) error {
 		paramEntityNames: make(map[string]string),
 		execCache:        ctx.Cache,
 		fragments:        ctx.Fragments,
-		themeRegistry:    e.getThemeRegistry(),
+		themeRegistry:    ctx.GetThemeRegistry(),
 	}
 
 	snippet, err := pb.buildSnippetV3(s)

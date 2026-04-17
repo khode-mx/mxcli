@@ -180,7 +180,6 @@ func (e *Executor) ValidateProgram(prog *ast.Program) []error {
 
 // validateWithContext validates a statement, considering objects defined in the script.
 func validateWithContext(ctx *ExecContext, stmt ast.Statement, sc *scriptContext) error {
-	e := ctx.executor
 	switch s := stmt.(type) {
 	// Statements that reference modules
 	case *ast.CreateEntityStmt:
@@ -370,7 +369,6 @@ func validateWithContext(ctx *ExecContext, stmt ast.Statement, sc *scriptContext
 		return nil
 	}
 
-	_ = e // suppress unused warning if e not referenced in all paths
 	return nil
 }
 

@@ -72,7 +72,6 @@ func describeFragment(ctx *ExecContext, name ast.QualifiedName) error {
 // describeFragmentFrom handles DESCRIBE FRAGMENT FROM PAGE/SNIPPET ... WIDGET ... command.
 // It finds a named widget in a page or snippet and outputs it as MDL.
 func describeFragmentFrom(ctx *ExecContext, s *ast.DescribeFragmentFromStmt) error {
-	e := ctx.executor
 	if !ctx.Connected() {
 		return mdlerrors.NewNotConnected()
 	}
@@ -131,7 +130,7 @@ func describeFragmentFrom(ctx *ExecContext, s *ast.DescribeFragmentFromStmt) err
 	}
 
 	// Output as MDL
-	e.outputWidgetMDLV3(*target, 0)
+	outputWidgetMDLV3(ctx, *target, 0)
 	return nil
 }
 

@@ -1548,7 +1548,7 @@ func buildWidgetsBson(ctx *ExecContext, widgets []*ast.WidgetV3, moduleName stri
 		paramEntityNames: paramEntityNames,
 		execCache:        ctx.Cache,
 		fragments:        ctx.Fragments,
-		themeRegistry:    e.getThemeRegistry(),
+		themeRegistry:    ctx.GetThemeRegistry(),
 	}
 
 	var result []any

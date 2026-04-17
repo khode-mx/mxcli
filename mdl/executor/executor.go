@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"path/filepath"
 	"time"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
@@ -70,12 +69,12 @@ type createdSnippetInfo struct {
 }
 
 // getEntityNames returns the entity name lookup map, using the pre-warmed cache if available.
-func (e *Executor) getEntityNames(h *ContainerHierarchy) map[model.ID]string {
-	if e.cache != nil && len(e.cache.entityNames) > 0 {
-		return e.cache.entityNames
+func getEntityNames(ctx *ExecContext, h *ContainerHierarchy) map[model.ID]string {
+	if ctx.Cache != nil && len(ctx.Cache.entityNames) > 0 {
+		return ctx.Cache.entityNames
 	}
 	entityNames := make(map[model.ID]string)
-	dms, _ := e.reader.ListDomainModels()
+	dms, _ := ctx.Backend.ListDomainModels()
 	for _, dm := range dms {
 		modName := h.GetModuleName(dm.ContainerID)
 		for _, ent := range dm.Entities {
@@ -86,12 +85,12 @@ func (e *Executor) getEntityNames(h *ContainerHierarchy) map[model.ID]string {
 }
 
 // getMicroflowNames returns the microflow name lookup map, using the pre-warmed cache if available.
-func (e *Executor) getMicroflowNames(h *ContainerHierarchy) map[model.ID]string {
-	if e.cache != nil && len(e.cache.microflowNames) > 0 {
-		return e.cache.microflowNames
+func getMicroflowNames(ctx *ExecContext, h *ContainerHierarchy) map[model.ID]string {
+	if ctx.Cache != nil && len(ctx.Cache.microflowNames) > 0 {
+		return ctx.Cache.microflowNames
 	}
 	microflowNames := make(map[model.ID]string)
-	mfs, _ := e.reader.ListMicroflows()
+	mfs, _ := ctx.Backend.ListMicroflows()
 	for _, mf := range mfs {
 		microflowNames[mf.ID] = h.GetQualifiedName(mf.ContainerID, mf.Name)
 	}
@@ -99,12 +98,12 @@ func (e *Executor) getMicroflowNames(h *ContainerHierarchy) map[model.ID]string 
 }
 
 // getPageNames returns the page name lookup map, using the pre-warmed cache if available.
-func (e *Executor) getPageNames(h *ContainerHierarchy) map[model.ID]string {
-	if e.cache != nil && len(e.cache.pageNames) > 0 {
-		return e.cache.pageNames
+func getPageNames(ctx *ExecContext, h *ContainerHierarchy) map[model.ID]string {
+	if ctx.Cache != nil && len(ctx.Cache.pageNames) > 0 {
+		return ctx.Cache.pageNames
 	}
 	pageNames := make(map[model.ID]string)
-	pgs, _ := e.reader.ListPages()
+	pgs, _ := ctx.Backend.ListPages()
 	for _, pg := range pgs {
 		pageNames[pg.ID] = h.GetQualifiedName(pg.ContainerID, pg.Name)
 	}
@@ -148,22 +147,6 @@ func New(output io.Writer) *Executor {
 		settings: make(map[string]any),
 		registry: NewRegistry(),
 	}
-}
-
-// getThemeRegistry returns the cached theme registry, loading it lazily from the project's theme sources.
-func (e *Executor) getThemeRegistry() *ThemeRegistry {
-	if e.themeRegistry != nil {
-		return e.themeRegistry
-	}
-	if e.mprPath == "" {
-		return nil
-	}
-	projectDir := filepath.Dir(e.mprPath)
-	registry, err := loadThemeRegistry(projectDir)
-	if err == nil {
-		e.themeRegistry = registry
-	}
-	return e.themeRegistry
 }
 
 // SetQuiet enables or disables quiet mode (suppresses connection/status messages).

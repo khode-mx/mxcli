@@ -178,7 +178,6 @@ func calculateNanoflowComplexity(nf *microflows.Nanoflow) int {
 
 // describeMicroflow handles DESCRIBE MICROFLOW command - outputs MDL source code.
 func describeMicroflow(ctx *ExecContext, name ast.QualifiedName) error {
-	e := ctx.executor
 	// Get hierarchy for module/folder resolution
 	h, err := getHierarchy(ctx)
 	if err != nil {
@@ -186,8 +185,8 @@ func describeMicroflow(ctx *ExecContext, name ast.QualifiedName) error {
 	}
 
 	// Use pre-warmed cache if available (from PreWarmCache), otherwise build on demand
-	entityNames := e.getEntityNames(h)
-	microflowNames := e.getMicroflowNames(h)
+	entityNames := getEntityNames(ctx, h)
+	microflowNames := getMicroflowNames(ctx, h)
 
 	// Find the microflow
 	allMicroflows, err := ctx.Backend.ListMicroflows()

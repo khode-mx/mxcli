@@ -5,6 +5,7 @@ package executor
 import (
 	"context"
 	"io"
+	"path/filepath"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
 	"github.com/mendixlabs/mxcli/mdl/backend"
@@ -79,4 +80,21 @@ func (ctx *ExecContext) Connected() bool {
 // MprBackend always supports writes.
 func (ctx *ExecContext) ConnectedForWrite() bool {
 	return ctx.Connected()
+}
+
+// GetThemeRegistry returns the cached theme registry, loading it lazily
+// from the project's theme sources on first access.
+func (ctx *ExecContext) GetThemeRegistry() *ThemeRegistry {
+	if ctx.ThemeRegistry != nil {
+		return ctx.ThemeRegistry
+	}
+	if ctx.MprPath == "" {
+		return nil
+	}
+	projectDir := filepath.Dir(ctx.MprPath)
+	registry, err := loadThemeRegistry(projectDir)
+	if err == nil {
+		ctx.ThemeRegistry = registry
+	}
+	return ctx.ThemeRegistry
 }
