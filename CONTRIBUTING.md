@@ -334,6 +334,44 @@ docs: add examples for CREATE WORKFLOW (closes #789)
 refactor: simplify executor dispatch logic
 ```
 
+### Fork PR Flow
+
+If you're contributing from a fork, this is the full cycle:
+
+```
+   jsmith/mxcli (fork)               mendixlabs/mxcli (origin)
+   ─────────────────────             ─────────────────────────
+
+                                      ┌─────────────────────┐
+                                      │   origin/main       │
+                                      └──────────┬──────────┘
+                                                 │
+                      git fetch origin           │
+   ┌─────────────────────┐ ◀────────────────────┘
+   │  local main         │
+   │  git merge origin/  │
+   │  main               │
+   └──────────┬──────────┘
+              │
+   ┌──────────▼──────────┐
+   │   feature branch    │
+   └──────────┬──────────┘
+              │
+   ┌──────────▼──────────┐
+   │   git push fork     │  ← push to jsmith/mxcli
+   └──────────┬──────────┘
+              │
+   ┌──────────▼──────────┐           ┌─────────────────────┐
+   │   open PR on GH     │ ────────▶ │  mendixlabs/main    │
+   │   (fork → origin)   │           └──────────┬──────────┘
+   └─────────────────────┘                      │
+                                     ┌──────────▼──────────┐
+                                     │  review + merge     │
+                                     └──────────┬──────────┘
+                                                │
+                                   git fetch origin (repeat ↑)
+```
+
 ### Scope
 
 - Each commit does **one thing** (feature, bugfix, or refactor)
