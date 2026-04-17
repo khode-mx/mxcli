@@ -3,6 +3,7 @@
 package executor
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -14,7 +15,9 @@ import (
 )
 
 // showPublishedRestServices handles SHOW PUBLISHED REST SERVICES [IN module] command.
-func (e *Executor) showPublishedRestServices(moduleName string) error {
+func showPublishedRestServices(ctx *ExecContext, moduleName string) error {
+	e := ctx.executor
+
 	services, err := e.reader.ListPublishedRestServices()
 	if err != nil {
 		return mdlerrors.NewBackend("list published REST services", err)
@@ -57,7 +60,7 @@ func (e *Executor) showPublishedRestServices(moduleName string) error {
 	}
 
 	if len(rows) == 0 {
-		fmt.Fprintln(e.output, "No published REST services found.")
+		fmt.Fprintln(ctx.Output, "No published REST services found.")
 		return nil
 	}
 
@@ -76,7 +79,9 @@ func (e *Executor) showPublishedRestServices(moduleName string) error {
 }
 
 // describePublishedRestService handles DESCRIBE PUBLISHED REST SERVICE command.
-func (e *Executor) describePublishedRestService(name ast.QualifiedName) error {
+func describePublishedRestService(ctx *ExecContext, name ast.QualifiedName) error {
+	e := ctx.executor
+
 	services, err := e.reader.ListPublishedRestServices()
 	if err != nil {
 		return mdlerrors.NewBackend("list published REST services", err)
@@ -97,24 +102,24 @@ func (e *Executor) describePublishedRestService(name ast.QualifiedName) error {
 		}
 
 		// Output as re-executable MDL
-		fmt.Fprintf(e.output, "CREATE PUBLISHED REST SERVICE %s (\n", qualifiedName)
-		fmt.Fprintf(e.output, "  Path: '%s'", svc.Path)
+		fmt.Fprintf(ctx.Output, "CREATE PUBLISHED REST SERVICE %s (\n", qualifiedName)
+		fmt.Fprintf(ctx.Output, "  Path: '%s'", svc.Path)
 		if svc.Version != "" {
-			fmt.Fprintf(e.output, ",\n  Version: '%s'", svc.Version)
+			fmt.Fprintf(ctx.Output, ",\n  Version: '%s'", svc.Version)
 		}
 		if svc.ServiceName != "" {
-			fmt.Fprintf(e.output, ",\n  ServiceName: '%s'", svc.ServiceName)
+			fmt.Fprintf(ctx.Output, ",\n  ServiceName: '%s'", svc.ServiceName)
 		}
 		folderPath := h.BuildFolderPath(svc.ContainerID)
 		if folderPath != "" {
-			fmt.Fprintf(e.output, ",\n  Folder: '%s'", folderPath)
+			fmt.Fprintf(ctx.Output, ",\n  Folder: '%s'", folderPath)
 		}
-		fmt.Fprintln(e.output, "\n)")
+		fmt.Fprintln(ctx.Output, "\n)")
 
 		if len(svc.Resources) > 0 {
-			fmt.Fprintln(e.output, "{")
+			fmt.Fprintln(ctx.Output, "{")
 			for _, res := range svc.Resources {
-				fmt.Fprintf(e.output, "  RESOURCE '%s' {\n", res.Name)
+				fmt.Fprintf(ctx.Output, "  RESOURCE '%s' {\n", res.Name)
 				for _, op := range res.Operations {
 					deprecated := ""
 					if op.Deprecated {
@@ -132,20 +137,20 @@ func (e *Executor) describePublishedRestService(name ast.QualifiedName) error {
 					if op.Path != "" {
 						opPath = fmt.Sprintf(" '%s'", op.Path)
 					}
-					fmt.Fprintf(e.output, "    %s%s%s%s;%s\n",
+					fmt.Fprintf(ctx.Output, "    %s%s%s%s;%s\n",
 						strings.ToUpper(op.HTTPMethod), opPath, mf, deprecated, summary)
 				}
-				fmt.Fprintln(e.output, "  }")
+				fmt.Fprintln(ctx.Output, "  }")
 			}
-			fmt.Fprintln(e.output, "};")
+			fmt.Fprintln(ctx.Output, "};")
 		} else {
-			fmt.Fprintln(e.output, ";")
+			fmt.Fprintln(ctx.Output, ";")
 		}
-		fmt.Fprintln(e.output, "/")
+		fmt.Fprintln(ctx.Output, "/")
 
 		// Emit GRANT statements for any module roles with access.
 		if len(svc.AllowedRoles) > 0 {
-			fmt.Fprintf(e.output, "\nGRANT ACCESS ON PUBLISHED REST SERVICE %s.%s TO %s;\n",
+			fmt.Fprintf(ctx.Output, "\nGRANT ACCESS ON PUBLISHED REST SERVICE %s.%s TO %s;\n",
 				modName, svc.Name, strings.Join(svc.AllowedRoles, ", "))
 		}
 
@@ -156,7 +161,9 @@ func (e *Executor) describePublishedRestService(name ast.QualifiedName) error {
 }
 
 // findPublishedRestService looks up a published REST service by module and name.
-func (e *Executor) findPublishedRestService(moduleName, name string) (*model.PublishedRestService, error) {
+func findPublishedRestService(ctx *ExecContext, moduleName, name string) (*model.PublishedRestService, error) {
+	e := ctx.executor
+
 	services, err := e.reader.ListPublishedRestServices()
 	if err != nil {
 		return nil, err
@@ -176,7 +183,9 @@ func (e *Executor) findPublishedRestService(moduleName, name string) (*model.Pub
 }
 
 // execCreatePublishedRestService creates a new published REST service.
-func (e *Executor) execCreatePublishedRestService(s *ast.CreatePublishedRestServiceStmt) error {
+func execCreatePublishedRestService(ctx *ExecContext, s *ast.CreatePublishedRestServiceStmt) error {
+	e := ctx.executor
+
 	if e.writer == nil {
 		return mdlerrors.NewNotConnectedWrite()
 	}
@@ -189,7 +198,7 @@ func (e *Executor) execCreatePublishedRestService(s *ast.CreatePublishedRestServ
 
 	// Handle CREATE OR REPLACE — delete existing if found
 	if s.CreateOrReplace {
-		existing, findErr := e.findPublishedRestService(s.Name.Module, s.Name.Name)
+		existing, findErr := findPublishedRestService(ctx, s.Name.Module, s.Name.Name)
 		var nfe *mdlerrors.NotFoundError
 		if findErr != nil && !errors.As(findErr, &nfe) {
 			return mdlerrors.NewBackend("find existing service", findErr)
@@ -245,13 +254,15 @@ func (e *Executor) execCreatePublishedRestService(s *ast.CreatePublishedRestServ
 	}
 
 	if !e.quiet {
-		fmt.Fprintf(e.output, "Created published REST service %s.%s\n", s.Name.Module, s.Name.Name)
+		fmt.Fprintf(ctx.Output, "Created published REST service %s.%s\n", s.Name.Module, s.Name.Name)
 	}
 	return nil
 }
 
 // execDropPublishedRestService deletes a published REST service.
-func (e *Executor) execDropPublishedRestService(s *ast.DropPublishedRestServiceStmt) error {
+func execDropPublishedRestService(ctx *ExecContext, s *ast.DropPublishedRestServiceStmt) error {
+	e := ctx.executor
+
 	if e.writer == nil {
 		return mdlerrors.NewNotConnectedWrite()
 	}
@@ -274,7 +285,7 @@ func (e *Executor) execDropPublishedRestService(s *ast.DropPublishedRestServiceS
 				return mdlerrors.NewBackend("drop published REST service", err)
 			}
 			if !e.quiet {
-				fmt.Fprintf(e.output, "Dropped published REST service %s.%s\n", s.Name.Module, s.Name.Name)
+				fmt.Fprintf(ctx.Output, "Dropped published REST service %s.%s\n", s.Name.Module, s.Name.Name)
 			}
 			return nil
 		}
@@ -300,7 +311,9 @@ func astResourceDefToModel(def *ast.PublishedRestResourceDef) *model.PublishedRe
 
 // execAlterPublishedRestService applies SET / ADD RESOURCE / DROP RESOURCE
 // actions to an existing published REST service.
-func (e *Executor) execAlterPublishedRestService(s *ast.AlterPublishedRestServiceStmt) error {
+func execAlterPublishedRestService(ctx *ExecContext, s *ast.AlterPublishedRestServiceStmt) error {
+	e := ctx.executor
+
 	if e.writer == nil {
 		return mdlerrors.NewNotConnectedWrite()
 	}
@@ -311,7 +324,7 @@ func (e *Executor) execAlterPublishedRestService(s *ast.AlterPublishedRestServic
 		return err
 	}
 
-	svc, err := e.findPublishedRestService(s.Name.Module, s.Name.Name)
+	svc, err := findPublishedRestService(ctx, s.Name.Module, s.Name.Name)
 	if err != nil {
 		return err
 	}
@@ -364,7 +377,17 @@ func (e *Executor) execAlterPublishedRestService(s *ast.AlterPublishedRestServic
 	}
 
 	if !e.quiet {
-		fmt.Fprintf(e.output, "Altered published REST service %s.%s\n", s.Name.Module, s.Name.Name)
+		fmt.Fprintf(ctx.Output, "Altered published REST service %s.%s\n", s.Name.Module, s.Name.Name)
 	}
 	return nil
+}
+
+// Executor wrappers for unmigrated callers.
+
+func (e *Executor) showPublishedRestServices(moduleName string) error {
+	return showPublishedRestServices(e.newExecContext(context.Background()), moduleName)
+}
+
+func (e *Executor) describePublishedRestService(name ast.QualifiedName) error {
+	return describePublishedRestService(e.newExecContext(context.Background()), name)
 }

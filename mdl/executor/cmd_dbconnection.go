@@ -3,6 +3,7 @@
 package executor
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -13,7 +14,9 @@ import (
 )
 
 // createDatabaseConnection handles CREATE DATABASE CONNECTION command.
-func (e *Executor) createDatabaseConnection(stmt *ast.CreateDatabaseConnectionStmt) error {
+func createDatabaseConnection(ctx *ExecContext, stmt *ast.CreateDatabaseConnectionStmt) error {
+	e := ctx.executor
+
 	if e.writer == nil {
 		return mdlerrors.NewNotConnectedWrite()
 	}
@@ -53,7 +56,7 @@ func (e *Executor) createDatabaseConnection(stmt *ast.CreateDatabaseConnectionSt
 	// Resolve ConnectionInput.Value from constant default (for Studio Pro dev)
 	connInputValue := ""
 	if stmt.ConnectionStringIsRef {
-		connInputValue = e.resolveConstantDefault(connStr)
+		connInputValue = resolveConstantDefault(ctx, connStr)
 	}
 
 	conn := &model.DatabaseConnection{
@@ -116,12 +119,14 @@ func (e *Executor) createDatabaseConnection(stmt *ast.CreateDatabaseConnectionSt
 	}
 
 	e.invalidateHierarchy()
-	fmt.Fprintf(e.output, "Created database connection: %s.%s\n", stmt.Name.Module, stmt.Name.Name)
+	fmt.Fprintf(ctx.Output, "Created database connection: %s.%s\n", stmt.Name.Module, stmt.Name.Name)
 	return nil
 }
 
 // showDatabaseConnections handles SHOW DATABASE CONNECTIONS command.
-func (e *Executor) showDatabaseConnections(moduleName string) error {
+func showDatabaseConnections(ctx *ExecContext, moduleName string) error {
+	e := ctx.executor
+
 	connections, err := e.reader.ListDatabaseConnections()
 	if err != nil {
 		return mdlerrors.NewBackend("list database connections", err)
@@ -156,7 +161,7 @@ func (e *Executor) showDatabaseConnections(moduleName string) error {
 	}
 
 	if len(rows) == 0 {
-		fmt.Fprintln(e.output, "No database connections found.")
+		fmt.Fprintln(ctx.Output, "No database connections found.")
 		return nil
 	}
 
@@ -175,7 +180,9 @@ func (e *Executor) showDatabaseConnections(moduleName string) error {
 }
 
 // describeDatabaseConnection handles DESCRIBE DATABASE CONNECTION command.
-func (e *Executor) describeDatabaseConnection(name ast.QualifiedName) error {
+func describeDatabaseConnection(ctx *ExecContext, name ast.QualifiedName) error {
+	e := ctx.executor
+
 	connections, err := e.reader.ListDatabaseConnections()
 	if err != nil {
 		return mdlerrors.NewBackend("list database connections", err)
@@ -190,7 +197,7 @@ func (e *Executor) describeDatabaseConnection(name ast.QualifiedName) error {
 		modID := h.FindModuleID(conn.ContainerID)
 		modName := h.GetModuleName(modID)
 		if strings.EqualFold(modName, name.Module) && strings.EqualFold(conn.Name, name.Name) {
-			return e.outputDatabaseConnectionMDL(conn, modName)
+			return outputDatabaseConnectionMDL(ctx, conn, modName)
 		}
 	}
 
@@ -198,52 +205,52 @@ func (e *Executor) describeDatabaseConnection(name ast.QualifiedName) error {
 }
 
 // outputDatabaseConnectionMDL outputs a database connection definition in MDL format.
-func (e *Executor) outputDatabaseConnectionMDL(conn *model.DatabaseConnection, moduleName string) error {
-	fmt.Fprintf(e.output, "CREATE DATABASE CONNECTION %s.%s\n", moduleName, conn.Name)
-	fmt.Fprintf(e.output, "TYPE '%s'\n", conn.DatabaseType)
+func outputDatabaseConnectionMDL(ctx *ExecContext, conn *model.DatabaseConnection, moduleName string) error {
+	fmt.Fprintf(ctx.Output, "CREATE DATABASE CONNECTION %s.%s\n", moduleName, conn.Name)
+	fmt.Fprintf(ctx.Output, "TYPE '%s'\n", conn.DatabaseType)
 
 	// Connection string
-	fmt.Fprintf(e.output, "CONNECTION STRING @%s\n", conn.ConnectionString)
+	fmt.Fprintf(ctx.Output, "CONNECTION STRING @%s\n", conn.ConnectionString)
 
 	// Username
-	fmt.Fprintf(e.output, "USERNAME @%s\n", conn.UserName)
+	fmt.Fprintf(ctx.Output, "USERNAME @%s\n", conn.UserName)
 
 	// Password
-	fmt.Fprintf(e.output, "PASSWORD @%s\n", conn.Password)
+	fmt.Fprintf(ctx.Output, "PASSWORD @%s\n", conn.Password)
 
 	// Queries
 	if len(conn.Queries) > 0 {
-		fmt.Fprintln(e.output, "BEGIN")
+		fmt.Fprintln(ctx.Output, "BEGIN")
 		for _, q := range conn.Queries {
-			fmt.Fprintf(e.output, "  QUERY %s\n", q.Name)
+			fmt.Fprintf(ctx.Output, "  QUERY %s\n", q.Name)
 
 			// SQL string
 			if q.SQL != "" {
 				escaped := strings.ReplaceAll(q.SQL, "'", "''")
-				fmt.Fprintf(e.output, "    SQL '%s'\n", escaped)
+				fmt.Fprintf(ctx.Output, "    SQL '%s'\n", escaped)
 			}
 
 			// PARAMETER clauses
 			for _, p := range q.Parameters {
 				typeName := dbTypeToMDLType(p.DataType)
 				if p.EmptyValueBecomesNull {
-					fmt.Fprintf(e.output, "    PARAMETER %s: %s NULL\n", p.ParameterName, typeName)
+					fmt.Fprintf(ctx.Output, "    PARAMETER %s: %s NULL\n", p.ParameterName, typeName)
 				} else if p.DefaultValue != "" {
 					escaped := strings.ReplaceAll(p.DefaultValue, "'", "''")
-					fmt.Fprintf(e.output, "    PARAMETER %s: %s DEFAULT '%s'\n", p.ParameterName, typeName, escaped)
+					fmt.Fprintf(ctx.Output, "    PARAMETER %s: %s DEFAULT '%s'\n", p.ParameterName, typeName, escaped)
 				} else {
-					fmt.Fprintf(e.output, "    PARAMETER %s: %s\n", p.ParameterName, typeName)
+					fmt.Fprintf(ctx.Output, "    PARAMETER %s: %s\n", p.ParameterName, typeName)
 				}
 			}
 
 			// RETURNS and MAP from table mapping
 			if len(q.TableMappings) > 0 {
 				tm := q.TableMappings[0]
-				fmt.Fprintf(e.output, "    RETURNS %s\n", tm.Entity)
+				fmt.Fprintf(ctx.Output, "    RETURNS %s\n", tm.Entity)
 
 				// MAP clause
 				if len(tm.Columns) > 0 {
-					fmt.Fprintln(e.output, "    MAP (")
+					fmt.Fprintln(ctx.Output, "    MAP (")
 					for i, c := range tm.Columns {
 						// Extract attribute name from qualified ref (Module.Entity.Attr → Attr)
 						attrName := c.Attribute
@@ -254,24 +261,26 @@ func (e *Executor) outputDatabaseConnectionMDL(conn *model.DatabaseConnection, m
 						if i == len(tm.Columns)-1 {
 							sep = ""
 						}
-						fmt.Fprintf(e.output, "      %s AS %s%s\n", c.ColumnName, attrName, sep)
+						fmt.Fprintf(ctx.Output, "      %s AS %s%s\n", c.ColumnName, attrName, sep)
 					}
-					fmt.Fprintln(e.output, "    )")
+					fmt.Fprintln(ctx.Output, "    )")
 				}
 			}
-			fmt.Fprintln(e.output, "  ;")
+			fmt.Fprintln(ctx.Output, "  ;")
 		}
-		fmt.Fprintln(e.output, "END")
+		fmt.Fprintln(ctx.Output, "END")
 	}
 
-	fmt.Fprintln(e.output, ";")
-	fmt.Fprintln(e.output, "/")
+	fmt.Fprintln(ctx.Output, ";")
+	fmt.Fprintln(ctx.Output, "/")
 
 	return nil
 }
 
 // resolveConstantDefault looks up a constant by qualified name and returns its default value.
-func (e *Executor) resolveConstantDefault(qualifiedName string) string {
+func resolveConstantDefault(ctx *ExecContext, qualifiedName string) string {
+	e := ctx.executor
+
 	constants, err := e.reader.ListConstants()
 	if err != nil {
 		return ""
@@ -327,4 +336,18 @@ func dbTypeToMDLType(bsonType string) string {
 	default:
 		return "String"
 	}
+}
+
+// Executor wrappers for unmigrated callers.
+
+func (e *Executor) showDatabaseConnections(moduleName string) error {
+	return showDatabaseConnections(e.newExecContext(context.Background()), moduleName)
+}
+
+func (e *Executor) describeDatabaseConnection(name ast.QualifiedName) error {
+	return describeDatabaseConnection(e.newExecContext(context.Background()), name)
+}
+
+func (e *Executor) outputDatabaseConnectionMDL(conn *model.DatabaseConnection, moduleName string) error {
+	return outputDatabaseConnectionMDL(e.newExecContext(context.Background()), conn, moduleName)
 }

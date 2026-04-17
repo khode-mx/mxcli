@@ -3,6 +3,7 @@
 package executor
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -13,7 +14,9 @@ import (
 )
 
 // showBusinessEventServices displays a table of all business event service documents.
-func (e *Executor) showBusinessEventServices(inModule string) error {
+func showBusinessEventServices(ctx *ExecContext, inModule string) error {
+	e := ctx.executor
+
 	if e.reader == nil {
 		return mdlerrors.NewNotConnected()
 	}
@@ -40,9 +43,9 @@ func (e *Executor) showBusinessEventServices(inModule string) error {
 
 	if len(filtered) == 0 {
 		if inModule != "" {
-			fmt.Fprintf(e.output, "No business event services found in module %s\n", inModule)
+			fmt.Fprintf(ctx.Output, "No business event services found in module %s\n", inModule)
 		} else {
-			fmt.Fprintln(e.output, "No business event services found")
+			fmt.Fprintln(ctx.Output, "No business event services found")
 		}
 		return nil
 	}
@@ -87,13 +90,15 @@ func (e *Executor) showBusinessEventServices(inModule string) error {
 }
 
 // showBusinessEventClients displays a table of all business event client documents.
-func (e *Executor) showBusinessEventClients(inModule string) error {
-	fmt.Fprintln(e.output, "Business event clients are not yet implemented.")
+func showBusinessEventClients(ctx *ExecContext, inModule string) error {
+	fmt.Fprintln(ctx.Output, "Business event clients are not yet implemented.")
 	return nil
 }
 
 // showBusinessEvents displays a table of individual messages across all business event services.
-func (e *Executor) showBusinessEvents(inModule string) error {
+func showBusinessEvents(ctx *ExecContext, inModule string) error {
+	e := ctx.executor
+
 	if e.reader == nil {
 		return mdlerrors.NewNotConnected()
 	}
@@ -152,9 +157,9 @@ func (e *Executor) showBusinessEvents(inModule string) error {
 
 	if len(rows) == 0 {
 		if inModule != "" {
-			fmt.Fprintf(e.output, "No business events found in module %s\n", inModule)
+			fmt.Fprintf(ctx.Output, "No business events found in module %s\n", inModule)
 		} else {
-			fmt.Fprintln(e.output, "No business events found")
+			fmt.Fprintln(ctx.Output, "No business events found")
 		}
 		return nil
 	}
@@ -170,7 +175,9 @@ func (e *Executor) showBusinessEvents(inModule string) error {
 }
 
 // describeBusinessEventService outputs the full MDL description of a business event service.
-func (e *Executor) describeBusinessEventService(name ast.QualifiedName) error {
+func describeBusinessEventService(ctx *ExecContext, name ast.QualifiedName) error {
+	e := ctx.executor
+
 	if e.reader == nil {
 		return mdlerrors.NewNotConnected()
 	}
@@ -205,21 +212,21 @@ func (e *Executor) describeBusinessEventService(name ast.QualifiedName) error {
 
 	// Output MDL CREATE statement
 	if found.Documentation != "" {
-		outputJavadoc(e.output, found.Documentation)
+		outputJavadoc(ctx.Output, found.Documentation)
 	}
-	fmt.Fprintf(e.output, "CREATE OR REPLACE BUSINESS EVENT SERVICE %s.%s\n", foundModule, found.Name)
+	fmt.Fprintf(ctx.Output, "CREATE OR REPLACE BUSINESS EVENT SERVICE %s.%s\n", foundModule, found.Name)
 
 	if found.Definition != nil {
-		fmt.Fprintf(e.output, "(\n")
-		fmt.Fprintf(e.output, "  ServiceName: '%s'", found.Definition.ServiceName)
+		fmt.Fprintf(ctx.Output, "(\n")
+		fmt.Fprintf(ctx.Output, "  ServiceName: '%s'", found.Definition.ServiceName)
 		if found.Definition.EventNamePrefix != "" {
-			fmt.Fprintf(e.output, ",\n  EventNamePrefix: '%s'", found.Definition.EventNamePrefix)
+			fmt.Fprintf(ctx.Output, ",\n  EventNamePrefix: '%s'", found.Definition.EventNamePrefix)
 		} else {
-			fmt.Fprintf(e.output, ",\n  EventNamePrefix: ''")
+			fmt.Fprintf(ctx.Output, ",\n  EventNamePrefix: ''")
 		}
-		fmt.Fprintf(e.output, "\n)\n")
+		fmt.Fprintf(ctx.Output, "\n)\n")
 
-		fmt.Fprintf(e.output, "{\n")
+		fmt.Fprintf(ctx.Output, "{\n")
 
 		// Build operation map: messageName -> operation info
 		opMap := make(map[string]*model.ServiceOperation)
@@ -248,19 +255,21 @@ func (e *Executor) describeBusinessEventService(name ast.QualifiedName) error {
 					}
 				}
 
-				fmt.Fprintf(e.output, "  MESSAGE %s (%s) %s%s;\n",
+				fmt.Fprintf(ctx.Output, "  MESSAGE %s (%s) %s%s;\n",
 					msg.MessageName, strings.Join(attrs, ", "), opStr, entityStr)
 			}
 		}
 
-		fmt.Fprintf(e.output, "};\n")
+		fmt.Fprintf(ctx.Output, "};\n")
 	}
 
 	return nil
 }
 
 // createBusinessEventService creates a new business event service from an AST statement.
-func (e *Executor) createBusinessEventService(stmt *ast.CreateBusinessEventServiceStmt) error {
+func createBusinessEventService(ctx *ExecContext, stmt *ast.CreateBusinessEventServiceStmt) error {
+	e := ctx.executor
+
 	if e.writer == nil {
 		return mdlerrors.NewNotConnectedWrite()
 	}
@@ -369,12 +378,14 @@ func (e *Executor) createBusinessEventService(stmt *ast.CreateBusinessEventServi
 		return mdlerrors.NewBackend("create business event service", err)
 	}
 
-	fmt.Fprintf(e.output, "Created business event service: %s.%s\n", moduleName, stmt.Name.Name)
+	fmt.Fprintf(ctx.Output, "Created business event service: %s.%s\n", moduleName, stmt.Name.Name)
 	return nil
 }
 
 // dropBusinessEventService deletes a business event service.
-func (e *Executor) dropBusinessEventService(stmt *ast.DropBusinessEventServiceStmt) error {
+func dropBusinessEventService(ctx *ExecContext, stmt *ast.DropBusinessEventServiceStmt) error {
+	e := ctx.executor
+
 	if e.writer == nil {
 		return mdlerrors.NewNotConnectedWrite()
 	}
@@ -396,7 +407,7 @@ func (e *Executor) dropBusinessEventService(stmt *ast.DropBusinessEventServiceSt
 			if err := e.writer.DeleteBusinessEventService(svc.ID); err != nil {
 				return mdlerrors.NewBackend("delete business event service", err)
 			}
-			fmt.Fprintf(e.output, "Dropped business event service: %s.%s\n", moduleName, svc.Name)
+			fmt.Fprintf(ctx.Output, "Dropped business event service: %s.%s\n", moduleName, svc.Name)
 			return nil
 		}
 	}
@@ -409,4 +420,22 @@ func generateChannelName() string {
 	// Generate a UUID-like hex string
 	uuid := mpr.GenerateID()
 	return strings.ReplaceAll(uuid, "-", "")
+}
+
+// Executor wrappers for unmigrated callers.
+
+func (e *Executor) showBusinessEventServices(inModule string) error {
+	return showBusinessEventServices(e.newExecContext(context.Background()), inModule)
+}
+
+func (e *Executor) showBusinessEventClients(inModule string) error {
+	return showBusinessEventClients(e.newExecContext(context.Background()), inModule)
+}
+
+func (e *Executor) showBusinessEvents(inModule string) error {
+	return showBusinessEvents(e.newExecContext(context.Background()), inModule)
+}
+
+func (e *Executor) describeBusinessEventService(name ast.QualifiedName) error {
+	return describeBusinessEventService(e.newExecContext(context.Background()), name)
 }

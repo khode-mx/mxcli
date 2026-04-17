@@ -3,6 +3,7 @@
 package executor
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"sort"
@@ -22,7 +23,9 @@ func safeIdent(name string) string {
 }
 
 // showRestClients handles SHOW REST CLIENTS [IN module] command.
-func (e *Executor) showRestClients(moduleName string) error {
+func showRestClients(ctx *ExecContext, moduleName string) error {
+	e := ctx.executor
+
 	services, err := e.reader.ListConsumedRestServices()
 	if err != nil {
 		return mdlerrors.NewBackend("list consumed REST services", err)
@@ -64,7 +67,7 @@ func (e *Executor) showRestClients(moduleName string) error {
 	}
 
 	if len(rows) == 0 {
-		fmt.Fprintln(e.output, "No consumed REST services found.")
+		fmt.Fprintln(ctx.Output, "No consumed REST services found.")
 		return nil
 	}
 
@@ -83,7 +86,9 @@ func (e *Executor) showRestClients(moduleName string) error {
 }
 
 // describeRestClient handles DESCRIBE REST CLIENT command.
-func (e *Executor) describeRestClient(name ast.QualifiedName) error {
+func describeRestClient(ctx *ExecContext, name ast.QualifiedName) error {
+	e := ctx.executor
+
 	services, err := e.reader.ListConsumedRestServices()
 	if err != nil {
 		return mdlerrors.NewBackend("list consumed REST services", err)
@@ -98,7 +103,7 @@ func (e *Executor) describeRestClient(name ast.QualifiedName) error {
 		modID := h.FindModuleID(svc.ContainerID)
 		modName := h.GetModuleName(modID)
 		if strings.EqualFold(modName, name.Module) && strings.EqualFold(svc.Name, name.Name) {
-			return e.outputConsumedRestServiceMDL(svc, modName)
+			return outputConsumedRestServiceMDL(ctx, svc, modName)
 		}
 	}
 
@@ -106,8 +111,8 @@ func (e *Executor) describeRestClient(name ast.QualifiedName) error {
 }
 
 // outputConsumedRestServiceMDL outputs a consumed REST service in the property-based { } format.
-func (e *Executor) outputConsumedRestServiceMDL(svc *model.ConsumedRestService, moduleName string) error {
-	w := e.output
+func outputConsumedRestServiceMDL(ctx *ExecContext, svc *model.ConsumedRestService, moduleName string) error {
+	w := ctx.Output
 
 	if svc.Documentation != "" {
 		outputJavadoc(w, svc.Documentation)
@@ -276,7 +281,9 @@ func writeExportMappings(w io.Writer, mappings []*model.RestResponseMapping, ind
 }
 
 // createRestClient handles CREATE REST CLIENT statement.
-func (e *Executor) createRestClient(stmt *ast.CreateRestClientStmt) error {
+func createRestClient(ctx *ExecContext, stmt *ast.CreateRestClientStmt) error {
+	e := ctx.executor
+
 	if e.writer == nil {
 		return mdlerrors.NewNotConnectedWrite()
 	}
@@ -354,7 +361,7 @@ func (e *Executor) createRestClient(stmt *ast.CreateRestClientStmt) error {
 		return mdlerrors.NewBackend("create REST client", err)
 	}
 
-	fmt.Fprintf(e.output, "Created REST client: %s.%s (%d operations)\n", moduleName, stmt.Name.Name, len(svc.Operations))
+	fmt.Fprintf(ctx.Output, "Created REST client: %s.%s (%d operations)\n", moduleName, stmt.Name.Name, len(svc.Operations))
 	return nil
 }
 
@@ -455,7 +462,9 @@ func convertMappingEntries(entries []ast.RestMappingEntry, importDirection bool)
 }
 
 // dropRestClient handles DROP REST CLIENT statement.
-func (e *Executor) dropRestClient(stmt *ast.DropRestClientStmt) error {
+func dropRestClient(ctx *ExecContext, stmt *ast.DropRestClientStmt) error {
+	e := ctx.executor
+
 	if e.writer == nil {
 		return mdlerrors.NewNotConnectedWrite()
 	}
@@ -477,7 +486,7 @@ func (e *Executor) dropRestClient(stmt *ast.DropRestClientStmt) error {
 			if err := e.writer.DeleteConsumedRestService(svc.ID); err != nil {
 				return mdlerrors.NewBackend("delete REST client", err)
 			}
-			fmt.Fprintf(e.output, "Dropped REST client: %s.%s\n", moduleName, svc.Name)
+			fmt.Fprintf(ctx.Output, "Dropped REST client: %s.%s\n", moduleName, svc.Name)
 			return nil
 		}
 	}
@@ -491,4 +500,14 @@ func formatRestAuthValue(value string) string {
 		return value
 	}
 	return "'" + value + "'"
+}
+
+// Executor wrappers for unmigrated callers.
+
+func (e *Executor) showRestClients(moduleName string) error {
+	return showRestClients(e.newExecContext(context.Background()), moduleName)
+}
+
+func (e *Executor) describeRestClient(name ast.QualifiedName) error {
+	return describeRestClient(e.newExecContext(context.Background()), name)
 }
