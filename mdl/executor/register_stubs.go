@@ -11,13 +11,13 @@ import "github.com/mendixlabs/mxcli/mdl/ast"
 
 func registerConnectionHandlers(r *Registry) {
 	r.Register(&ast.ConnectStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.execConnect(stmt.(*ast.ConnectStmt))
+		return execConnect(ctx, stmt.(*ast.ConnectStmt))
 	})
 	r.Register(&ast.DisconnectStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.execDisconnect()
+		return execDisconnect(ctx)
 	})
 	r.Register(&ast.StatusStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.execStatus()
+		return execStatus(ctx)
 	})
 }
 
