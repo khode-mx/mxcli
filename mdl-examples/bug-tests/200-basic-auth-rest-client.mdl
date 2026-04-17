@@ -1,0 +1,168 @@
+-- ============================================================================
+-- Bug #200: REST Client BASIC Auth — runtime verification test case
+-- ============================================================================
+--
+-- This script creates a REST client with BASIC authentication and a microflow
+-- that calls it. Open the project in Studio Pro and run the microflow to
+-- verify the Authorization header is sent correctly.
+--
+-- The test uses httpbin.org/basic-auth which returns 200 only if the correct
+-- Basic auth credentials are provided, and 401 otherwise.
+--
+-- Usage:
+--   mxcli exec mdl-examples/bug-tests/200-basic-auth-rest-client.mdl -p app.mpr
+--   Then open in Studio Pro and run ACT_TestBasicAuth from the test page.
+--
+-- Expected result:
+--   - ACT_TestBasicAuth logs "Auth OK: 200" (httpbin returns the auth echo)
+--   - If auth header is NOT sent, httpbin returns 401 and the log shows "Auth FAILED"
+--
+-- ============================================================================
+
+CREATE MODULE AuthTest;
+
+-- ############################################################################
+-- PART 1: CONSTANTS FOR AUTH CREDENTIALS
+-- ############################################################################
+
+-- Mendix requires Rest$ConstantValue for BASIC auth (not Rest$StringValue).
+-- Literal strings in Authentication: BASIC (...) are auto-promoted to
+-- constants by mxcli. For explicit control, create constants first:
+
+CREATE CONSTANT AuthTest.ApiUser TYPE String DEFAULT 'testuser';
+CREATE CONSTANT AuthTest.ApiPass TYPE String DEFAULT 'testpass123!';
+
+-- ############################################################################
+-- PART 2: REST CLIENT WITH BASIC AUTH
+-- ############################################################################
+
+-- httpbin.org/basic-auth/{user}/{pass} returns 200 + JSON if correct
+-- Basic auth credentials are sent, 401 otherwise.
+-- This is the definitive test: if we get 200, the header was sent.
+
+CREATE REST CLIENT AuthTest.HttpBinAuthAPI (
+  BaseUrl: 'https://httpbin.org',
+  Authentication: BASIC (Username: $ApiUser, Password: $ApiPass)
+)
+{
+  /** Calls /basic-auth/testuser/testpass123! — returns 200 if auth header sent */
+  OPERATION CheckAuth {
+    Method: GET,
+    Path: '/basic-auth/testuser/testpass123!',
+    Headers: ('Accept' = 'application/json'),
+    Timeout: 30,
+    Response: NONE
+  }
+};
+
+-- ############################################################################
+-- PART 2: TEST MICROFLOW
+-- ############################################################################
+
+/**
+ * Test BASIC auth on consumed REST client.
+ *
+ * Calls httpbin.org/basic-auth/testuser/testpass123! which requires
+ * correct Basic auth. Logs the HTTP status code:
+ *   200 = auth header sent correctly
+ *   401 = auth header missing or wrong (BUG #200)
+ */
+CREATE MICROFLOW AuthTest.ACT_TestBasicAuth ()
+RETURNS Boolean AS $Success
+BEGIN
+  DECLARE $Success Boolean = false;
+
+  -- Call the REST client operation
+  SEND REST REQUEST AuthTest.HttpBinAuthAPI.CheckAuth;
+
+  -- Check the response status
+  IF $latestHttpResponse/StatusCode = 200 THEN
+    LOG INFO NODE 'AuthTest' 'Auth OK: 200 — Basic auth header was sent correctly';
+    SET $Success = true;
+  ELSE
+    LOG WARNING NODE 'AuthTest' 'Auth FAILED: status=' + toString($latestHttpResponse/StatusCode) + ' — Basic auth header was NOT sent (bug #200)';
+  END IF;
+
+  RETURN $Success;
+END;
+/
+
+-- ############################################################################
+-- PART 3: COMPARISON — INLINE REST CALL (known to work)
+-- ############################################################################
+
+/**
+ * Same test using inline REST CALL (this always worked).
+ * Run both microflows and compare: if ACT_TestBasicAuth fails but
+ * ACT_TestBasicAuthInline succeeds, the bug is in the REST client
+ * auth serialization.
+ */
+CREATE MICROFLOW AuthTest.ACT_TestBasicAuthInline ()
+RETURNS Boolean AS $Success
+BEGIN
+  DECLARE $Success Boolean = false;
+
+  $Response = REST CALL GET 'https://httpbin.org/basic-auth/testuser/testpass123!'
+    HEADER Accept = 'application/json'
+    AUTH BASIC 'testuser' PASSWORD 'testpass123!'
+    TIMEOUT 30
+    RETURNS String
+    ON ERROR CONTINUE;
+
+  IF $Response != '' THEN
+    LOG INFO NODE 'AuthTest' 'Inline auth OK — response received';
+    SET $Success = true;
+  ELSE
+    LOG WARNING NODE 'AuthTest' 'Inline auth FAILED — empty response';
+  END IF;
+
+  RETURN $Success;
+END;
+/
+
+-- ############################################################################
+-- PART 4: TEST PAGE
+-- ############################################################################
+
+CREATE PAGE AuthTest.AuthTestPage
+(
+  Title: 'Bug #200 — Basic Auth Test',
+  Layout: Atlas_Core.Atlas_Default,
+  Url: 'auth-test'
+)
+{
+  LAYOUTGRID grid {
+    ROW rowTitle {
+      COLUMN col (DesktopWidth: 12) {
+        DYNAMICTEXT txtTitle (Content: 'Bug #200: REST Client Basic Auth', RenderMode: H2)
+        DYNAMICTEXT txtDesc (Content: 'Click each button and check the console log. Both should show status 200.', RenderMode: Paragraph)
+      }
+    }
+    ROW rowButtons {
+      COLUMN colClient (DesktopWidth: 6) {
+        ACTIONBUTTON btnClient (
+          Caption: 'Test REST Client Auth',
+          Action: MICROFLOW AuthTest.ACT_TestBasicAuth,
+          ButtonStyle: Primary
+        )
+        DYNAMICTEXT txtClient (Content: 'Uses CREATE REST CLIENT with BASIC auth', RenderMode: Paragraph)
+      }
+      COLUMN colInline (DesktopWidth: 6) {
+        ACTIONBUTTON btnInline (
+          Caption: 'Test Inline REST CALL Auth',
+          Action: MICROFLOW AuthTest.ACT_TestBasicAuthInline,
+          ButtonStyle: Default
+        )
+        DYNAMICTEXT txtInline (Content: 'Uses inline REST CALL ... AUTH BASIC (known working)', RenderMode: Paragraph)
+      }
+    }
+  }
+};
+
+-- ############################################################################
+-- PART 5: VERIFICATION
+-- ############################################################################
+
+SHOW REST CLIENTS IN AuthTest;
+DESCRIBE REST CLIENT AuthTest.HttpBinAuthAPI;
+DESCRIBE MICROFLOW AuthTest.ACT_TestBasicAuth;

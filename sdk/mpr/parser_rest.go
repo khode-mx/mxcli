@@ -334,7 +334,15 @@ func extractRestValue(v any) string {
 	case "Rest$StringValue":
 		return extractString(valMap["Value"])
 	case "Rest$ConstantValue":
-		return extractString(valMap["Constant"])
+		// The BSON field is "Value" (QualifiedName of the constant).
+		// Historical code wrote "Constant" — try both for backward compat.
+		if v := extractString(valMap["Value"]); v != "" {
+			return "$" + v
+		}
+		if v := extractString(valMap["Constant"]); v != "" {
+			return "$" + v
+		}
+		return ""
 	}
 	return ""
 }

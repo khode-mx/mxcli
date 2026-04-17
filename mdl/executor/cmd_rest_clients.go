@@ -337,13 +337,44 @@ func createRestClient(ctx *ExecContext, stmt *ast.CreateRestClientStmt) error {
 		BaseUrl:       stmt.BaseUrl,
 	}
 
-	// Authentication
+	// Authentication — Mendix requires Rest$ConstantValue for BASIC auth credentials
+	// (Rest$StringValue causes InvalidCastException in Studio Pro). When literal
+	// strings are provided, auto-create constants to hold them.
 	if stmt.Authentication != nil {
-		svc.Authentication = &model.RestAuthentication{
-			Scheme:   stmt.Authentication.Scheme,
-			Username: stmt.Authentication.Username,
-			Password: stmt.Authentication.Password,
+		auth := &model.RestAuthentication{
+			Scheme: stmt.Authentication.Scheme,
 		}
+		// Username — must use Rest$ConstantValue pointing to a real constant.
+		// $Variable refs pass through; literal strings auto-create constants.
+		if strings.HasPrefix(stmt.Authentication.Username, "$") {
+			// Already a $Constant ref — resolve to qualified name for BY_NAME lookup
+			name := strings.TrimPrefix(stmt.Authentication.Username, "$")
+			if !strings.Contains(name, ".") {
+				name = moduleName + "." + name
+			}
+			auth.Username = "$" + name
+		} else if stmt.Authentication.Username != "" {
+			constName := stmt.Name.Name + "_Username"
+			if err := e.ensureConstant(moduleName, containerID, constName, stmt.Authentication.Username); err != nil {
+				return fmt.Errorf("failed to create username constant: %w", err)
+			}
+			auth.Username = "$" + moduleName + "." + constName
+		}
+		// Password
+		if strings.HasPrefix(stmt.Authentication.Password, "$") {
+			name := strings.TrimPrefix(stmt.Authentication.Password, "$")
+			if !strings.Contains(name, ".") {
+				name = moduleName + "." + name
+			}
+			auth.Password = "$" + name
+		} else if stmt.Authentication.Password != "" {
+			constName := stmt.Name.Name + "_Password"
+			if err := e.ensureConstant(moduleName, containerID, constName, stmt.Authentication.Password); err != nil {
+				return fmt.Errorf("failed to create password constant: %w", err)
+			}
+			auth.Password = "$" + moduleName + "." + constName
+		}
+		svc.Authentication = auth
 	}
 
 	// Operations
@@ -455,6 +486,30 @@ func convertMappingEntries(entries []ast.RestMappingEntry, importDirection bool)
 		}
 	}
 	return result
+}
+
+// ensureConstant creates a string constant if it doesn't already exist.
+func (e *Executor) ensureConstant(moduleName string, containerID model.ID, constName, value string) error {
+	// Check if constant already exists
+	constants, _ := e.reader.ListConstants()
+	h, _ := e.getHierarchy()
+	for _, c := range constants {
+		modID := h.FindModuleID(c.ContainerID)
+		modName := h.GetModuleName(modID)
+		if modName == moduleName && c.Name == constName {
+			return nil // already exists
+		}
+	}
+
+	// Create the constant
+	constant := &model.Constant{
+		ContainerID:  containerID,
+		Name:         constName,
+		Type:         model.ConstantDataType{Kind: "String"},
+		DefaultValue: value,
+		ExportLevel:  "Hidden",
+	}
+	return e.writer.CreateConstant(constant)
 }
 
 // dropRestClient handles DROP REST CLIENT statement.

@@ -49,6 +49,12 @@ func (w *Writer) serializeConsumedRestService(svc *model.ConsumedRestService) ([
 		"Name":          svc.Name,
 		"Documentation": svc.Documentation,
 		"Excluded":      svc.Excluded,
+		// ExportLevel: whether the document is exposed to other modules/projects.
+		// Studio Pro defaults to "Hidden". Missing this field has been observed
+		// to cause runtime auth issues (#200).
+		"ExportLevel":      "Hidden",
+		"BaseUrlParameter": nil,
+		"OpenApiFile":      nil,
 	}
 
 	// BaseUrl as Rest$ValueTemplate
@@ -97,11 +103,12 @@ func serializeRestAuthScheme(auth *model.RestAuthentication) bson.M {
 // Values starting with "$" are treated as constant references; others as string literals.
 func serializeRestValue(value string) bson.M {
 	if strings.HasPrefix(value, "$") {
-		// Constant reference — strip the $ prefix for the constant name
+		// Constant reference — the BSON field is "Value" (QualifiedName of the constant).
+		constRef := strings.TrimPrefix(value, "$")
 		return bson.M{
-			"$ID":      idToBsonBinary(generateUUID()),
-			"$Type":    "Rest$ConstantValue",
-			"Constant": strings.TrimPrefix(value, "$"),
+			"$ID":   idToBsonBinary(generateUUID()),
+			"$Type": "Rest$ConstantValue",
+			"Value": constRef,
 		}
 	}
 	return bson.M{
@@ -119,9 +126,15 @@ func serializeRestOperation(op *model.RestClientOperation) bson.M {
 		"Name":  op.Name,
 	}
 
-	if op.Timeout > 0 {
-		doc["Timeout"] = int64(op.Timeout)
+	// Timeout: Studio Pro always writes this field; default is 300 seconds.
+	timeout := int64(op.Timeout)
+	if timeout <= 0 {
+		timeout = 300
 	}
+	doc["Timeout"] = timeout
+
+	// Tags: Studio Pro always writes this field (versioned string array).
+	doc["Tags"] = bson.A{int32(1)}
 
 	// Method: polymorphic (WithBody or WithoutBody)
 	doc["Method"] = serializeRestMethod(op)

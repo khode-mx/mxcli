@@ -135,7 +135,7 @@ func TestSerializeConsumedRestServiceWithConstantAuth(t *testing.T) {
 		t.Fatalf("Username: expected map, got %T", authScheme["Username"])
 	}
 	assertField(t, username, "$Type", "Rest$ConstantValue")
-	assertField(t, username, "Constant", "MyModule.ApiUser")
+	assertField(t, username, "Value", "MyModule.ApiUser")
 }
 
 func TestSerializeRestOperationGetWithParams(t *testing.T) {
