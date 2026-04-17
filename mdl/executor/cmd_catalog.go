@@ -691,7 +691,8 @@ func captureDescribeParallel(ctx *ExecContext, objectType string, qualifiedName 
 	}
 	qn := ast.QualifiedName{Module: parts[0], Name: parts[1]}
 
-	// Create a goroutine-local executor: shared reader + cache, own output buffer
+	// Create a goroutine-local executor: shared reader + cache, own output buffer.
+	// TODO: Replace with ExecContext.Fork() when MR 3 makes ExecContext self-contained.
 	var buf bytes.Buffer
 	local := &Executor{
 		reader: ctx.executor.reader,
