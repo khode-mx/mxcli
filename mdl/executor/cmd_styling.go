@@ -3,6 +3,7 @@
 package executor
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"reflect"
@@ -19,7 +20,9 @@ import (
 // SHOW DESIGN PROPERTIES
 // ============================================================================
 
-func (e *Executor) execShowDesignProperties(s *ast.ShowDesignPropertiesStmt) error {
+func execShowDesignProperties(ctx *ExecContext, s *ast.ShowDesignPropertiesStmt) error {
+	e := ctx.executor
+
 	if e.reader == nil {
 		return mdlerrors.NewNotConnected()
 	}
@@ -31,7 +34,7 @@ func (e *Executor) execShowDesignProperties(s *ast.ShowDesignPropertiesStmt) err
 	}
 
 	if len(registry.WidgetProperties) == 0 {
-		fmt.Fprintln(e.output, "No design properties found. Check that themesource/*/web/design-properties.json exists in the project directory.")
+		fmt.Fprintln(ctx.Output, "No design properties found. Check that themesource/*/web/design-properties.json exists in the project directory.")
 		return nil
 	}
 
@@ -40,11 +43,11 @@ func (e *Executor) execShowDesignProperties(s *ast.ShowDesignPropertiesStmt) err
 		dpKey := resolveDesignPropsKey(s.WidgetType)
 		props := registry.GetPropertiesForWidget(dpKey)
 		if len(props) == 0 {
-			fmt.Fprintf(e.output, "No design properties found for widget type %s (%s)\n", s.WidgetType, dpKey)
+			fmt.Fprintf(ctx.Output, "No design properties found for widget type %s (%s)\n", s.WidgetType, dpKey)
 			return nil
 		}
-		fmt.Fprintf(e.output, "Design Properties for %s:\n\n", s.WidgetType)
-		e.printDesignProperties(registry, dpKey)
+		fmt.Fprintf(ctx.Output, "Design Properties for %s:\n\n", s.WidgetType)
+		printDesignProperties(ctx, registry, dpKey)
 	} else {
 		// Show all widget types and their properties
 		keys := make([]string, 0, len(registry.WidgetProperties))
@@ -58,51 +61,56 @@ func (e *Executor) execShowDesignProperties(s *ast.ShowDesignPropertiesStmt) err
 			if len(props) == 0 {
 				continue
 			}
-			fmt.Fprintf(e.output, "=== %s ===\n", key)
+			fmt.Fprintf(ctx.Output, "=== %s ===\n", key)
 			for _, p := range props {
-				e.printOneProperty(p)
+				printOneProperty(ctx, p)
 			}
-			fmt.Fprintln(e.output)
+			fmt.Fprintln(ctx.Output)
 		}
 	}
 
 	return nil
 }
 
+// Wrapper for callers that haven't been migrated yet.
+func (e *Executor) execShowDesignProperties(s *ast.ShowDesignPropertiesStmt) error {
+	return execShowDesignProperties(e.newExecContext(context.Background()), s)
+}
+
 // printDesignProperties prints properties for a widget type, showing inherited "Widget" props separately.
-func (e *Executor) printDesignProperties(registry *ThemeRegistry, dpKey string) {
+func printDesignProperties(ctx *ExecContext, registry *ThemeRegistry, dpKey string) {
 	// Print inherited Widget properties
 	if widgetProps, ok := registry.WidgetProperties["Widget"]; ok && len(widgetProps) > 0 {
-		fmt.Fprintf(e.output, "From: Widget (inherited)\n")
+		fmt.Fprintf(ctx.Output, "From: Widget (inherited)\n")
 		for _, p := range widgetProps {
-			e.printOneProperty(p)
+			printOneProperty(ctx, p)
 		}
 	}
 
 	// Print type-specific properties
 	if dpKey != "Widget" {
 		if typeProps, ok := registry.WidgetProperties[dpKey]; ok && len(typeProps) > 0 {
-			fmt.Fprintf(e.output, "From: %s\n", dpKey)
+			fmt.Fprintf(ctx.Output, "From: %s\n", dpKey)
 			for _, p := range typeProps {
-				e.printOneProperty(p)
+				printOneProperty(ctx, p)
 			}
 		}
 	}
 }
 
 // printOneProperty prints a single design property in a readable format.
-func (e *Executor) printOneProperty(p ThemeProperty) {
+func printOneProperty(ctx *ExecContext, p ThemeProperty) {
 	switch p.Type {
 	case "Toggle":
-		fmt.Fprintf(e.output, "  %-24s Toggle      class: %s\n", p.Name, p.Class)
+		fmt.Fprintf(ctx.Output, "  %-24s Toggle      class: %s\n", p.Name, p.Class)
 	case "Dropdown", "ColorPicker", "ToggleButtonGroup":
 		options := make([]string, 0, len(p.Options))
 		for _, o := range p.Options {
 			options = append(options, o.Name)
 		}
-		fmt.Fprintf(e.output, "  %-24s %-11s [%s]\n", p.Name, p.Type, strings.Join(options, ", "))
+		fmt.Fprintf(ctx.Output, "  %-24s %-11s [%s]\n", p.Name, p.Type, strings.Join(options, ", "))
 	default:
-		fmt.Fprintf(e.output, "  %-24s %s\n", p.Name, p.Type)
+		fmt.Fprintf(ctx.Output, "  %-24s %s\n", p.Name, p.Type)
 	}
 }
 
@@ -110,7 +118,9 @@ func (e *Executor) printOneProperty(p ThemeProperty) {
 // DESCRIBE STYLING
 // ============================================================================
 
-func (e *Executor) execDescribeStyling(s *ast.DescribeStylingStmt) error {
+func execDescribeStyling(ctx *ExecContext, s *ast.DescribeStylingStmt) error {
+	e := ctx.executor
+
 	if e.reader == nil {
 		return mdlerrors.NewNotConnected()
 	}
@@ -165,7 +175,7 @@ func (e *Executor) execDescribeStyling(s *ast.DescribeStylingStmt) error {
 	}
 
 	if len(rawWidgets) == 0 {
-		fmt.Fprintf(e.output, "No widgets found in %s %s\n", s.ContainerType, s.ContainerName.String())
+		fmt.Fprintf(ctx.Output, "No widgets found in %s %s\n", s.ContainerType, s.ContainerName.String())
 		return nil
 	}
 
@@ -176,40 +186,45 @@ func (e *Executor) execDescribeStyling(s *ast.DescribeStylingStmt) error {
 		if s.WidgetName != "" {
 			return mdlerrors.NewNotFoundMsg("widget", s.WidgetName, fmt.Sprintf("widget %q not found in %s %s", s.WidgetName, s.ContainerType, s.ContainerName.String()))
 		}
-		fmt.Fprintf(e.output, "No styled widgets found in %s %s\n", s.ContainerType, s.ContainerName.String())
+		fmt.Fprintf(ctx.Output, "No styled widgets found in %s %s\n", s.ContainerType, s.ContainerName.String())
 		return nil
 	}
 
 	// Output
 	for i, w := range styledWidgets {
 		if i > 0 {
-			fmt.Fprintln(e.output)
+			fmt.Fprintln(ctx.Output)
 		}
 		displayName := getWidgetDisplayName(w.Type)
-		fmt.Fprintf(e.output, "WIDGET %s (%s)\n", w.Name, displayName)
+		fmt.Fprintf(ctx.Output, "WIDGET %s (%s)\n", w.Name, displayName)
 		if w.Class != "" {
-			fmt.Fprintf(e.output, "  Class: '%s'\n", w.Class)
+			fmt.Fprintf(ctx.Output, "  Class: '%s'\n", w.Class)
 		}
 		if w.Style != "" {
-			fmt.Fprintf(e.output, "  Style: '%s'\n", w.Style)
+			fmt.Fprintf(ctx.Output, "  Style: '%s'\n", w.Style)
 		}
 		if len(w.DesignProperties) > 0 {
-			fmt.Fprintf(e.output, "  DesignProperties: [")
+			fmt.Fprintf(ctx.Output, "  DesignProperties: [")
 			for j, dp := range w.DesignProperties {
 				if j > 0 {
-					fmt.Fprint(e.output, ", ")
+					fmt.Fprint(ctx.Output, ", ")
 				}
 				if dp.ValueType == "toggle" {
-					fmt.Fprintf(e.output, "'%s': ON", dp.Key)
+					fmt.Fprintf(ctx.Output, "'%s': ON", dp.Key)
 				} else {
-					fmt.Fprintf(e.output, "'%s': '%s'", dp.Key, dp.Option)
+					fmt.Fprintf(ctx.Output, "'%s': '%s'", dp.Key, dp.Option)
 				}
 			}
-			fmt.Fprintln(e.output, "]")
+			fmt.Fprintln(ctx.Output, "]")
 		}
 	}
 
 	return nil
+}
+
+// Wrapper for callers that haven't been migrated yet.
+func (e *Executor) execDescribeStyling(s *ast.DescribeStylingStmt) error {
+	return execDescribeStyling(e.newExecContext(context.Background()), s)
 }
 
 // collectStyledWidgets walks rawWidget tree and collects widgets that have styling.
@@ -252,7 +267,9 @@ func collectStyledWidgets(widgets []rawWidget, widgetName string) []rawWidget {
 // ALTER STYLING
 // ============================================================================
 
-func (e *Executor) execAlterStyling(s *ast.AlterStylingStmt) error {
+func execAlterStyling(ctx *ExecContext, s *ast.AlterStylingStmt) error {
+	e := ctx.executor
+
 	if e.reader == nil {
 		return mdlerrors.NewNotConnected()
 	}
@@ -266,15 +283,22 @@ func (e *Executor) execAlterStyling(s *ast.AlterStylingStmt) error {
 	}
 
 	if s.ContainerType == "PAGE" {
-		return e.alterStylingOnPage(s, h)
+		return alterStylingOnPage(ctx, s, h)
 	} else if s.ContainerType == "SNIPPET" {
-		return e.alterStylingOnSnippet(s, h)
+		return alterStylingOnSnippet(ctx, s, h)
 	}
 
 	return mdlerrors.NewUnsupported("unsupported container type: " + s.ContainerType)
 }
 
-func (e *Executor) alterStylingOnPage(s *ast.AlterStylingStmt, h *ContainerHierarchy) error {
+// Wrapper for callers that haven't been migrated yet.
+func (e *Executor) execAlterStyling(s *ast.AlterStylingStmt) error {
+	return execAlterStyling(e.newExecContext(context.Background()), s)
+}
+
+func alterStylingOnPage(ctx *ExecContext, s *ast.AlterStylingStmt, h *ContainerHierarchy) error {
+	e := ctx.executor
+
 	// Find page
 	allPages, err := e.reader.ListPages()
 	if err != nil {
@@ -317,11 +341,13 @@ func (e *Executor) alterStylingOnPage(s *ast.AlterStylingStmt, h *ContainerHiera
 		return mdlerrors.NewBackend("save page", err)
 	}
 
-	fmt.Fprintf(e.output, "Updated styling on widget %q in page %s\n", s.WidgetName, s.ContainerName.String())
+	fmt.Fprintf(ctx.Output, "Updated styling on widget %q in page %s\n", s.WidgetName, s.ContainerName.String())
 	return nil
 }
 
-func (e *Executor) alterStylingOnSnippet(s *ast.AlterStylingStmt, h *ContainerHierarchy) error {
+func alterStylingOnSnippet(ctx *ExecContext, s *ast.AlterStylingStmt, h *ContainerHierarchy) error {
+	e := ctx.executor
+
 	// Find snippet
 	allSnippets, err := e.reader.ListSnippets()
 	if err != nil {
@@ -364,7 +390,7 @@ func (e *Executor) alterStylingOnSnippet(s *ast.AlterStylingStmt, h *ContainerHi
 		return mdlerrors.NewBackend("save snippet", err)
 	}
 
-	fmt.Fprintf(e.output, "Updated styling on widget %q in snippet %s\n", s.WidgetName, s.ContainerName.String())
+	fmt.Fprintf(ctx.Output, "Updated styling on widget %q in snippet %s\n", s.WidgetName, s.ContainerName.String())
 	return nil
 }
 
@@ -509,7 +535,9 @@ func setDesignProperty(baseWidget reflect.Value, a ast.StylingAssignment) error 
 }
 
 // findPageByName looks up a page by qualified name.
-func (e *Executor) findPageByName(name ast.QualifiedName, h *ContainerHierarchy) (*pages.Page, error) {
+func findPageByName(ctx *ExecContext, name ast.QualifiedName, h *ContainerHierarchy) (*pages.Page, error) {
+	e := ctx.executor
+
 	allPages, err := e.reader.ListPages()
 	if err != nil {
 		return nil, mdlerrors.NewBackend("list pages", err)
@@ -524,8 +552,15 @@ func (e *Executor) findPageByName(name ast.QualifiedName, h *ContainerHierarchy)
 	return nil, mdlerrors.NewNotFound("page", name.String())
 }
 
+// Wrapper for callers that haven't been migrated yet.
+func (e *Executor) findPageByName(name ast.QualifiedName, h *ContainerHierarchy) (*pages.Page, error) {
+	return findPageByName(e.newExecContext(context.Background()), name, h)
+}
+
 // findSnippetByName looks up a snippet by qualified name.
-func (e *Executor) findSnippetByName(name ast.QualifiedName, h *ContainerHierarchy) (*pages.Snippet, model.ID, error) {
+func findSnippetByName(ctx *ExecContext, name ast.QualifiedName, h *ContainerHierarchy) (*pages.Snippet, model.ID, error) {
+	e := ctx.executor
+
 	allSnippets, err := e.reader.ListSnippets()
 	if err != nil {
 		return nil, "", mdlerrors.NewBackend("list snippets", err)
@@ -538,4 +573,9 @@ func (e *Executor) findSnippetByName(name ast.QualifiedName, h *ContainerHierarc
 		}
 	}
 	return nil, "", mdlerrors.NewNotFound("snippet", name.String())
+}
+
+// Wrapper for callers that haven't been migrated yet.
+func (e *Executor) findSnippetByName(name ast.QualifiedName, h *ContainerHierarchy) (*pages.Snippet, model.ID, error) {
+	return findSnippetByName(e.newExecContext(context.Background()), name, h)
 }

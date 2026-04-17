@@ -3,6 +3,7 @@
 package executor
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -60,14 +61,14 @@ type oqlPlanColumn struct {
 }
 
 // OqlQueryPlanELK generates a query plan visualization for a view entity's OQL query.
-func (e *Executor) OqlQueryPlanELK(qualifiedName string, entity *domainmodel.Entity) error {
+func OqlQueryPlanELK(ctx *ExecContext, qualifiedName string, entity *domainmodel.Entity) error {
 	plan := parseOqlPlan(qualifiedName, entity.OqlQuery)
 
 	out, err := json.MarshalIndent(plan, "", "  ")
 	if err != nil {
 		return mdlerrors.NewBackend("marshal JSON", err)
 	}
-	fmt.Fprint(e.output, string(out))
+	fmt.Fprint(ctx.Output, string(out))
 	return nil
 }
 
@@ -473,4 +474,10 @@ func buildScalarSubqueryTable(sel ast.OQLSelectItem, selectIndex, tableOffset in
 	}
 
 	return t
+}
+
+// --- Executor method wrapper for backward compatibility ---
+
+func (e *Executor) OqlQueryPlanELK(qualifiedName string, entity *domainmodel.Entity) error {
+	return OqlQueryPlanELK(e.newExecContext(context.Background()), qualifiedName, entity)
 }

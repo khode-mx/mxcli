@@ -257,7 +257,7 @@ func (e *Executor) showImageCollections(moduleName string) error {
 }
 
 // findImageCollection finds an image collection by module and name.
-func (e *Executor) findImageCollection(moduleName, collectionName string) *mpr.ImageCollection {
+func findImageCollection(e *Executor, moduleName, collectionName string) *mpr.ImageCollection {
 	collections, err := e.reader.ListImageCollections()
 	if err != nil {
 		return nil
@@ -276,4 +276,9 @@ func (e *Executor) findImageCollection(moduleName, collectionName string) *mpr.I
 		}
 	}
 	return nil
+}
+
+// Executor wrapper for unmigrated callers.
+func (e *Executor) findImageCollection(moduleName, collectionName string) *mpr.ImageCollection {
+	return findImageCollection(e, moduleName, collectionName)
 }

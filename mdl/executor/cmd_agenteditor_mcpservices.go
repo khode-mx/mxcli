@@ -9,6 +9,7 @@
 package executor
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
@@ -17,7 +18,8 @@ import (
 )
 
 // showAgentEditorConsumedMCPServices handles SHOW CONSUMED MCP SERVICES [IN module].
-func (e *Executor) showAgentEditorConsumedMCPServices(moduleName string) error {
+func showAgentEditorConsumedMCPServices(ctx *ExecContext, moduleName string) error {
+	e := ctx.executor
 	if e.reader == nil {
 		return mdlerrors.NewNotConnected()
 	}
@@ -57,12 +59,13 @@ func (e *Executor) showAgentEditorConsumedMCPServices(moduleName string) error {
 }
 
 // describeAgentEditorConsumedMCPService handles DESCRIBE CONSUMED MCP SERVICE Module.Name.
-func (e *Executor) describeAgentEditorConsumedMCPService(name ast.QualifiedName) error {
+func describeAgentEditorConsumedMCPService(ctx *ExecContext, name ast.QualifiedName) error {
+	e := ctx.executor
 	if e.reader == nil {
 		return mdlerrors.NewNotConnected()
 	}
 
-	c := e.findAgentEditorConsumedMCPService(name.Module, name.Name)
+	c := findAgentEditorConsumedMCPService(ctx, name.Module, name.Name)
 	if c == nil {
 		return mdlerrors.NewNotFound("consumed MCP service", name.String())
 	}
@@ -76,10 +79,10 @@ func (e *Executor) describeAgentEditorConsumedMCPService(name ast.QualifiedName)
 	qualifiedName := fmt.Sprintf("%s.%s", modName, c.Name)
 
 	if c.Documentation != "" {
-		fmt.Fprintf(e.output, "/**\n * %s\n */\n", c.Documentation)
+		fmt.Fprintf(ctx.Output, "/**\n * %s\n */\n", c.Documentation)
 	}
 
-	fmt.Fprintf(e.output, "CREATE CONSUMED MCP SERVICE %s (\n", qualifiedName)
+	fmt.Fprintf(ctx.Output, "CREATE CONSUMED MCP SERVICE %s (\n", qualifiedName)
 
 	var lines []string
 	if c.ProtocolVersion != "" {
@@ -97,19 +100,20 @@ func (e *Executor) describeAgentEditorConsumedMCPService(name ast.QualifiedName)
 
 	for i, line := range lines {
 		if i < len(lines)-1 {
-			fmt.Fprintln(e.output, line+",")
+			fmt.Fprintln(ctx.Output, line+",")
 		} else {
-			fmt.Fprintln(e.output, line)
+			fmt.Fprintln(ctx.Output, line)
 		}
 	}
 
-	fmt.Fprintln(e.output, ");")
-	fmt.Fprintln(e.output, "/")
+	fmt.Fprintln(ctx.Output, ");")
+	fmt.Fprintln(ctx.Output, "/")
 	return nil
 }
 
 // findAgentEditorConsumedMCPService looks up an MCP service by module and name.
-func (e *Executor) findAgentEditorConsumedMCPService(moduleName, svcName string) *agenteditor.ConsumedMCPService {
+func findAgentEditorConsumedMCPService(ctx *ExecContext, moduleName, svcName string) *agenteditor.ConsumedMCPService {
+	e := ctx.executor
 	svcs, err := e.reader.ListAgentEditorConsumedMCPServices()
 	if err != nil {
 		return nil
@@ -126,4 +130,18 @@ func (e *Executor) findAgentEditorConsumedMCPService(moduleName, svcName string)
 		}
 	}
 	return nil
+}
+
+// --- Executor method wrappers for backward compatibility ---
+
+func (e *Executor) showAgentEditorConsumedMCPServices(moduleName string) error {
+	return showAgentEditorConsumedMCPServices(e.newExecContext(context.Background()), moduleName)
+}
+
+func (e *Executor) describeAgentEditorConsumedMCPService(name ast.QualifiedName) error {
+	return describeAgentEditorConsumedMCPService(e.newExecContext(context.Background()), name)
+}
+
+func (e *Executor) findAgentEditorConsumedMCPService(moduleName, svcName string) *agenteditor.ConsumedMCPService {
+	return findAgentEditorConsumedMCPService(e.newExecContext(context.Background()), moduleName, svcName)
 }

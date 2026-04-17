@@ -3,6 +3,7 @@
 package executor
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -11,7 +12,8 @@ import (
 )
 
 // execShowCallers handles SHOW CALLERS OF Module.Microflow [TRANSITIVE].
-func (e *Executor) execShowCallers(s *ast.ShowStmt) error {
+func execShowCallers(ctx *ExecContext, s *ast.ShowStmt) error {
+	e := ctx.executor
 	if s.Name == nil {
 		return mdlerrors.NewValidation("target name required for SHOW CALLERS")
 	}
@@ -22,11 +24,11 @@ func (e *Executor) execShowCallers(s *ast.ShowStmt) error {
 	}
 
 	targetName := s.Name.String()
-	fmt.Fprintf(e.output, "\nCallers of %s", targetName)
+	fmt.Fprintf(ctx.Output, "\nCallers of %s", targetName)
 	if s.Transitive {
-		fmt.Fprintln(e.output, " (transitive)")
+		fmt.Fprintln(ctx.Output, " (transitive)")
 	} else {
-		fmt.Fprintln(e.output, "")
+		fmt.Fprintln(ctx.Output, "")
 	}
 
 	var query string
@@ -58,23 +60,24 @@ func (e *Executor) execShowCallers(s *ast.ShowStmt) error {
 		`
 	}
 
-	result, err := e.catalog.Query(strings.Replace(query, "?", "'"+targetName+"'", 1))
+	result, err := ctx.Catalog.Query(strings.Replace(query, "?", "'"+targetName+"'", 1))
 	if err != nil {
 		return mdlerrors.NewBackend("query callers", err)
 	}
 
 	if result.Count == 0 {
-		fmt.Fprintln(e.output, "(no callers found)")
+		fmt.Fprintln(ctx.Output, "(no callers found)")
 		return nil
 	}
 
-	fmt.Fprintf(e.output, "Found %d caller(s)\n", result.Count)
+	fmt.Fprintf(ctx.Output, "Found %d caller(s)\n", result.Count)
 	e.outputCatalogResults(result)
 	return nil
 }
 
 // execShowCallees handles SHOW CALLEES OF Module.Microflow [TRANSITIVE].
-func (e *Executor) execShowCallees(s *ast.ShowStmt) error {
+func execShowCallees(ctx *ExecContext, s *ast.ShowStmt) error {
+	e := ctx.executor
 	if s.Name == nil {
 		return mdlerrors.NewValidation("target name required for SHOW CALLEES")
 	}
@@ -85,11 +88,11 @@ func (e *Executor) execShowCallees(s *ast.ShowStmt) error {
 	}
 
 	sourceName := s.Name.String()
-	fmt.Fprintf(e.output, "\nCallees of %s", sourceName)
+	fmt.Fprintf(ctx.Output, "\nCallees of %s", sourceName)
 	if s.Transitive {
-		fmt.Fprintln(e.output, " (transitive)")
+		fmt.Fprintln(ctx.Output, " (transitive)")
 	} else {
-		fmt.Fprintln(e.output, "")
+		fmt.Fprintln(ctx.Output, "")
 	}
 
 	var query string
@@ -121,23 +124,24 @@ func (e *Executor) execShowCallees(s *ast.ShowStmt) error {
 		`
 	}
 
-	result, err := e.catalog.Query(strings.Replace(query, "?", "'"+sourceName+"'", 1))
+	result, err := ctx.Catalog.Query(strings.Replace(query, "?", "'"+sourceName+"'", 1))
 	if err != nil {
 		return mdlerrors.NewBackend("query callees", err)
 	}
 
 	if result.Count == 0 {
-		fmt.Fprintln(e.output, "(no callees found)")
+		fmt.Fprintln(ctx.Output, "(no callees found)")
 		return nil
 	}
 
-	fmt.Fprintf(e.output, "Found %d callee(s)\n", result.Count)
+	fmt.Fprintf(ctx.Output, "Found %d callee(s)\n", result.Count)
 	e.outputCatalogResults(result)
 	return nil
 }
 
 // execShowReferences handles SHOW REFERENCES TO Module.Entity.
-func (e *Executor) execShowReferences(s *ast.ShowStmt) error {
+func execShowReferences(ctx *ExecContext, s *ast.ShowStmt) error {
+	e := ctx.executor
 	if s.Name == nil {
 		return mdlerrors.NewValidation("target name required for SHOW REFERENCES")
 	}
@@ -148,7 +152,7 @@ func (e *Executor) execShowReferences(s *ast.ShowStmt) error {
 	}
 
 	targetName := s.Name.String()
-	fmt.Fprintf(e.output, "\nReferences to %s\n", targetName)
+	fmt.Fprintf(ctx.Output, "\nReferences to %s\n", targetName)
 
 	// Find all references to this target
 	query := `
@@ -158,24 +162,25 @@ func (e *Executor) execShowReferences(s *ast.ShowStmt) error {
 		ORDER BY RefKind, SourceType, SourceName
 	`
 
-	result, err := e.catalog.Query(strings.Replace(query, "?", "'"+targetName+"'", 1))
+	result, err := ctx.Catalog.Query(strings.Replace(query, "?", "'"+targetName+"'", 1))
 	if err != nil {
 		return mdlerrors.NewBackend("query references", err)
 	}
 
 	if result.Count == 0 {
-		fmt.Fprintln(e.output, "(no references found)")
+		fmt.Fprintln(ctx.Output, "(no references found)")
 		return nil
 	}
 
-	fmt.Fprintf(e.output, "Found %d reference(s)\n", result.Count)
+	fmt.Fprintf(ctx.Output, "Found %d reference(s)\n", result.Count)
 	e.outputCatalogResults(result)
 	return nil
 }
 
 // execShowImpact handles SHOW IMPACT OF Module.Entity.
 // This shows all elements that would be affected by changing the target.
-func (e *Executor) execShowImpact(s *ast.ShowStmt) error {
+func execShowImpact(ctx *ExecContext, s *ast.ShowStmt) error {
+	e := ctx.executor
 	if s.Name == nil {
 		return mdlerrors.NewValidation("target name required for SHOW IMPACT")
 	}
@@ -186,7 +191,7 @@ func (e *Executor) execShowImpact(s *ast.ShowStmt) error {
 	}
 
 	targetName := s.Name.String()
-	fmt.Fprintf(e.output, "\nImpact analysis for %s\n", targetName)
+	fmt.Fprintf(ctx.Output, "\nImpact analysis for %s\n", targetName)
 
 	// Find all direct references to this target
 	directQuery := `
@@ -196,13 +201,13 @@ func (e *Executor) execShowImpact(s *ast.ShowStmt) error {
 		ORDER BY SourceType, SourceName
 	`
 
-	result, err := e.catalog.Query(strings.Replace(directQuery, "?", "'"+targetName+"'", 1))
+	result, err := ctx.Catalog.Query(strings.Replace(directQuery, "?", "'"+targetName+"'", 1))
 	if err != nil {
 		return mdlerrors.NewBackend("query impact", err)
 	}
 
 	if result.Count == 0 {
-		fmt.Fprintln(e.output, "(no impact - element is not referenced)")
+		fmt.Fprintln(ctx.Output, "(no impact - element is not referenced)")
 		return nil
 	}
 
@@ -216,14 +221,32 @@ func (e *Executor) execShowImpact(s *ast.ShowStmt) error {
 		}
 	}
 
-	fmt.Fprintf(e.output, "\nSummary:\n")
+	fmt.Fprintf(ctx.Output, "\nSummary:\n")
 	for t, count := range typeCounts {
-		fmt.Fprintf(e.output, "  %s: %d\n", t, count)
+		fmt.Fprintf(ctx.Output, "  %s: %d\n", t, count)
 	}
-	fmt.Fprintln(e.output)
+	fmt.Fprintln(ctx.Output)
 
-	fmt.Fprintf(e.output, "Found %d affected element(s)\n", result.Count)
+	fmt.Fprintf(ctx.Output, "Found %d affected element(s)\n", result.Count)
 	e.outputCatalogResults(result)
 
 	return nil
+}
+
+// --- Executor method wrappers for backward compatibility ---
+
+func (e *Executor) execShowCallers(s *ast.ShowStmt) error {
+	return execShowCallers(e.newExecContext(context.Background()), s)
+}
+
+func (e *Executor) execShowCallees(s *ast.ShowStmt) error {
+	return execShowCallees(e.newExecContext(context.Background()), s)
+}
+
+func (e *Executor) execShowReferences(s *ast.ShowStmt) error {
+	return execShowReferences(e.newExecContext(context.Background()), s)
+}
+
+func (e *Executor) execShowImpact(s *ast.ShowStmt) error {
+	return execShowImpact(e.newExecContext(context.Background()), s)
 }

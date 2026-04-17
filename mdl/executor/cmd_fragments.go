@@ -3,6 +3,7 @@
 package executor
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"sort"
@@ -14,62 +15,80 @@ import (
 )
 
 // execDefineFragment stores a fragment definition in the executor's session state.
-func (e *Executor) execDefineFragment(s *ast.DefineFragmentStmt) error {
-	if e.fragments == nil {
-		e.fragments = make(map[string]*ast.DefineFragmentStmt)
+func execDefineFragment(ctx *ExecContext, s *ast.DefineFragmentStmt) error {
+	if ctx.Fragments == nil {
+		ctx.Fragments = make(map[string]*ast.DefineFragmentStmt)
+		// Also update the executor's fragments map so newExecContext picks it up.
+		ctx.executor.fragments = ctx.Fragments
 	}
-	if _, exists := e.fragments[s.Name]; exists {
+	if _, exists := ctx.Fragments[s.Name]; exists {
 		return mdlerrors.NewAlreadyExists("fragment", s.Name)
 	}
-	e.fragments[s.Name] = s
-	fmt.Fprintf(e.output, "Defined fragment %s (%d widgets)\n", s.Name, len(s.Widgets))
+	ctx.Fragments[s.Name] = s
+	fmt.Fprintf(ctx.Output, "Defined fragment %s (%d widgets)\n", s.Name, len(s.Widgets))
 	return nil
 }
 
+// Executor wrapper for unmigrated callers.
+func (e *Executor) execDefineFragment(s *ast.DefineFragmentStmt) error {
+	return execDefineFragment(e.newExecContext(context.Background()), s)
+}
+
 // showFragments lists all defined fragments in the current session.
-func (e *Executor) showFragments() error {
-	if len(e.fragments) == 0 {
-		fmt.Fprintln(e.output, "No fragments defined.")
+func showFragments(ctx *ExecContext) error {
+	if len(ctx.Fragments) == 0 {
+		fmt.Fprintln(ctx.Output, "No fragments defined.")
 		return nil
 	}
 
 	// Sort by name for consistent output
-	names := make([]string, 0, len(e.fragments))
-	for name := range e.fragments {
+	names := make([]string, 0, len(ctx.Fragments))
+	for name := range ctx.Fragments {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 
-	fmt.Fprintf(e.output, "%-30s %s\n", "Fragment", "Widgets")
-	fmt.Fprintf(e.output, "%-30s %s\n", strings.Repeat("-", 30), strings.Repeat("-", 10))
+	fmt.Fprintf(ctx.Output, "%-30s %s\n", "Fragment", "Widgets")
+	fmt.Fprintf(ctx.Output, "%-30s %s\n", strings.Repeat("-", 30), strings.Repeat("-", 10))
 	for _, name := range names {
-		frag := e.fragments[name]
-		fmt.Fprintf(e.output, "%-30s %d\n", name, len(frag.Widgets))
+		frag := ctx.Fragments[name]
+		fmt.Fprintf(ctx.Output, "%-30s %d\n", name, len(frag.Widgets))
 	}
 	return nil
 }
 
+// Executor wrapper for unmigrated callers.
+func (e *Executor) showFragments() error {
+	return showFragments(e.newExecContext(context.Background()))
+}
+
 // describeFragment outputs a fragment's definition as MDL.
-func (e *Executor) describeFragment(name ast.QualifiedName) error {
-	if e.fragments == nil {
+func describeFragment(ctx *ExecContext, name ast.QualifiedName) error {
+	if ctx.Fragments == nil {
 		return mdlerrors.NewNotFound("fragment", name.Name)
 	}
-	frag, ok := e.fragments[name.Name]
+	frag, ok := ctx.Fragments[name.Name]
 	if !ok {
 		return mdlerrors.NewNotFound("fragment", name.Name)
 	}
 
-	fmt.Fprintf(e.output, "DEFINE FRAGMENT %s AS {\n", frag.Name)
+	fmt.Fprintf(ctx.Output, "DEFINE FRAGMENT %s AS {\n", frag.Name)
 	for _, w := range frag.Widgets {
-		outputASTWidgetMDL(e.output, w, 1)
+		outputASTWidgetMDL(ctx.Output, w, 1)
 	}
-	fmt.Fprintln(e.output, "};")
+	fmt.Fprintln(ctx.Output, "};")
 	return nil
+}
+
+// Executor wrapper for unmigrated callers.
+func (e *Executor) describeFragment(name ast.QualifiedName) error {
+	return describeFragment(e.newExecContext(context.Background()), name)
 }
 
 // describeFragmentFrom handles DESCRIBE FRAGMENT FROM PAGE/SNIPPET ... WIDGET ... command.
 // It finds a named widget in a page or snippet and outputs it as MDL.
-func (e *Executor) describeFragmentFrom(s *ast.DescribeFragmentFromStmt) error {
+func describeFragmentFrom(ctx *ExecContext, s *ast.DescribeFragmentFromStmt) error {
+	e := ctx.executor
 	if e.reader == nil {
 		return mdlerrors.NewNotConnected()
 	}
@@ -130,6 +149,11 @@ func (e *Executor) describeFragmentFrom(s *ast.DescribeFragmentFromStmt) error {
 	// Output as MDL
 	e.outputWidgetMDLV3(*target, 0)
 	return nil
+}
+
+// Executor wrapper for unmigrated callers.
+func (e *Executor) describeFragmentFrom(s *ast.DescribeFragmentFromStmt) error {
+	return describeFragmentFrom(e.newExecContext(context.Background()), s)
 }
 
 // findRawWidgetByName recursively searches the widget tree for a widget with the given name.

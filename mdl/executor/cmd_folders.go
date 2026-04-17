@@ -14,7 +14,7 @@ import (
 )
 
 // findFolderByPath walks a folder path under a module and returns the folder ID.
-func (e *Executor) findFolderByPath(moduleID model.ID, folderPath string, folders []*mpr.FolderInfo) (model.ID, error) {
+func findFolderByPath(ctx *ExecContext, moduleID model.ID, folderPath string, folders []*mpr.FolderInfo) (model.ID, error) {
 	parts := strings.Split(folderPath, "/")
 	currentContainerID := moduleID
 
@@ -50,7 +50,8 @@ func (e *Executor) findFolderByPath(moduleID model.ID, folderPath string, folder
 
 // execDropFolder handles DROP FOLDER 'path' IN Module statements.
 // The folder must be empty (no child documents or sub-folders).
-func (e *Executor) execDropFolder(s *ast.DropFolderStmt) error {
+func execDropFolder(ctx *ExecContext, s *ast.DropFolderStmt) error {
+	e := ctx.executor
 	if e.writer == nil {
 		return mdlerrors.NewNotConnected()
 	}
@@ -65,7 +66,7 @@ func (e *Executor) execDropFolder(s *ast.DropFolderStmt) error {
 		return mdlerrors.NewBackend("list folders", err)
 	}
 
-	folderID, err := e.findFolderByPath(module.ID, s.FolderPath, folders)
+	folderID, err := findFolderByPath(ctx, module.ID, s.FolderPath, folders)
 	if err != nil {
 		return fmt.Errorf("%w in %s", err, s.Module)
 	}
@@ -75,12 +76,13 @@ func (e *Executor) execDropFolder(s *ast.DropFolderStmt) error {
 	}
 
 	e.invalidateHierarchy()
-	fmt.Fprintf(e.output, "Dropped folder: '%s' in %s\n", s.FolderPath, s.Module)
+	fmt.Fprintf(ctx.Output, "Dropped folder: '%s' in %s\n", s.FolderPath, s.Module)
 	return nil
 }
 
 // execMoveFolder handles MOVE FOLDER Module.FolderName TO ... statements.
-func (e *Executor) execMoveFolder(s *ast.MoveFolderStmt) error {
+func execMoveFolder(ctx *ExecContext, s *ast.MoveFolderStmt) error {
+	e := ctx.executor
 	if e.writer == nil {
 		return mdlerrors.NewNotConnected()
 	}
@@ -97,7 +99,7 @@ func (e *Executor) execMoveFolder(s *ast.MoveFolderStmt) error {
 		return mdlerrors.NewBackend("list folders", err)
 	}
 
-	folderID, err := e.findFolderByPath(sourceModule.ID, s.Name.Name, folders)
+	folderID, err := findFolderByPath(ctx, sourceModule.ID, s.Name.Name, folders)
 	if err != nil {
 		return fmt.Errorf("%w in %s", err, s.Name.Module)
 	}
@@ -135,6 +137,6 @@ func (e *Executor) execMoveFolder(s *ast.MoveFolderStmt) error {
 	if s.TargetFolder != "" {
 		target += "/" + s.TargetFolder
 	}
-	fmt.Fprintf(e.output, "Moved folder %s to %s\n", s.Name.String(), target)
+	fmt.Fprintf(ctx.Output, "Moved folder %s to %s\n", s.Name.String(), target)
 	return nil
 }
