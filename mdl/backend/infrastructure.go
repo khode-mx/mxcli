@@ -50,4 +50,6 @@ type AgentEditorBackend interface {
 	ListAgentEditorKnowledgeBases() ([]*agenteditor.KnowledgeBase, error)
 	ListAgentEditorConsumedMCPServices() ([]*agenteditor.ConsumedMCPService, error)
 	ListAgentEditorAgents() ([]*agenteditor.Agent, error)
+	CreateAgentEditorModel(m *agenteditor.Model) error
+	DeleteAgentEditorModel(id string) error
 }

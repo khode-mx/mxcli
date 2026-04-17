@@ -105,6 +105,7 @@ createStatement
       | createConfigurationStatement
       | createPublishedRestServiceStatement
       | createDataTransformerStatement
+      | createModelStatement
       )
     ;
 
@@ -287,6 +288,7 @@ dropStatement
     | DROP REST CLIENT qualifiedName
     | DROP PUBLISHED REST SERVICE qualifiedName
     | DROP DATA TRANSFORMER qualifiedName
+    | DROP MODEL qualifiedName                               // DROP MODEL Module.Name (agent-editor)
     | DROP CONFIGURATION STRING_LITERAL
     | DROP FOLDER STRING_LITERAL IN (qualifiedName | IDENTIFIER)
     ;
@@ -881,6 +883,25 @@ imageName
     : IDENTIFIER
     | QUOTED_IDENTIFIER
     | keyword
+    ;
+
+// =============================================================================
+// AGENT-EDITOR MODEL CREATION
+// =============================================================================
+// CREATE MODEL Module.Name (
+//   Provider: MxCloudGenAI,
+//   Key: Module.SomeConstant
+//   [, DisplayName: '...', KeyName: '...', etc. — Portal-populated metadata]
+// );
+createModelStatement
+    : MODEL qualifiedName
+      LPAREN modelProperty (COMMA modelProperty)* RPAREN
+    ;
+
+modelProperty
+    : identifierOrKeyword COLON identifierOrKeyword       // Provider: MxCloudGenAI
+    | identifierOrKeyword COLON qualifiedName             // Key: Module.Constant
+    | identifierOrKeyword COLON STRING_LITERAL            // DisplayName: 'GPT-4 Turbo' etc.
     ;
 
 // =============================================================================

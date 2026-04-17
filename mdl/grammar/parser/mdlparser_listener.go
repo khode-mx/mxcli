@@ -1,4 +1,4 @@
-// Code generated from MDLParser.g4 by ANTLR 4.13.1. DO NOT EDIT.
+// Code generated from MDLParser.g4 by ANTLR 4.13.2. DO NOT EDIT.
 
 package parser // MDLParser
 import "github.com/antlr4-go/antlr/v4"
@@ -285,6 +285,12 @@ type MDLParserListener interface {
 
 	// EnterImageName is called when entering the imageName production.
 	EnterImageName(c *ImageNameContext)
+
+	// EnterCreateModelStatement is called when entering the createModelStatement production.
+	EnterCreateModelStatement(c *CreateModelStatementContext)
+
+	// EnterModelProperty is called when entering the modelProperty production.
+	EnterModelProperty(c *ModelPropertyContext)
 
 	// EnterCreateJsonStructureStatement is called when entering the createJsonStructureStatement production.
 	EnterCreateJsonStructureStatement(c *CreateJsonStructureStatementContext)
@@ -1557,6 +1563,12 @@ type MDLParserListener interface {
 
 	// ExitImageName is called when exiting the imageName production.
 	ExitImageName(c *ImageNameContext)
+
+	// ExitCreateModelStatement is called when exiting the createModelStatement production.
+	ExitCreateModelStatement(c *CreateModelStatementContext)
+
+	// ExitModelProperty is called when exiting the modelProperty production.
+	ExitModelProperty(c *ModelPropertyContext)
 
 	// ExitCreateJsonStructureStatement is called when exiting the createJsonStructureStatement production.
 	ExitCreateJsonStructureStatement(c *CreateJsonStructureStatementContext)

@@ -55,6 +55,7 @@ func NewRegistry() *Registry {
 	registerFragmentHandlers(r)
 	registerSQLHandlers(r)
 	registerImportHandlers(r)
+	registerAgentEditorHandlers(r)
 	return r
 }
 

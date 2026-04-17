@@ -1,4 +1,4 @@
-// Code generated from MDLParser.g4 by ANTLR 4.13.1. DO NOT EDIT.
+// Code generated from MDLParser.g4 by ANTLR 4.13.2. DO NOT EDIT.
 
 package parser // MDLParser
 import "github.com/antlr4-go/antlr/v4"
@@ -613,6 +613,18 @@ func (s *BaseMDLParserListener) EnterImageName(ctx *ImageNameContext) {}
 
 // ExitImageName is called when production imageName is exited.
 func (s *BaseMDLParserListener) ExitImageName(ctx *ImageNameContext) {}
+
+// EnterCreateModelStatement is called when production createModelStatement is entered.
+func (s *BaseMDLParserListener) EnterCreateModelStatement(ctx *CreateModelStatementContext) {}
+
+// ExitCreateModelStatement is called when production createModelStatement is exited.
+func (s *BaseMDLParserListener) ExitCreateModelStatement(ctx *CreateModelStatementContext) {}
+
+// EnterModelProperty is called when production modelProperty is entered.
+func (s *BaseMDLParserListener) EnterModelProperty(ctx *ModelPropertyContext) {}
+
+// ExitModelProperty is called when production modelProperty is exited.
+func (s *BaseMDLParserListener) ExitModelProperty(ctx *ModelPropertyContext) {}
 
 // EnterCreateJsonStructureStatement is called when production createJsonStructureStatement is entered.
 func (s *BaseMDLParserListener) EnterCreateJsonStructureStatement(ctx *CreateJsonStructureStatementContext) {

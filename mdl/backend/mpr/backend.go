@@ -700,3 +700,9 @@ func (b *MprBackend) ListAgentEditorConsumedMCPServices() ([]*agenteditor.Consum
 func (b *MprBackend) ListAgentEditorAgents() ([]*agenteditor.Agent, error) {
 	return b.reader.ListAgentEditorAgents()
 }
+func (b *MprBackend) CreateAgentEditorModel(m *agenteditor.Model) error {
+	return b.writer.CreateAgentEditorModel(m)
+}
+func (b *MprBackend) DeleteAgentEditorModel(id string) error {
+	return b.writer.DeleteAgentEditorModel(id)
+}

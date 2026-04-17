@@ -187,3 +187,6 @@ func (m *MockBackend) ListAgentEditorAgents() ([]*agenteditor.Agent, error) {
 	}
 	return nil, nil
 }
+
+func (m *MockBackend) CreateAgentEditorModel(_ *agenteditor.Model) error { return nil }
+func (m *MockBackend) DeleteAgentEditorModel(_ string) error             { return nil }

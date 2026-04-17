@@ -442,3 +442,12 @@ func registerImportHandlers(r *Registry) {
 		return execImport(ctx, stmt.(*ast.ImportStmt))
 	})
 }
+
+func registerAgentEditorHandlers(r *Registry) {
+	r.Register(&ast.CreateModelStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return execCreateAgentEditorModel(ctx, stmt.(*ast.CreateModelStmt))
+	})
+	r.Register(&ast.DropModelStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
+		return execDropAgentEditorModel(ctx, stmt.(*ast.DropModelStmt))
+	})
+}

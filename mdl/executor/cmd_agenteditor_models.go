@@ -130,6 +130,99 @@ func describeAgentEditorModel(ctx *ExecContext, name ast.QualifiedName) error {
 	return nil
 }
 
+// execCreateAgentEditorModel handles CREATE MODEL Module.Name (...).
+func execCreateAgentEditorModel(ctx *ExecContext, s *ast.CreateModelStmt) error {
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
+	}
+
+	module, err := findOrCreateModule(ctx, s.Name.Module)
+	if err != nil {
+		return err
+	}
+
+	if existing := findAgentEditorModel(ctx, s.Name.Module, s.Name.Name); existing != nil {
+		return mdlerrors.NewAlreadyExists("model", s.Name.String())
+	}
+
+	var keyRef *agenteditor.ConstantRef
+	if s.Key != nil {
+		keyRef, err = resolveConstantRef(ctx, *s.Key)
+		if err != nil {
+			return fmt.Errorf("CREATE MODEL %s: %w", s.Name, err)
+		}
+	}
+
+	provider := s.Provider
+	if provider == "" {
+		provider = "MxCloudGenAI"
+	}
+
+	m := &agenteditor.Model{
+		ContainerID:  module.ID,
+		Name:         s.Name.Name,
+		Documentation: s.Documentation,
+		Provider:     provider,
+		Key:          keyRef,
+		DisplayName:  s.DisplayName,
+		KeyName:      s.KeyName,
+		KeyID:        s.KeyID,
+		Environment:  s.Environment,
+		ResourceName: s.ResourceName,
+		DeepLinkURL:  s.DeepLinkURL,
+	}
+
+	if err := ctx.Backend.CreateAgentEditorModel(m); err != nil {
+		return mdlerrors.NewBackend("create model", err)
+	}
+	invalidateHierarchy(ctx)
+	fmt.Fprintf(ctx.Output, "Created model: %s\n", s.Name)
+	return nil
+}
+
+// execDropAgentEditorModel handles DROP MODEL Module.Name.
+func execDropAgentEditorModel(ctx *ExecContext, s *ast.DropModelStmt) error {
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
+	}
+
+	m := findAgentEditorModel(ctx, s.Name.Module, s.Name.Name)
+	if m == nil {
+		return mdlerrors.NewNotFound("model", s.Name.String())
+	}
+
+	if err := ctx.Backend.DeleteAgentEditorModel(string(m.ID)); err != nil {
+		return mdlerrors.NewBackend("delete model", err)
+	}
+	fmt.Fprintf(ctx.Output, "Dropped model: %s\n", s.Name)
+	return nil
+}
+
+// resolveConstantRef looks up a String constant by qualified name and
+// returns a ConstantRef ready to embed in a Model/KnowledgeBase
+// document's providerFields.key field.
+func resolveConstantRef(ctx *ExecContext, name ast.QualifiedName) (*agenteditor.ConstantRef, error) {
+	consts, err := ctx.Backend.ListConstants()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list constants: %w", err)
+	}
+	h, err := getHierarchy(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range consts {
+		modID := h.FindModuleID(c.ContainerID)
+		modName := h.GetModuleName(modID)
+		if c.Name == name.Name && modName == name.Module {
+			return &agenteditor.ConstantRef{
+				DocumentID:    string(c.ID),
+				QualifiedName: name.String(),
+			}, nil
+		}
+	}
+	return nil, fmt.Errorf("constant not found: %s", name)
+}
+
 // findAgentEditorModel looks up a model by module and name.
 func findAgentEditorModel(ctx *ExecContext, moduleName, modelName string) *agenteditor.Model {
 	models, err := ctx.Backend.ListAgentEditorModels()
