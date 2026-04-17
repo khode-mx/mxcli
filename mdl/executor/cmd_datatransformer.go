@@ -186,4 +186,3 @@ func execDropDataTransformer(ctx *ExecContext, s *ast.DropDataTransformerStmt) e
 }
 
 // Executor wrappers for unmigrated callers.
-

@@ -258,6 +258,7 @@ var mendixReservedWords = map[string]bool{
 	"true": true, "try": true, "void": true, "volatile": true,
 	"while": true,
 	// Mendix-specific reserved identifiers
+	"changedby": true, "changeddate": true, "con": true, "context": true,
 	"createddate": true, "currentuser": true, "guid": true,
 	"id": true, "mendixobject": true, "submetaobjectname": true,
 }

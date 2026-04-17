@@ -156,4 +156,3 @@ func showLintRules(ctx *ExecContext) error {
 }
 
 // --- Executor method wrappers for backward compatibility ---
-

@@ -229,4 +229,3 @@ func execShowImpact(ctx *ExecContext, s *ast.ShowStmt) error {
 }
 
 // --- Executor method wrappers for backward compatibility ---
-

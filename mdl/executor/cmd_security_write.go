@@ -1284,4 +1284,3 @@ func execUpdateSecurity(ctx *ExecContext, s *ast.UpdateSecurityStmt) error {
 
 // Executor method wrappers — delegate to free functions for callers that
 // still use the Executor receiver (e.g. executor_query.go).
-

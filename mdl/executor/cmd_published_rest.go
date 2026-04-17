@@ -382,4 +382,3 @@ func execAlterPublishedRestService(ctx *ExecContext, s *ast.AlterPublishedRestSe
 }
 
 // Executor wrappers for unmigrated callers.
-

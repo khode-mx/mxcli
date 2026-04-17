@@ -49,7 +49,7 @@ func execImport(ctx *ExecContext, s *ast.ImportStmt) error {
 	}
 
 	// Resolve association LINK mappings
-	goCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	goCtx, cancel := context.WithTimeout(ctx.Context, 10*time.Minute)
 	defer cancel()
 
 	assocs, err := resolveImportLinks(ctx, goCtx, targetConn, s)

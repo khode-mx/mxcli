@@ -763,4 +763,3 @@ func describeUserRole(ctx *ExecContext, name ast.QualifiedName) error {
 
 // Executor method wrappers — delegate to free functions for callers that
 // still use the Executor receiver (e.g. executor_query.go).
-

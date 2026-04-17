@@ -984,4 +984,3 @@ func warnEntityReferences(ctx *ExecContext, entityName string) {
 }
 
 // --- Executor method wrappers for callers not yet migrated ---
-

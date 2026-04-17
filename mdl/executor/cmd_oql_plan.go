@@ -476,4 +476,3 @@ func buildScalarSubqueryTable(sel ast.OQLSelectItem, selectIndex, tableOffset in
 }
 
 // --- Executor method wrapper for backward compatibility ---
-

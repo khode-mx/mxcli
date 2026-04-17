@@ -256,4 +256,3 @@ func findImageCollection(ctx *ExecContext, moduleName, collectionName string) *m
 	}
 	return nil
 }
-

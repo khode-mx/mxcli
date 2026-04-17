@@ -155,4 +155,3 @@ func invalidateDomainModelsCache(ctx *ExecContext) {
 func (e *Executor) getHierarchy() (*ContainerHierarchy, error) {
 	return getHierarchy(e.newExecContext(context.Background()))
 }
-

@@ -50,4 +50,3 @@ func showLanguages(ctx *ExecContext) error {
 }
 
 // --- Executor method wrapper for backward compatibility ---
-

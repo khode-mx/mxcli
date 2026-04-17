@@ -905,4 +905,3 @@ func sortEntitiesByGeneralization(entities []*domainmodel.Entity, moduleName str
 }
 
 // Executor method wrappers for callers in unmigrated files.
-

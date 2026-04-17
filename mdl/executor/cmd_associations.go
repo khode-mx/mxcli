@@ -478,4 +478,3 @@ func describeAssociation(ctx *ExecContext, name ast.QualifiedName) error {
 }
 
 // --- Executor method wrappers for callers not yet migrated ---
-

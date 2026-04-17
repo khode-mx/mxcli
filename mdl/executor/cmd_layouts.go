@@ -62,4 +62,3 @@ func showLayouts(ctx *ExecContext, moduleName string) error {
 	}
 	return writeResult(ctx, result)
 }
-

@@ -271,4 +271,3 @@ func execSQLDescribeTable(ctx *ExecContext, s *ast.SQLDescribeTableStmt) error {
 }
 
 // Executor wrappers for unmigrated callers.
-

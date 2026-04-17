@@ -656,7 +656,7 @@ func inferAttributeType(ctx *ExecContext, attrPath string, col *OQLColumnInfo) a
 	return ast.DataType{Kind: ast.TypeUnknown}
 }
 
-// oqlFindEntity looks up an entity by module and name.
+// findEntity looks up an entity by module and name.
 func findEntity(ctx *ExecContext, moduleName, entityName string) (*domainmodel.Entity, error) {
 	e := ctx.executor
 	// Get all entities

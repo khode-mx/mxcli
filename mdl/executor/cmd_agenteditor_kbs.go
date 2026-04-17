@@ -148,4 +148,3 @@ func findAgentEditorKnowledgeBase(ctx *ExecContext, moduleName, kbName string) *
 }
 
 // --- Executor method wrappers for backward compatibility ---
-

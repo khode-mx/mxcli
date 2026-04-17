@@ -216,4 +216,3 @@ func formatAccessRuleResult(ctx *ExecContext, moduleName, entityName string, rol
 }
 
 // --- Executor method wrappers for callers not yet migrated ---
-

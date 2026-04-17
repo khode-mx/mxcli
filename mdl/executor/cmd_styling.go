@@ -553,4 +553,3 @@ func findSnippetByName(ctx *ExecContext, name ast.QualifiedName, h *ContainerHie
 	}
 	return nil, "", mdlerrors.NewNotFound("snippet", name.String())
 }
-

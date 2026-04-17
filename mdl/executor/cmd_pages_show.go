@@ -75,4 +75,3 @@ func showPages(ctx *ExecContext, moduleName string) error {
 	}
 	return writeResult(ctx, result)
 }
-

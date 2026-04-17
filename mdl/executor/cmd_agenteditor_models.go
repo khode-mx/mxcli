@@ -154,4 +154,3 @@ func findAgentEditorModel(ctx *ExecContext, moduleName, modelName string) *agent
 }
 
 // --- Executor method wrappers for backward compatibility ---
-

@@ -760,4 +760,3 @@ func pageParamTypeMDL(p *pages.PageParameter) string {
 	}
 	return string(p.EntityID)
 }
-

@@ -516,4 +516,3 @@ func classifyEntity(entity *domainmodel.Entity) string {
 func (e *Executor) DomainModelELK(name string) error {
 	return domainModelELK(e.newExecContext(context.Background()), name)
 }
-
