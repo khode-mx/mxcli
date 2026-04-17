@@ -275,7 +275,9 @@ func execRenameEnumeration(ctx *ExecContext, s *ast.RenameStmt) error {
 	}
 
 	// Also update enumeration refs in domain models (attribute types store qualified enum names)
-	ctx.Backend.UpdateEnumerationRefsInAllDomainModels(oldQualifiedName, newQualifiedName)
+	if err := ctx.Backend.UpdateEnumerationRefsInAllDomainModels(oldQualifiedName, newQualifiedName); err != nil {
+		fmt.Fprintf(ctx.Output, "Warning: failed to update enumeration references in domain models: %v\n", err)
+	}
 
 	invalidateHierarchy(ctx)
 	invalidateDomainModelsCache(ctx)

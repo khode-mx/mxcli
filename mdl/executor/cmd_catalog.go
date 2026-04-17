@@ -211,6 +211,11 @@ func ensureCatalog(ctx *ExecContext, full bool) error {
 		}
 	}
 
+	// Guard against building without a connection.
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
+	}
+
 	// Build fresh catalog
 	return buildCatalog(ctx, full)
 }
@@ -347,7 +352,7 @@ func buildCatalog(ctx *ExecContext, full bool, source ...bool) error {
 	cat.SetProject("default", "Current Project", version)
 
 	// Build catalog
-	builder := catalog.NewBuilder(cat, e.reader)
+	builder := catalog.NewBuilder(cat, ctx.Backend)
 	builder.SetFullMode(full)
 	if isSource {
 		builder.SetSourceMode(true)
@@ -684,18 +689,27 @@ func captureDescribeParallel(ctx *ExecContext, objectType string, qualifiedName 
 	}
 	qn := ast.QualifiedName{Module: parts[0], Name: parts[1]}
 
-	// Create a goroutine-local executor: shared reader + cache, own output buffer.
-	// TODO: Replace with ExecContext.Fork() when MR 3 makes ExecContext self-contained.
+	// Create a goroutine-local context: shared backend + cache, own output buffer.
 	var buf bytes.Buffer
-	local := &Executor{
-		reader: ctx.executor.reader,
-		output: &buf,
-		cache:  ctx.Cache,
-	}
 	localCtx := &ExecContext{
-		Output:   &buf,
-		Cache:    ctx.Cache,
-		executor: local,
+		Context: ctx.Context,
+		Output:  &buf,
+		Format:  ctx.Format,
+		Quiet:   ctx.Quiet,
+		Logger:  ctx.Logger,
+		Backend: ctx.Backend,
+		Cache:   ctx.Cache,
+		MprPath: ctx.MprPath,
+	}
+	// If a backing Executor exists, create a local one for handlers that still
+	// need e.reader/e.output (e.g., describeMicroflow via writeDescribeJSON).
+	if ctx.executor != nil {
+		local := &Executor{
+			reader: ctx.executor.reader,
+			output: &buf,
+			cache:  ctx.Cache,
+		}
+		localCtx.executor = local
 	}
 
 	var err error

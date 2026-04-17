@@ -38,6 +38,13 @@ func execRefresh(ctx *ExecContext) error {
 
 // execSet handles SET statements.
 func execSet(ctx *ExecContext, s *ast.SetStmt) error {
+	if ctx.Settings == nil {
+		ctx.Settings = make(map[string]any)
+		// Persist back to Executor so subsequent statements see the map.
+		if ctx.executor != nil {
+			ctx.executor.settings = ctx.Settings
+		}
+	}
 	ctx.Settings[s.Key] = s.Value
 	fmt.Fprintf(ctx.Output, "Set %s = %v\n", s.Key, s.Value)
 	return nil

@@ -422,7 +422,7 @@ func execCreateJavaAction(ctx *ExecContext, s *ast.CreateJavaActionStmt) error {
 	}
 
 	// Clear cache
-	ctx.Cache = nil
+	ctx.InvalidateCache()
 
 	fmt.Fprintf(ctx.Output, "Created java action: %s.%s\n", s.Name.Module, s.Name.Name)
 	return nil

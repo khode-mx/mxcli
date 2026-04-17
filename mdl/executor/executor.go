@@ -74,12 +74,21 @@ func getEntityNames(ctx *ExecContext, h *ContainerHierarchy) map[model.ID]string
 		return ctx.Cache.entityNames
 	}
 	entityNames := make(map[model.ID]string)
-	dms, _ := ctx.Backend.ListDomainModels()
+	dms, err := ctx.Backend.ListDomainModels()
+	if err != nil {
+		if ctx.Logger != nil {
+			ctx.Logger.Warn("getEntityNames: ListDomainModels failed", "error", err)
+		}
+		return entityNames
+	}
 	for _, dm := range dms {
 		modName := h.GetModuleName(dm.ContainerID)
 		for _, ent := range dm.Entities {
 			entityNames[ent.ID] = modName + "." + ent.Name
 		}
+	}
+	if ctx.Cache != nil {
+		ctx.Cache.entityNames = entityNames
 	}
 	return entityNames
 }
@@ -90,9 +99,18 @@ func getMicroflowNames(ctx *ExecContext, h *ContainerHierarchy) map[model.ID]str
 		return ctx.Cache.microflowNames
 	}
 	microflowNames := make(map[model.ID]string)
-	mfs, _ := ctx.Backend.ListMicroflows()
+	mfs, err := ctx.Backend.ListMicroflows()
+	if err != nil {
+		if ctx.Logger != nil {
+			ctx.Logger.Warn("getMicroflowNames: ListMicroflows failed", "error", err)
+		}
+		return microflowNames
+	}
 	for _, mf := range mfs {
 		microflowNames[mf.ID] = h.GetQualifiedName(mf.ContainerID, mf.Name)
+	}
+	if ctx.Cache != nil {
+		ctx.Cache.microflowNames = microflowNames
 	}
 	return microflowNames
 }
@@ -103,9 +121,18 @@ func getPageNames(ctx *ExecContext, h *ContainerHierarchy) map[model.ID]string {
 		return ctx.Cache.pageNames
 	}
 	pageNames := make(map[model.ID]string)
-	pgs, _ := ctx.Backend.ListPages()
+	pgs, err := ctx.Backend.ListPages()
+	if err != nil {
+		if ctx.Logger != nil {
+			ctx.Logger.Warn("getPageNames: ListPages failed", "error", err)
+		}
+		return pageNames
+	}
 	for _, pg := range pgs {
 		pageNames[pg.ID] = h.GetQualifiedName(pg.ContainerID, pg.Name)
+	}
+	if ctx.Cache != nil {
+		ctx.Cache.pageNames = pageNames
 	}
 	return pageNames
 }

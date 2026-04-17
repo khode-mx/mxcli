@@ -65,8 +65,8 @@ type ExecContext struct {
 
 	// executor is a temporary back-reference used during incremental migration.
 	// Handlers that have not yet been migrated to use Backend can access the
-	// original Executor through this field. It will be removed once all handlers
-	// are fully migrated to ctx.Backend.
+	// original Executor through this field. Remove once all handlers are fully
+	// migrated to ctx.Backend (tracked: ~27 e := ctx.executor sites remain).
 	executor *Executor
 }
 
@@ -82,6 +82,16 @@ func (ctx *ExecContext) ConnectedForWrite() bool {
 	return ctx.Connected()
 }
 
+// InvalidateCache clears the hierarchy/entity/microflow cache on both the
+// ExecContext and the underlying Executor so that subsequent statements see
+// fresh data.
+func (ctx *ExecContext) InvalidateCache() {
+	ctx.Cache = nil
+	if ctx.executor != nil {
+		ctx.executor.cache = nil
+	}
+}
+
 // GetThemeRegistry returns the cached theme registry, loading it lazily
 // from the project's theme sources on first access.
 func (ctx *ExecContext) GetThemeRegistry() *ThemeRegistry {
@@ -93,8 +103,17 @@ func (ctx *ExecContext) GetThemeRegistry() *ThemeRegistry {
 	}
 	projectDir := filepath.Dir(ctx.MprPath)
 	registry, err := loadThemeRegistry(projectDir)
-	if err == nil {
-		ctx.ThemeRegistry = registry
+	if err != nil {
+		if ctx.Logger != nil {
+			ctx.Logger.Warn("failed to load theme registry", "error", err)
+		}
+		return nil
+	}
+	ctx.ThemeRegistry = registry
+	// Persist back to Executor so subsequent statements pick up the cached value
+	// via newExecContext without reloading.
+	if ctx.executor != nil {
+		ctx.executor.themeRegistry = registry
 	}
 	return ctx.ThemeRegistry
 }

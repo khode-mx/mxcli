@@ -30,6 +30,19 @@ func execConnect(ctx *ExecContext, s *ast.ConnectStmt) error {
 	// Wrap the writer in an MprBackend for ctx.Backend propagation.
 	e.backend = mprbackend.Wrap(writer, s.Path)
 
+	// Propagate connection state back to ctx so subsequent code in this
+	// dispatch cycle sees the updated values.
+	ctx.Backend = e.backend
+	ctx.Cache = e.cache
+	ctx.MprPath = e.mprPath
+
+	// Reset project-scoped caches — previous project's catalog and theme
+	// registry are invalid for the new connection.
+	e.catalog = nil
+	e.themeRegistry = nil
+	ctx.Catalog = nil
+	ctx.ThemeRegistry = nil
+
 	// Display connection info with version
 	pv := e.reader.ProjectVersion()
 	if !ctx.Quiet {
@@ -64,6 +77,17 @@ func reconnect(ctx *ExecContext) error {
 	e.reader = writer.Reader()
 	e.cache = &executorCache{} // Reset cache
 	e.backend = mprbackend.Wrap(writer, e.mprPath)
+
+	// Propagate reconnection state back to ctx.
+	ctx.Backend = e.backend
+	ctx.Cache = e.cache
+
+	// Reset project-scoped caches — file may have changed externally.
+	e.catalog = nil
+	e.themeRegistry = nil
+	ctx.Catalog = nil
+	ctx.ThemeRegistry = nil
+
 	return nil
 }
 
@@ -86,6 +110,13 @@ func execDisconnect(ctx *ExecContext) error {
 	e.mprPath = ""
 	e.cache = nil
 	e.backend = nil
+
+	// Propagate disconnection state back to ctx so subsequent code in this
+	// dispatch cycle sees the cleared values.
+	ctx.Backend = nil
+	ctx.MprPath = ""
+	ctx.Cache = nil
+
 	return nil
 }
 

@@ -24,6 +24,9 @@ func execShowDesignProperties(ctx *ExecContext, s *ast.ShowDesignPropertiesStmt)
 	if !ctx.Connected() {
 		return mdlerrors.NewNotConnected()
 	}
+	if ctx.MprPath == "" {
+		return mdlerrors.NewValidationf("project path unavailable — connected via mock backend without MprPath")
+	}
 
 	projectDir := filepath.Dir(ctx.MprPath)
 	registry, err := loadThemeRegistry(projectDir)
