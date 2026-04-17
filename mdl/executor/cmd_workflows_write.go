@@ -4,6 +4,7 @@
 package executor
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"unicode"
@@ -16,7 +17,8 @@ import (
 )
 
 // execCreateWorkflow handles CREATE WORKFLOW statements.
-func (e *Executor) execCreateWorkflow(s *ast.CreateWorkflowStmt) error {
+func execCreateWorkflow(ctx *ExecContext, s *ast.CreateWorkflowStmt) error {
+	e := ctx.executor
 	if e.writer == nil {
 		return mdlerrors.NewNotConnectedWrite()
 	}
@@ -98,7 +100,7 @@ func (e *Executor) execCreateWorkflow(s *ast.CreateWorkflowStmt) error {
 	userActivities := buildWorkflowActivities(s.Activities)
 
 	// Auto-bind microflow/workflow parameters and sanitize names
-	e.autoBindWorkflowParameters(userActivities)
+	autoBindWorkflowParameters(e, userActivities)
 
 	// Deduplicate activity names to avoid CE0495
 	deduplicateActivityNames(userActivities)
@@ -123,12 +125,18 @@ func (e *Executor) execCreateWorkflow(s *ast.CreateWorkflowStmt) error {
 	}
 
 	e.invalidateHierarchy()
-	fmt.Fprintf(e.output, "Created workflow: %s.%s\n", s.Name.Module, s.Name.Name)
+	fmt.Fprintf(ctx.Output, "Created workflow: %s.%s\n", s.Name.Module, s.Name.Name)
 	return nil
 }
 
+// Executor wrapper for unmigrated callers.
+func (e *Executor) execCreateWorkflow(s *ast.CreateWorkflowStmt) error {
+	return execCreateWorkflow(e.newExecContext(context.Background()), s)
+}
+
 // execDropWorkflow handles DROP WORKFLOW statements.
-func (e *Executor) execDropWorkflow(s *ast.DropWorkflowStmt) error {
+func execDropWorkflow(ctx *ExecContext, s *ast.DropWorkflowStmt) error {
+	e := ctx.executor
 	if e.writer == nil {
 		return mdlerrors.NewNotConnectedWrite()
 	}
@@ -151,12 +159,17 @@ func (e *Executor) execDropWorkflow(s *ast.DropWorkflowStmt) error {
 				return mdlerrors.NewBackend("delete workflow", err)
 			}
 			e.invalidateHierarchy()
-			fmt.Fprintf(e.output, "Dropped workflow: %s.%s\n", s.Name.Module, s.Name.Name)
+			fmt.Fprintf(ctx.Output, "Dropped workflow: %s.%s\n", s.Name.Module, s.Name.Name)
 			return nil
 		}
 	}
 
 	return mdlerrors.NewNotFound("workflow", s.Name.Module+"."+s.Name.Name)
+}
+
+// Executor wrapper for unmigrated callers.
+func (e *Executor) execDropWorkflow(s *ast.DropWorkflowStmt) error {
+	return execDropWorkflow(e.newExecContext(context.Background()), s)
 }
 
 // generateWorkflowUUID generates a UUID for workflow elements.
@@ -602,36 +615,36 @@ func sanitizeActivityName(name string) string {
 
 // autoBindWorkflowParameters resolves microflow/workflow parameters and generates
 // ParameterMappings, default outcomes, and sanitized names for workflow activities.
-func (e *Executor) autoBindWorkflowParameters(activities []workflows.WorkflowActivity) {
-	e.autoBindActivitiesInFlow(activities)
+func autoBindWorkflowParameters(e *Executor, activities []workflows.WorkflowActivity) {
+	autoBindActivitiesInFlow(e, activities)
 }
 
-func (e *Executor) autoBindActivitiesInFlow(activities []workflows.WorkflowActivity) {
+func autoBindActivitiesInFlow(e *Executor, activities []workflows.WorkflowActivity) {
 	for _, act := range activities {
 		switch a := act.(type) {
 		case *workflows.CallMicroflowTask:
-			e.autoBindCallMicroflow(a)
+			autoBindCallMicroflow(e, a)
 			// Recurse into outcomes
 			for _, outcome := range a.Outcomes {
 				switch o := outcome.(type) {
 				case *workflows.BooleanConditionOutcome:
 					if o.Flow != nil {
-						e.autoBindActivitiesInFlow(o.Flow.Activities)
+						autoBindActivitiesInFlow(e, o.Flow.Activities)
 					}
 				case *workflows.VoidConditionOutcome:
 					if o.Flow != nil {
-						e.autoBindActivitiesInFlow(o.Flow.Activities)
+						autoBindActivitiesInFlow(e, o.Flow.Activities)
 					}
 				}
 			}
 		case *workflows.CallWorkflowActivity:
-			e.autoBindCallWorkflow(a)
+			autoBindCallWorkflow(e, a)
 		case *workflows.UserTask:
 			// Sanitize name
 			a.Name = sanitizeActivityName(a.Name)
 			for _, outcome := range a.Outcomes {
 				if outcome.Flow != nil {
-					e.autoBindActivitiesInFlow(outcome.Flow.Activities)
+					autoBindActivitiesInFlow(e, outcome.Flow.Activities)
 				}
 			}
 		case *workflows.ParallelSplitActivity:
@@ -639,7 +652,7 @@ func (e *Executor) autoBindActivitiesInFlow(activities []workflows.WorkflowActiv
 			a.Name = sanitizeActivityName(a.Name)
 			for _, outcome := range a.Outcomes {
 				if outcome.Flow != nil {
-					e.autoBindActivitiesInFlow(outcome.Flow.Activities)
+					autoBindActivitiesInFlow(e, outcome.Flow.Activities)
 				}
 			}
 		case *workflows.ExclusiveSplitActivity:
@@ -648,11 +661,11 @@ func (e *Executor) autoBindActivitiesInFlow(activities []workflows.WorkflowActiv
 				switch o := outcome.(type) {
 				case *workflows.BooleanConditionOutcome:
 					if o.Flow != nil {
-						e.autoBindActivitiesInFlow(o.Flow.Activities)
+						autoBindActivitiesInFlow(e, o.Flow.Activities)
 					}
 				case *workflows.VoidConditionOutcome:
 					if o.Flow != nil {
-						e.autoBindActivitiesInFlow(o.Flow.Activities)
+						autoBindActivitiesInFlow(e, o.Flow.Activities)
 					}
 				}
 			}
@@ -667,7 +680,7 @@ func (e *Executor) autoBindActivitiesInFlow(activities []workflows.WorkflowActiv
 }
 
 // autoBindCallMicroflow resolves microflow parameters and auto-generates ParameterMappings.
-func (e *Executor) autoBindCallMicroflow(task *workflows.CallMicroflowTask) {
+func autoBindCallMicroflow(e *Executor, task *workflows.CallMicroflowTask) {
 	// Sanitize name
 	task.Name = sanitizeActivityName(task.Name)
 
@@ -720,7 +733,7 @@ func (e *Executor) autoBindCallMicroflow(task *workflows.CallMicroflowTask) {
 }
 
 // autoBindCallWorkflow resolves workflow parameters and generates ParameterMappings.
-func (e *Executor) autoBindCallWorkflow(act *workflows.CallWorkflowActivity) {
+func autoBindCallWorkflow(e *Executor, act *workflows.CallWorkflowActivity) {
 	// Sanitize name
 	act.Name = sanitizeActivityName(act.Name)
 

@@ -53,7 +53,7 @@ func registerConstantHandlers(r *Registry) {
 
 func registerDatabaseConnectionHandlers(r *Registry) {
 	r.Register(&ast.CreateDatabaseConnectionStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.createDatabaseConnection(stmt.(*ast.CreateDatabaseConnectionStmt))
+		return createDatabaseConnection(ctx, stmt.(*ast.CreateDatabaseConnectionStmt))
 	})
 }
 
@@ -182,70 +182,70 @@ func registerSecurityHandlers(r *Registry) {
 
 func registerNavigationHandlers(r *Registry) {
 	r.Register(&ast.AlterNavigationStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.execAlterNavigation(stmt.(*ast.AlterNavigationStmt))
+		return execAlterNavigation(ctx, stmt.(*ast.AlterNavigationStmt))
 	})
 }
 
 func registerImageHandlers(r *Registry) {
 	r.Register(&ast.CreateImageCollectionStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.execCreateImageCollection(stmt.(*ast.CreateImageCollectionStmt))
+		return execCreateImageCollection(ctx, stmt.(*ast.CreateImageCollectionStmt))
 	})
 	r.Register(&ast.DropImageCollectionStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.execDropImageCollection(stmt.(*ast.DropImageCollectionStmt))
+		return execDropImageCollection(ctx, stmt.(*ast.DropImageCollectionStmt))
 	})
 }
 
 func registerWorkflowHandlers(r *Registry) {
 	r.Register(&ast.CreateWorkflowStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.execCreateWorkflow(stmt.(*ast.CreateWorkflowStmt))
+		return execCreateWorkflow(ctx, stmt.(*ast.CreateWorkflowStmt))
 	})
 	r.Register(&ast.DropWorkflowStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.execDropWorkflow(stmt.(*ast.DropWorkflowStmt))
+		return execDropWorkflow(ctx, stmt.(*ast.DropWorkflowStmt))
 	})
 	r.Register(&ast.AlterWorkflowStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.execAlterWorkflow(stmt.(*ast.AlterWorkflowStmt))
+		return execAlterWorkflow(ctx, stmt.(*ast.AlterWorkflowStmt))
 	})
 }
 
 func registerBusinessEventHandlers(r *Registry) {
 	r.Register(&ast.CreateBusinessEventServiceStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.createBusinessEventService(stmt.(*ast.CreateBusinessEventServiceStmt))
+		return createBusinessEventService(ctx, stmt.(*ast.CreateBusinessEventServiceStmt))
 	})
 	r.Register(&ast.DropBusinessEventServiceStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.dropBusinessEventService(stmt.(*ast.DropBusinessEventServiceStmt))
+		return dropBusinessEventService(ctx, stmt.(*ast.DropBusinessEventServiceStmt))
 	})
 }
 
 func registerSettingsHandlers(r *Registry) {
 	r.Register(&ast.AlterSettingsStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.alterSettings(stmt.(*ast.AlterSettingsStmt))
+		return alterSettings(ctx, stmt.(*ast.AlterSettingsStmt))
 	})
 	r.Register(&ast.CreateConfigurationStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.createConfiguration(stmt.(*ast.CreateConfigurationStmt))
+		return createConfiguration(ctx, stmt.(*ast.CreateConfigurationStmt))
 	})
 	r.Register(&ast.DropConfigurationStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.dropConfiguration(stmt.(*ast.DropConfigurationStmt))
+		return dropConfiguration(ctx, stmt.(*ast.DropConfigurationStmt))
 	})
 }
 
 func registerODataHandlers(r *Registry) {
 	r.Register(&ast.CreateODataClientStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.createODataClient(stmt.(*ast.CreateODataClientStmt))
+		return createODataClient(ctx, stmt.(*ast.CreateODataClientStmt))
 	})
 	r.Register(&ast.AlterODataClientStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.alterODataClient(stmt.(*ast.AlterODataClientStmt))
+		return alterODataClient(ctx, stmt.(*ast.AlterODataClientStmt))
 	})
 	r.Register(&ast.DropODataClientStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.dropODataClient(stmt.(*ast.DropODataClientStmt))
+		return dropODataClient(ctx, stmt.(*ast.DropODataClientStmt))
 	})
 	r.Register(&ast.CreateODataServiceStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.createODataService(stmt.(*ast.CreateODataServiceStmt))
+		return createODataService(ctx, stmt.(*ast.CreateODataServiceStmt))
 	})
 	r.Register(&ast.AlterODataServiceStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.alterODataService(stmt.(*ast.AlterODataServiceStmt))
+		return alterODataService(ctx, stmt.(*ast.AlterODataServiceStmt))
 	})
 	r.Register(&ast.DropODataServiceStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.dropODataService(stmt.(*ast.DropODataServiceStmt))
+		return dropODataService(ctx, stmt.(*ast.DropODataServiceStmt))
 	})
 }
 
@@ -275,22 +275,22 @@ func registerMappingHandlers(r *Registry) {
 
 func registerRESTHandlers(r *Registry) {
 	r.Register(&ast.CreateRestClientStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.createRestClient(stmt.(*ast.CreateRestClientStmt))
+		return createRestClient(ctx, stmt.(*ast.CreateRestClientStmt))
 	})
 	r.Register(&ast.DropRestClientStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.dropRestClient(stmt.(*ast.DropRestClientStmt))
+		return dropRestClient(ctx, stmt.(*ast.DropRestClientStmt))
 	})
 	r.Register(&ast.CreatePublishedRestServiceStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.execCreatePublishedRestService(stmt.(*ast.CreatePublishedRestServiceStmt))
+		return execCreatePublishedRestService(ctx, stmt.(*ast.CreatePublishedRestServiceStmt))
 	})
 	r.Register(&ast.DropPublishedRestServiceStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.execDropPublishedRestService(stmt.(*ast.DropPublishedRestServiceStmt))
+		return execDropPublishedRestService(ctx, stmt.(*ast.DropPublishedRestServiceStmt))
 	})
 	r.Register(&ast.AlterPublishedRestServiceStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.execAlterPublishedRestService(stmt.(*ast.AlterPublishedRestServiceStmt))
+		return execAlterPublishedRestService(ctx, stmt.(*ast.AlterPublishedRestServiceStmt))
 	})
 	r.Register(&ast.CreateExternalEntityStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.execCreateExternalEntity(stmt.(*ast.CreateExternalEntityStmt))
+		return execCreateExternalEntity(ctx, stmt.(*ast.CreateExternalEntityStmt))
 	})
 	r.Register(&ast.CreateExternalEntitiesStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
 		return ctx.executor.createExternalEntities(stmt.(*ast.CreateExternalEntitiesStmt))
@@ -311,10 +311,10 @@ func registerRESTHandlers(r *Registry) {
 
 func registerDataTransformerHandlers(r *Registry) {
 	r.Register(&ast.CreateDataTransformerStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.execCreateDataTransformer(stmt.(*ast.CreateDataTransformerStmt))
+		return execCreateDataTransformer(ctx, stmt.(*ast.CreateDataTransformerStmt))
 	})
 	r.Register(&ast.DropDataTransformerStmt{}, func(ctx *ExecContext, stmt ast.Statement) error {
-		return ctx.executor.execDropDataTransformer(stmt.(*ast.DropDataTransformerStmt))
+		return execDropDataTransformer(ctx, stmt.(*ast.DropDataTransformerStmt))
 	})
 }
 

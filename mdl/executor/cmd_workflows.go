@@ -4,6 +4,7 @@
 package executor
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -14,7 +15,8 @@ import (
 )
 
 // showWorkflows handles SHOW WORKFLOWS command.
-func (e *Executor) showWorkflows(moduleName string) error {
+func showWorkflows(ctx *ExecContext, moduleName string) error {
+	e := ctx.executor
 	h, err := e.getHierarchy()
 	if err != nil {
 		return mdlerrors.NewBackend("build hierarchy", err)
@@ -67,6 +69,11 @@ func (e *Executor) showWorkflows(moduleName string) error {
 		result.Rows = append(result.Rows, []any{r.qualifiedName, r.activities, r.userTasks, r.decisions, r.paramEntity})
 	}
 	return e.writeResult(result)
+}
+
+// Executor wrapper for unmigrated callers.
+func (e *Executor) showWorkflows(moduleName string) error {
+	return showWorkflows(e.newExecContext(context.Background()), moduleName)
 }
 
 // countWorkflowActivities counts total activities, user tasks, and decisions in a workflow.
@@ -131,17 +138,23 @@ func countFlowActivities(flow *workflows.Flow, total, userTasks, decisions *int)
 }
 
 // describeWorkflow handles DESCRIBE WORKFLOW command.
-func (e *Executor) describeWorkflow(name ast.QualifiedName) error {
-	output, _, err := e.describeWorkflowToString(name)
+func describeWorkflow(ctx *ExecContext, name ast.QualifiedName) error {
+	output, _, err := describeWorkflowToString(ctx, name)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(e.output, output)
+	fmt.Fprintln(ctx.Output, output)
 	return nil
 }
 
+// Executor wrapper for unmigrated callers.
+func (e *Executor) describeWorkflow(name ast.QualifiedName) error {
+	return describeWorkflow(e.newExecContext(context.Background()), name)
+}
+
 // describeWorkflowToString generates MDL-like output for a workflow and returns it as a string.
-func (e *Executor) describeWorkflowToString(name ast.QualifiedName) (string, map[string]elkSourceRange, error) {
+func describeWorkflowToString(ctx *ExecContext, name ast.QualifiedName) (string, map[string]elkSourceRange, error) {
+	e := ctx.executor
 	h, err := e.getHierarchy()
 	if err != nil {
 		return "", nil, mdlerrors.NewBackend("build hierarchy", err)
@@ -232,6 +245,11 @@ func (e *Executor) describeWorkflowToString(name ast.QualifiedName) (string, map
 	lines = append(lines, "/")
 
 	return strings.Join(lines, "\n"), nil, nil
+}
+
+// Executor wrapper for unmigrated callers.
+func (e *Executor) describeWorkflowToString(name ast.QualifiedName) (string, map[string]elkSourceRange, error) {
+	return describeWorkflowToString(e.newExecContext(context.Background()), name)
 }
 
 // formatAnnotation returns an ANNOTATION statement for a workflow activity annotation.

@@ -4,6 +4,7 @@
 package executor
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,7 +16,8 @@ import (
 )
 
 // execCreateImageCollection handles CREATE IMAGE COLLECTION statements.
-func (e *Executor) execCreateImageCollection(s *ast.CreateImageCollectionStmt) error {
+func execCreateImageCollection(ctx *ExecContext, s *ast.CreateImageCollectionStmt) error {
+	e := ctx.executor
 	if e.reader == nil {
 		return mdlerrors.NewNotConnected()
 	}
@@ -69,12 +71,18 @@ func (e *Executor) execCreateImageCollection(s *ast.CreateImageCollectionStmt) e
 	// Invalidate hierarchy cache so the new collection's container is visible
 	e.invalidateHierarchy()
 
-	fmt.Fprintf(e.output, "Created image collection: %s\n", s.Name)
+	fmt.Fprintf(ctx.Output, "Created image collection: %s\n", s.Name)
 	return nil
 }
 
+// Executor wrapper for unmigrated callers.
+func (e *Executor) execCreateImageCollection(s *ast.CreateImageCollectionStmt) error {
+	return execCreateImageCollection(e.newExecContext(context.Background()), s)
+}
+
 // execDropImageCollection handles DROP IMAGE COLLECTION statements.
-func (e *Executor) execDropImageCollection(s *ast.DropImageCollectionStmt) error {
+func execDropImageCollection(ctx *ExecContext, s *ast.DropImageCollectionStmt) error {
+	e := ctx.executor
 	if e.reader == nil {
 		return mdlerrors.NewNotConnected()
 	}
@@ -88,12 +96,18 @@ func (e *Executor) execDropImageCollection(s *ast.DropImageCollectionStmt) error
 		return mdlerrors.NewBackend("delete image collection", err)
 	}
 
-	fmt.Fprintf(e.output, "Dropped image collection: %s\n", s.Name)
+	fmt.Fprintf(ctx.Output, "Dropped image collection: %s\n", s.Name)
 	return nil
 }
 
+// Executor wrapper for unmigrated callers.
+func (e *Executor) execDropImageCollection(s *ast.DropImageCollectionStmt) error {
+	return execDropImageCollection(e.newExecContext(context.Background()), s)
+}
+
 // describeImageCollection handles DESCRIBE IMAGE COLLECTION Module.Name.
-func (e *Executor) describeImageCollection(name ast.QualifiedName) error {
+func describeImageCollection(ctx *ExecContext, name ast.QualifiedName) error {
+	e := ctx.executor
 	ic := e.findImageCollection(name.Module, name.Name)
 	if ic == nil {
 		return mdlerrors.NewNotFound("image collection", name.String())
@@ -107,7 +121,7 @@ func (e *Executor) describeImageCollection(name ast.QualifiedName) error {
 	modName := h.GetModuleName(modID)
 
 	if ic.Documentation != "" {
-		fmt.Fprintf(e.output, "/**\n * %s\n */\n", ic.Documentation)
+		fmt.Fprintf(ctx.Output, "/**\n * %s\n */\n", ic.Documentation)
 	}
 
 	exportLevel := ic.ExportLevel
@@ -118,12 +132,12 @@ func (e *Executor) describeImageCollection(name ast.QualifiedName) error {
 	qualifiedName := fmt.Sprintf("%s.%s", modName, ic.Name)
 
 	if len(ic.Images) == 0 {
-		fmt.Fprintf(e.output, "CREATE OR REPLACE IMAGE COLLECTION %s", qualifiedName)
+		fmt.Fprintf(ctx.Output, "CREATE OR REPLACE IMAGE COLLECTION %s", qualifiedName)
 		if exportLevel != "Hidden" {
-			fmt.Fprintf(e.output, " EXPORT LEVEL '%s'", exportLevel)
+			fmt.Fprintf(ctx.Output, " EXPORT LEVEL '%s'", exportLevel)
 		}
-		fmt.Fprintln(e.output, ";")
-		fmt.Fprintln(e.output, "/")
+		fmt.Fprintln(ctx.Output, ";")
+		fmt.Fprintln(ctx.Output, "/")
 		return nil
 	}
 
@@ -133,11 +147,11 @@ func (e *Executor) describeImageCollection(name ast.QualifiedName) error {
 		return mdlerrors.NewBackend("create preview directory", err)
 	}
 
-	fmt.Fprintf(e.output, "CREATE OR REPLACE IMAGE COLLECTION %s", qualifiedName)
+	fmt.Fprintf(ctx.Output, "CREATE OR REPLACE IMAGE COLLECTION %s", qualifiedName)
 	if exportLevel != "Hidden" {
-		fmt.Fprintf(e.output, " EXPORT LEVEL '%s'", exportLevel)
+		fmt.Fprintf(ctx.Output, " EXPORT LEVEL '%s'", exportLevel)
 	}
-	fmt.Fprintln(e.output, " (")
+	fmt.Fprintln(ctx.Output, " (")
 
 	for i, img := range ic.Images {
 		ext := imageFormatToExt(img.Format)
@@ -152,12 +166,17 @@ func (e *Executor) describeImageCollection(name ast.QualifiedName) error {
 		if i == len(ic.Images)-1 {
 			comma = ""
 		}
-		fmt.Fprintf(e.output, "    IMAGE %s FROM FILE '%s'%s\n", img.Name, filePath, comma)
+		fmt.Fprintf(ctx.Output, "    IMAGE %s FROM FILE '%s'%s\n", img.Name, filePath, comma)
 	}
 
-	fmt.Fprintln(e.output, ");")
-	fmt.Fprintln(e.output, "/")
+	fmt.Fprintln(ctx.Output, ");")
+	fmt.Fprintln(ctx.Output, "/")
 	return nil
+}
+
+// Executor wrapper for unmigrated callers.
+func (e *Executor) describeImageCollection(name ast.QualifiedName) error {
+	return describeImageCollection(e.newExecContext(context.Background()), name)
 }
 
 // imageFormatToExt converts a Mendix ImageFormat value to a file extension.
@@ -197,7 +216,8 @@ func extToImageFormat(ext string) string {
 }
 
 // showImageCollections handles SHOW IMAGE COLLECTION [IN module].
-func (e *Executor) showImageCollections(moduleName string) error {
+func showImageCollections(ctx *ExecContext, moduleName string) error {
+	e := ctx.executor
 	collections, err := e.reader.ListImageCollections()
 	if err != nil {
 		return mdlerrors.NewBackend("list image collections", err)
@@ -229,6 +249,11 @@ func (e *Executor) showImageCollections(moduleName string) error {
 
 	result.Summary = fmt.Sprintf("(%d image collection(s))", len(result.Rows))
 	return e.writeResult(result)
+}
+
+// Executor wrapper for unmigrated callers.
+func (e *Executor) showImageCollections(moduleName string) error {
+	return showImageCollections(e.newExecContext(context.Background()), moduleName)
 }
 
 // findImageCollection finds an image collection by module and name.
