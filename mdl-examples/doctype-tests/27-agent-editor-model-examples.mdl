@@ -1,0 +1,170 @@
+-- @version: 11.9+
+-- ============================================================================
+-- Agent Editor: Model Document Examples
+-- ============================================================================
+--
+-- This file demonstrates the MDL syntax for managing agent-editor Model
+-- documents. Models represent LLM configurations created in the Mendix
+-- Studio Pro Agent Editor. They are stored as CustomBlobDocuments with
+-- CustomDocumentType = "agenteditor.model".
+--
+-- A Model document references a String constant that holds the
+-- Mendix Cloud GenAI Portal resource key. At runtime, the
+-- AgentEditorCommons.ASU_AgentEditor after-startup microflow reads
+-- the constant and creates the corresponding GenAICommons.DeployedModel.
+--
+-- Features demonstrated:
+--   - CREATE MODEL (minimal: Provider + Key)
+--   - CREATE MODEL (with Portal-populated metadata)
+--   - LIST MODELS [IN Module]
+--   - DESCRIBE MODEL
+--   - DROP MODEL
+--
+-- Prerequisites:
+--   - A String constant must exist to hold the Portal key
+--   - AgentEditorCommons module must be installed
+--   - Encryption module must be configured (32-char key)
+--   - ASU_AgentEditor registered as after-startup microflow
+--
+-- ============================================================================
+
+CREATE MODULE ModelTest;
+
+-- ============================================================================
+-- Setup: Create the key constant that the Model will reference
+-- ============================================================================
+
+CREATE CONSTANT ModelTest."GPT4Key"
+  TYPE String
+  DEFAULT '';
+/
+
+CREATE CONSTANT ModelTest."ClaudeKey"
+  TYPE String
+  DEFAULT '';
+/
+
+-- MARK: Create
+
+-- ============================================================================
+-- LEVEL 1: Basic Model Creation
+-- ============================================================================
+
+/**
+ * Level 1.1: Minimal model — just Provider and Key
+ *
+ * This is the typical CREATE MODEL statement. The Provider is always
+ * MxCloudGenAI (the only supported value in current Mendix versions).
+ * The Key references a String constant that will hold the Portal key.
+ *
+ * After creation, the model appears in Studio Pro's Agent Editor and
+ * can be selected when configuring an Agent.
+ */
+CREATE MODEL ModelTest."GPT4Model" (
+  Provider: MxCloudGenAI,
+  Key: ModelTest.GPT4Key
+);
+/
+
+/**
+ * Level 1.2: Second model referencing a different key
+ *
+ * Projects commonly have multiple models (e.g., GPT-4 for complex tasks,
+ * Claude for document analysis). Each references its own key constant.
+ */
+CREATE MODEL ModelTest."ClaudeModel" (
+  Provider: MxCloudGenAI,
+  Key: ModelTest.ClaudeKey
+);
+/
+
+-- ============================================================================
+-- LEVEL 2: Model with Portal-Populated Metadata
+-- ============================================================================
+
+/**
+ * Level 2.1: Model with display name and key name
+ *
+ * These fields are normally populated by Studio Pro when the user clicks
+ * "Test Key" against the Mendix Cloud GenAI Portal. They can be provided
+ * in MDL for round-trip preservation (e.g., when DESCRIBE output is
+ * re-executed), but setting them manually has no functional effect.
+ */
+CREATE MODEL ModelTest."ConfiguredModel" (
+  Provider: MxCloudGenAI,
+  Key: ModelTest.GPT4Key,
+  DisplayName: 'GPT-4 Turbo (128K)',
+  KeyName: 'prod-gpt4-turbo',
+  Environment: 'production'
+);
+/
+
+-- MARK: List
+
+-- ============================================================================
+-- LEVEL 3: List Models
+-- ============================================================================
+
+-- List all models across all modules
+LIST MODELS;
+/
+
+-- List models in a specific module
+LIST MODELS IN ModelTest;
+/
+
+-- SHOW also works (deprecated alias for LIST)
+SHOW MODELS IN ModelTest;
+/
+
+-- MARK: Describe
+
+-- ============================================================================
+-- LEVEL 4: Describe Model
+-- ============================================================================
+
+-- Describe produces round-trippable MDL. User-set fields (Provider, Key)
+-- come first; Portal-populated fields only appear when non-empty.
+DESCRIBE MODEL ModelTest.GPT4Model;
+DESCRIBE MODEL ModelTest.ConfiguredModel;
+
+-- MARK: Drop
+
+-- ============================================================================
+-- LEVEL 5: Drop Model
+-- ============================================================================
+
+-- Drop a model by qualified name.
+-- The underlying CustomBlobDocument is removed from the project.
+DROP MODEL ModelTest.ConfiguredModel;
+/
+
+-- Verify it's gone
+LIST MODELS IN ModelTest;
+/
+
+-- ============================================================================
+-- LEVEL 6: Error Cases
+-- ============================================================================
+
+-- These statements produce errors (commented out to not block the script):
+
+-- Duplicate model name:
+-- CREATE MODEL ModelTest.GPT4Model (Provider: MxCloudGenAI, Key: ModelTest.GPT4Key);
+-- → Error: model already exists: ModelTest.GPT4Model
+
+-- Missing constant:
+-- CREATE MODEL ModelTest.BadModel (Provider: MxCloudGenAI, Key: ModelTest.NoSuchConst);
+-- → Error: CREATE MODEL ModelTest.BadModel: constant not found: ModelTest.NoSuchConst
+
+-- Drop non-existent model:
+-- DROP MODEL ModelTest.DoesNotExist;
+-- → Error: model not found: ModelTest.DoesNotExist
+
+-- ============================================================================
+-- Cleanup
+-- ============================================================================
+
+DROP MODEL ModelTest.GPT4Model;
+DROP MODEL ModelTest.ClaudeModel;
+/
