@@ -292,6 +292,38 @@ type EqualsOperation struct {
 
 func (EqualsOperation) isListOperation() {}
 
+// FindByAttributeOperation finds an element by attribute or association value.
+type FindByAttributeOperation struct {
+	model.BaseElement
+	ListVariable string `json:"listVariable"`
+	Attribute    string `json:"attribute,omitempty"`
+	Association  string `json:"association,omitempty"`
+	Expression   string `json:"expression"`
+}
+
+func (FindByAttributeOperation) isListOperation() {}
+
+// FilterByAttributeOperation filters a list by attribute or association value.
+type FilterByAttributeOperation struct {
+	model.BaseElement
+	ListVariable string `json:"listVariable"`
+	Attribute    string `json:"attribute,omitempty"`
+	Association  string `json:"association,omitempty"`
+	Expression   string `json:"expression"`
+}
+
+func (FilterByAttributeOperation) isListOperation() {}
+
+// ListRangeOperation gets a range of elements from a list.
+type ListRangeOperation struct {
+	model.BaseElement
+	ListVariable     string `json:"listVariable"`
+	LimitExpression  string `json:"limitExpression,omitempty"`
+	OffsetExpression string `json:"offsetExpression,omitempty"`
+}
+
+func (ListRangeOperation) isListOperation() {}
+
 // List Actions
 
 // CreateListAction creates an empty list.

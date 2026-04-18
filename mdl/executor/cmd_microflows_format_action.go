@@ -756,9 +756,50 @@ func formatListOperation(ctx *ExecContext, op microflows.ListOperation, outputVa
 		return fmt.Sprintf("$%s = CONTAINS($%s, $%s);", outputVar, o.ListVariable, o.ObjectVariable)
 	case *microflows.EqualsOperation:
 		return fmt.Sprintf("$%s = EQUALS($%s, $%s);", outputVar, o.ListVariable1, o.ListVariable2)
+	case *microflows.FindByAttributeOperation:
+		fieldName := extractFieldName(o.Attribute, o.Association)
+		if fieldName != "" && o.Expression != "" {
+			return fmt.Sprintf("$%s = FIND($%s, %s = %s);", outputVar, o.ListVariable, fieldName, o.Expression)
+		} else if o.Expression != "" {
+			return fmt.Sprintf("$%s = FIND($%s, %s);", outputVar, o.ListVariable, o.Expression)
+		}
+		return fmt.Sprintf("-- $%s = FIND($%s) — missing attribute/expression", outputVar, o.ListVariable)
+	case *microflows.FilterByAttributeOperation:
+		fieldName := extractFieldName(o.Attribute, o.Association)
+		if fieldName != "" && o.Expression != "" {
+			return fmt.Sprintf("$%s = FILTER($%s, %s = %s);", outputVar, o.ListVariable, fieldName, o.Expression)
+		} else if o.Expression != "" {
+			return fmt.Sprintf("$%s = FILTER($%s, %s);", outputVar, o.ListVariable, o.Expression)
+		}
+		return fmt.Sprintf("-- $%s = FILTER($%s) — missing attribute/expression", outputVar, o.ListVariable)
+	case *microflows.ListRangeOperation:
+		if o.OffsetExpression != "" && o.LimitExpression != "" {
+			return fmt.Sprintf("$%s = RANGE($%s, %s, %s);", outputVar, o.ListVariable, o.OffsetExpression, o.LimitExpression)
+		} else if o.OffsetExpression != "" {
+			return fmt.Sprintf("$%s = RANGE($%s, %s);", outputVar, o.ListVariable, o.OffsetExpression)
+		} else if o.LimitExpression != "" {
+			return fmt.Sprintf("$%s = RANGE($%s, 0, %s);", outputVar, o.ListVariable, o.LimitExpression)
+		}
+		return fmt.Sprintf("$%s = RANGE($%s);", outputVar, o.ListVariable)
 	default:
 		return fmt.Sprintf("$%s = LIST OPERATION %T;", outputVar, op)
 	}
+}
+
+// extractFieldName returns the short field name from a qualified attribute
+// or association reference (e.g. "MyModule.Entity.Status" → "Status",
+// "MyModule.Order_Customer" → "Order_Customer"). Returns the association
+// name if attribute is empty.
+func extractFieldName(attribute, association string) string {
+	ref := attribute
+	if ref == "" {
+		ref = association
+	}
+	if ref == "" {
+		return ""
+	}
+	parts := strings.Split(ref, ".")
+	return parts[len(parts)-1]
 }
 
 // formatRestCallAction formats a REST call action as MDL.

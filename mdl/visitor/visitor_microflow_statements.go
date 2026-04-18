@@ -470,6 +470,19 @@ func buildSetStatement(ctx parser.ISetStatementContext) ast.MicroflowStatement {
 				InputVariable:  extractVariableName(funcCall.Arguments, 0),
 				SecondVariable: extractVariableName(funcCall.Arguments, 1),
 			}
+		case "RANGE":
+			stmt := &ast.ListOperationStmt{
+				OutputVariable: targetVar,
+				Operation:      ast.ListOpRange,
+				InputVariable:  extractVariableName(funcCall.Arguments, 0),
+			}
+			if len(funcCall.Arguments) > 1 {
+				stmt.OffsetExpr = funcCall.Arguments[1]
+			}
+			if len(funcCall.Arguments) > 2 {
+				stmt.LimitExpr = funcCall.Arguments[2]
+			}
+			return stmt
 		// Check for aggregate operations: COUNT, SUM, AVERAGE, MINIMUM, MAXIMUM
 		case "COUNT":
 			return &ast.AggregateListStmt{

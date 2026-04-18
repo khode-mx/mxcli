@@ -445,8 +445,8 @@ func buildListOperationAsFunction(ctx parser.IListOperationContext) ast.Expressi
 		funcExpr.Arguments = append(funcExpr.Arguments, &ast.VariableExpr{Name: varName})
 	}
 
-	// Get expression argument (for FIND/FILTER)
-	if expr := listOpCtx.Expression(); expr != nil {
+	// Get expression arguments (for FIND/FILTER/RANGE)
+	for _, expr := range listOpCtx.AllExpression() {
 		funcExpr.Arguments = append(funcExpr.Arguments, buildExpression(expr))
 	}
 

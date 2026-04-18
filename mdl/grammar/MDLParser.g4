@@ -1789,6 +1789,7 @@ listOperation
     | SUBTRACT LPAREN VARIABLE COMMA VARIABLE RPAREN                   // $var = SUBTRACT($list1, $list2)
     | CONTAINS LPAREN VARIABLE COMMA VARIABLE RPAREN                   // $bool = CONTAINS($list, $item)
     | EQUALS_OP LPAREN VARIABLE COMMA VARIABLE RPAREN                  // $bool = EQUALS($list1, $list2)
+    | RANGE LPAREN VARIABLE (COMMA expression (COMMA expression)?)? RPAREN // $var = RANGE($list, offset, limit)
     ;
 
 sortSpecList

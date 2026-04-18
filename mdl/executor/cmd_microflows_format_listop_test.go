@@ -97,6 +97,76 @@ func TestFormatListOperation_Equals(t *testing.T) {
 	}
 }
 
+func TestFormatListOperation_FindByAttribute(t *testing.T) {
+	e := newTestExecutor()
+	got := e.formatListOperation(&microflows.FindByAttributeOperation{
+		ListVariable: "Orders",
+		Attribute:    "MyModule.Order.Status",
+		Expression:   "'Active'",
+	}, "Found")
+	if got != "$Found = FIND($Orders, Status = 'Active');" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestFormatListOperation_FindByAssociation(t *testing.T) {
+	e := newTestExecutor()
+	got := e.formatListOperation(&microflows.FindByAttributeOperation{
+		ListVariable: "Orders",
+		Association:  "MyModule.Order_Customer",
+		Expression:   "$Customer",
+	}, "Found")
+	if got != "$Found = FIND($Orders, Order_Customer = $Customer);" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestFormatListOperation_FindByAttributeEmpty(t *testing.T) {
+	e := newTestExecutor()
+	got := e.formatListOperation(&microflows.FindByAttributeOperation{
+		ListVariable: "Orders",
+	}, "Found")
+	if got != "-- $Found = FIND($Orders) — missing attribute/expression" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestFormatListOperation_FilterByAttribute(t *testing.T) {
+	e := newTestExecutor()
+	got := e.formatListOperation(&microflows.FilterByAttributeOperation{
+		ListVariable: "Orders",
+		Attribute:    "MyModule.Order.IsActive",
+		Expression:   "true",
+	}, "Filtered")
+	if got != "$Filtered = FILTER($Orders, IsActive = true);" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestFormatListOperation_Range(t *testing.T) {
+	e := newTestExecutor()
+	got := e.formatListOperation(&microflows.ListRangeOperation{ListVariable: "Orders", OffsetExpression: "5", LimitExpression: "10"}, "Page")
+	if got != "$Page = RANGE($Orders, 5, 10);" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestFormatListOperation_RangeOffsetOnly(t *testing.T) {
+	e := newTestExecutor()
+	got := e.formatListOperation(&microflows.ListRangeOperation{ListVariable: "Orders", OffsetExpression: "5"}, "Page")
+	if got != "$Page = RANGE($Orders, 5);" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestFormatListOperation_RangeLimitOnly(t *testing.T) {
+	e := newTestExecutor()
+	got := e.formatListOperation(&microflows.ListRangeOperation{ListVariable: "Orders", LimitExpression: "10"}, "Page")
+	if got != "$Page = RANGE($Orders, 0, 10);" {
+		t.Errorf("got %q", got)
+	}
+}
+
 func TestFormatListOperation_Nil(t *testing.T) {
 	e := newTestExecutor()
 	got := e.formatListOperation(nil, "Result")

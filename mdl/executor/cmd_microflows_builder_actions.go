@@ -534,6 +534,18 @@ func (fb *flowBuilder) addListOperationAction(s *ast.ListOperationStmt) model.ID
 			ListVariable1: s.InputVariable,
 			ListVariable2: s.SecondVariable,
 		}
+	case ast.ListOpRange:
+		rangeOp := &microflows.ListRangeOperation{
+			BaseElement:  model.BaseElement{ID: model.ID(mpr.GenerateID())},
+			ListVariable: s.InputVariable,
+		}
+		if s.OffsetExpr != nil {
+			rangeOp.OffsetExpression = fb.exprToString(s.OffsetExpr)
+		}
+		if s.LimitExpr != nil {
+			rangeOp.LimitExpression = fb.exprToString(s.LimitExpr)
+		}
+		operation = rangeOp
 	default:
 		return ""
 	}
@@ -548,7 +560,7 @@ func (fb *flowBuilder) addListOperationAction(s *ast.ListOperationStmt) model.ID
 	if fb.varTypes != nil && s.OutputVariable != "" && s.InputVariable != "" {
 		inputType := fb.varTypes[s.InputVariable]
 		switch s.Operation {
-		case ast.ListOpFilter, ast.ListOpSort, ast.ListOpTail, ast.ListOpUnion, ast.ListOpIntersect, ast.ListOpSubtract:
+		case ast.ListOpFilter, ast.ListOpSort, ast.ListOpTail, ast.ListOpUnion, ast.ListOpIntersect, ast.ListOpSubtract, ast.ListOpRange:
 			// These operations preserve the list type
 			if inputType != "" {
 				fb.varTypes[s.OutputVariable] = inputType
