@@ -1,0 +1,171 @@
+-- @version: 11.9+
+-- ============================================================================
+-- Agent Editor Document Examples
+-- ============================================================================
+--
+-- This file demonstrates the MDL syntax for all four agent-editor document
+-- types: Model, Knowledge Base, Consumed MCP Service, and Agent.
+--
+-- Features demonstrated:
+--   - CREATE/DROP CONSUMED MCP SERVICE
+--   - CREATE/DROP KNOWLEDGE BASE
+--   - CREATE/DROP AGENT (simple, with variables, with body blocks)
+--   - Dollar-quoted multi-line prompts ($$...$$)
+--   - Variables: ("Key": EntityAttribute) inline syntax
+--   - TOOL, MCP SERVICE, KNOWLEDGE BASE body blocks
+--
+-- Prerequisites:
+--   - AgentEditorCommons module installed
+--   - Encryption module configured (32-char key)
+--   - ASU_AgentEditor registered as after-startup microflow
+--
+-- ============================================================================
+
+CREATE MODULE AgentTest;
+
+-- ============================================================================
+-- Setup: Constants for Model and KB key references
+-- ============================================================================
+
+CREATE CONSTANT AgentTest."ModelKey"
+  TYPE String
+  DEFAULT '';
+/
+
+CREATE CONSTANT AgentTest."KBKey"
+  TYPE String
+  DEFAULT '';
+/
+
+-- ============================================================================
+-- LEVEL 1: Model (prerequisite for Agents)
+-- ============================================================================
+
+CREATE MODEL AgentTest."TestModel" (
+  Provider: MxCloudGenAI,
+  Key: AgentTest.ModelKey
+);
+/
+
+-- ============================================================================
+-- LEVEL 2: Knowledge Base
+-- ============================================================================
+
+CREATE KNOWLEDGE BASE AgentTest."ProductDocs" (
+  Provider: MxCloudGenAI,
+  Key: AgentTest.KBKey
+);
+/
+
+-- ============================================================================
+-- LEVEL 3: Consumed MCP Service
+-- ============================================================================
+
+CREATE CONSUMED MCP SERVICE AgentTest."WebSearch" (
+  ProtocolVersion: v2025_03_26,
+  Version: '1.0',
+  ConnectionTimeoutSeconds: 30,
+  Documentation: 'Web search MCP server for research tasks'
+);
+/
+
+-- ============================================================================
+-- LEVEL 4: Simple Agent (no tools, no body)
+-- ============================================================================
+
+CREATE AGENT AgentTest."Summarizer" (
+  UsageType: Task,
+  Model: AgentTest.TestModel,
+  SystemPrompt: 'Summarize the given text in 3 sentences.',
+  UserPrompt: 'Enter text to summarize.'
+);
+/
+
+-- ============================================================================
+-- LEVEL 5: Agent with Variables
+-- ============================================================================
+
+CREATE AGENT AgentTest."Translator" (
+  UsageType: Task,
+  Model: AgentTest.TestModel,
+  Variables: ("Language": EntityAttribute),
+  SystemPrompt: 'Translate the text into {{Language}}.',
+  UserPrompt: 'Hello world'
+);
+/
+
+-- ============================================================================
+-- LEVEL 6: Agent with dollar-quoted multi-line prompts
+-- ============================================================================
+
+CREATE AGENT AgentTest."CodeReviewer" (
+  UsageType: Task,
+  Model: AgentTest.TestModel,
+  SystemPrompt: $$You are a code review assistant.
+
+Review the provided code for:
+1. Security vulnerabilities
+2. Performance issues
+3. Code style and readability
+
+Provide specific, actionable feedback.$$,
+  UserPrompt: $$func main() {
+    fmt.Println("Hello, World!")
+}$$
+);
+/
+
+-- ============================================================================
+-- LEVEL 7: Agent with body blocks (MCP SERVICE + KNOWLEDGE BASE)
+-- ============================================================================
+
+CREATE AGENT AgentTest."ResearchAssistant" (
+  UsageType: Conversational,
+  Description: 'Research assistant with web search and documentation',
+  Model: AgentTest.TestModel,
+  MaxTokens: 16384,
+  ToolChoice: Auto,
+  SystemPrompt: 'You are a research assistant. Use available tools.',
+  UserPrompt: 'Find information about quantum computing.'
+)
+{
+  MCP SERVICE AgentTest.WebSearch {
+    Enabled: true
+  }
+
+  KNOWLEDGE BASE ProductKB {
+    Source: AgentTest.ProductDocs,
+    Collection: 'product-docs',
+    MaxResults: 5,
+    Description: 'Product documentation',
+    Enabled: true
+  }
+};
+/
+
+-- ============================================================================
+-- LEVEL 8: List and Describe
+-- ============================================================================
+
+LIST AGENTS IN AgentTest;
+LIST MODELS IN AgentTest;
+LIST KNOWLEDGE BASES IN AgentTest;
+LIST CONSUMED MCP SERVICES IN AgentTest;
+
+DESCRIBE AGENT AgentTest.ResearchAssistant;
+DESCRIBE MODEL AgentTest.TestModel;
+DESCRIBE KNOWLEDGE BASE AgentTest.ProductDocs;
+DESCRIBE CONSUMED MCP SERVICE AgentTest.WebSearch;
+
+-- ============================================================================
+-- Cleanup (reverse dependency order: agents first, then their dependencies)
+-- ============================================================================
+
+DROP AGENT AgentTest.ResearchAssistant;
+DROP AGENT AgentTest.CodeReviewer;
+DROP AGENT AgentTest.Translator;
+DROP AGENT AgentTest.Summarizer;
+DROP CONSUMED MCP SERVICE AgentTest.WebSearch;
+DROP KNOWLEDGE BASE AgentTest.ProductDocs;
+DROP MODEL AgentTest.TestModel;
+/

@@ -626,6 +626,18 @@ func (s *BaseMDLParserListener) EnterModelProperty(ctx *ModelPropertyContext) {}
 // ExitModelProperty is called when production modelProperty is exited.
 func (s *BaseMDLParserListener) ExitModelProperty(ctx *ModelPropertyContext) {}
 
+// EnterVariableDefList is called when production variableDefList is entered.
+func (s *BaseMDLParserListener) EnterVariableDefList(ctx *VariableDefListContext) {}
+
+// ExitVariableDefList is called when production variableDefList is exited.
+func (s *BaseMDLParserListener) ExitVariableDefList(ctx *VariableDefListContext) {}
+
+// EnterVariableDef is called when production variableDef is entered.
+func (s *BaseMDLParserListener) EnterVariableDef(ctx *VariableDefContext) {}
+
+// ExitVariableDef is called when production variableDef is exited.
+func (s *BaseMDLParserListener) ExitVariableDef(ctx *VariableDefContext) {}
+
 // EnterCreateConsumedMCPServiceStatement is called when production createConsumedMCPServiceStatement is entered.
 func (s *BaseMDLParserListener) EnterCreateConsumedMCPServiceStatement(ctx *CreateConsumedMCPServiceStatementContext) {
 }

@@ -90,12 +90,60 @@ func parseModelProps(props []parser.IModelPropertyContext) map[string]string {
 			m[key] = num.GetText()
 		} else if bl := pc.BooleanLiteral(); bl != nil {
 			m[key] = strings.ToLower(bl.GetText())
+		} else if dq := pc.DOLLAR_STRING(); dq != nil {
+			m[key] = unquoteDollarString(dq.GetText())
 		} else if len(idents) > 1 {
 			m[key] = idents[1].GetText()
 		}
 	}
 	return m
 }
+
+// parseVariableDefsFromProps scans modelProperty contexts for a
+// Variables: (...) entry and parses the variable list. Returns nil if
+// no Variables property is present.
+func parseVariableDefsFromProps(props []parser.IModelPropertyContext) []ast.AgentVarDef {
+	for _, p := range props {
+		pc := p.(*parser.ModelPropertyContext)
+		idents := pc.AllIdentifierOrKeyword()
+		if len(idents) == 0 {
+			continue
+		}
+		if !strings.EqualFold(idents[0].GetText(), "variables") {
+			continue
+		}
+		vdl := pc.VariableDefList()
+		if vdl == nil {
+			continue
+		}
+		vdlCtx := vdl.(*parser.VariableDefListContext)
+		var result []ast.AgentVarDef
+		for _, vd := range vdlCtx.AllVariableDef() {
+			vdc := vd.(*parser.VariableDefContext)
+			// Key is STRING_LITERAL or QUOTED_IDENTIFIER
+			var key string
+			if sl := vdc.STRING_LITERAL(); sl != nil {
+				key = unquoteString(sl.GetText())
+			} else if qi := vdc.QUOTED_IDENTIFIER(); qi != nil {
+				key = unquoteIdentifier(qi.GetText())
+			}
+			// Type is identifierOrKeyword
+			typeStr := ""
+			if iok := vdc.IdentifierOrKeyword(); iok != nil {
+				typeStr = iok.GetText()
+			}
+			result = append(result, ast.AgentVarDef{
+				Key:                 key,
+				IsAttributeInEntity: strings.EqualFold(typeStr, "EntityAttribute"),
+			})
+		}
+		return result
+	}
+	return nil
+}
+
+// unquoteIdentifier and unquoteDollarString are defined in visitor_helpers.go
+// and visitor_dbconnection.go respectively — reuse those.
 
 // ExitCreateConsumedMCPServiceStatement bridges the grammar to AST.
 func (b *Builder) ExitCreateConsumedMCPServiceStatement(ctx *parser.CreateConsumedMCPServiceStatementContext) {
@@ -167,9 +215,7 @@ func (b *Builder) ExitCreateAgentStatement(ctx *parser.CreateAgentStatementConte
 	}
 
 	// Parse Variables: ("Key": EntityAttribute, "Key2": String)
-	if v, ok := props["variables"]; ok {
-		stmt.Variables = parseAgentVariables(v)
-	}
+	stmt.Variables = parseVariableDefsFromProps(ctx.AllModelProperty())
 
 	// Parse body blocks (TOOL, MCP SERVICE, KNOWLEDGE BASE)
 	if body := ctx.AgentBody(); body != nil {
@@ -199,9 +245,8 @@ func (b *Builder) ExitCreateAgentStatement(ctx *parser.CreateAgentStatementConte
 				kbd := ast.AgentKBToolDef{
 					Enabled: true,
 				}
-				ioks := blk.AllIdentifierOrKeyword()
-				if len(ioks) > 0 {
-					kbd.Name = ioks[0].GetText()
+				if iok := blk.IdentifierOrKeyword(); iok != nil {
+					kbd.Name = iok.GetText()
 				}
 				if src, ok := blockProps["source"]; ok {
 					sqn := parseQualifiedNameString(src)
@@ -216,15 +261,14 @@ func (b *Builder) ExitCreateAgentStatement(ctx *parser.CreateAgentStatementConte
 					kbd.Enabled = strings.EqualFold(v, "true")
 				}
 				stmt.KBTools = append(stmt.KBTools, kbd)
-			} else {
-				// Generic TOOL block (e.g., TOOL ToolName { ... })
-				ioks := blk.AllIdentifierOrKeyword()
+			} else if blk.TOOL() != nil {
+				// TOOL ToolName { ... }
 				td := ast.AgentToolDef{
 					ToolType: "Microflow",
 					Enabled:  true,
 				}
-				if len(ioks) >= 2 {
-					td.Name = ioks[1].GetText()
+				if iok := blk.IdentifierOrKeyword(); iok != nil {
+					td.Name = iok.GetText()
 				}
 				td.Description = blockProps["description"]
 				if v, ok := blockProps["enabled"]; ok {
@@ -238,17 +282,6 @@ func (b *Builder) ExitCreateAgentStatement(ctx *parser.CreateAgentStatementConte
 	b.statements = append(b.statements, stmt)
 }
 
-// parseAgentVariables parses a Variables property value like:
-// ("Key": EntityAttribute, "Key2": String)
-// This arrives as the raw text between the outer parentheses.
-func parseAgentVariables(raw string) []ast.AgentVarDef {
-	// The raw value is already unquoted from STRING_LITERAL or parsed from
-	// identifierOrKeyword. For the inline Variables: (...) form, the grammar
-	// captures the parenthesized content. We need to handle it as-is from
-	// the qualified-name or identifier alternatives.
-	// For now: return empty if the value doesn't look parseable.
-	return nil
-}
 
 // parseQualifiedNameString splits "Module.Name" into a QualifiedName.
 func parseQualifiedNameString(s string) ast.QualifiedName {

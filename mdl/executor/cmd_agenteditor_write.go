@@ -169,7 +169,9 @@ func execCreateAgent(ctx *ExecContext, s *ast.CreateAgentStmt) error {
 		}
 	}
 
-	// Resolve Entity reference
+	// Resolve Entity reference. The documentId for entity references is an
+	// opaque agent-editor-internal ID (not a unit UUID), so we set only
+	// qualifiedName here. ASU_AgentEditor populates documentId at runtime.
 	if s.Entity != nil {
 		a.Entity = &agenteditor.DocRef{
 			QualifiedName: s.Entity.String(),

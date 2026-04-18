@@ -292,6 +292,12 @@ type MDLParserListener interface {
 	// EnterModelProperty is called when entering the modelProperty production.
 	EnterModelProperty(c *ModelPropertyContext)
 
+	// EnterVariableDefList is called when entering the variableDefList production.
+	EnterVariableDefList(c *VariableDefListContext)
+
+	// EnterVariableDef is called when entering the variableDef production.
+	EnterVariableDef(c *VariableDefContext)
+
 	// EnterCreateConsumedMCPServiceStatement is called when entering the createConsumedMCPServiceStatement production.
 	EnterCreateConsumedMCPServiceStatement(c *CreateConsumedMCPServiceStatementContext)
 
@@ -1584,6 +1590,12 @@ type MDLParserListener interface {
 
 	// ExitModelProperty is called when exiting the modelProperty production.
 	ExitModelProperty(c *ModelPropertyContext)
+
+	// ExitVariableDefList is called when exiting the variableDefList production.
+	ExitVariableDefList(c *VariableDefListContext)
+
+	// ExitVariableDef is called when exiting the variableDef production.
+	ExitVariableDef(c *VariableDefContext)
 
 	// ExitCreateConsumedMCPServiceStatement is called when exiting the createConsumedMCPServiceStatement production.
 	ExitCreateConsumedMCPServiceStatement(c *CreateConsumedMCPServiceStatementContext)

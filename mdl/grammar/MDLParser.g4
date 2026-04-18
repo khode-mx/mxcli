@@ -910,6 +910,16 @@ modelProperty
     | identifierOrKeyword COLON STRING_LITERAL            // DisplayName: 'GPT-4 Turbo' etc.
     | identifierOrKeyword COLON NUMBER_LITERAL            // ConnectionTimeoutSeconds: 30
     | identifierOrKeyword COLON booleanLiteral            // Enabled: true
+    | identifierOrKeyword COLON DOLLAR_STRING              // SystemPrompt: $$multi-line...$$
+    | identifierOrKeyword COLON LPAREN variableDefList RPAREN  // Variables: ("Key": EntityAttribute, ...)
+    ;
+
+variableDefList
+    : variableDef (COMMA variableDef)*
+    ;
+
+variableDef
+    : (STRING_LITERAL | QUOTED_IDENTIFIER) COLON identifierOrKeyword  // "Key": EntityAttribute
     ;
 
 // =============================================================================
@@ -962,7 +972,7 @@ agentBody
 agentBodyBlock
     : MCP SERVICE qualifiedName LBRACE modelProperty (COMMA modelProperty)* RBRACE       // MCP SERVICE Mod.Name { ... }
     | KNOWLEDGE BASE identifierOrKeyword LBRACE modelProperty (COMMA modelProperty)* RBRACE // KNOWLEDGE BASE MyKB { ... }
-    | identifierOrKeyword identifierOrKeyword LBRACE modelProperty (COMMA modelProperty)* RBRACE // TOOL ToolName { ... }
+    | TOOL identifierOrKeyword LBRACE modelProperty (COMMA modelProperty)* RBRACE        // TOOL ToolName { ... }
     ;
 
 // =============================================================================
@@ -3749,7 +3759,7 @@ keyword
     | STORE | STRUCTURE | STRUCTURES | VIEW
 
     // Agent editor
-    | AGENT | AGENTS | KNOWLEDGE | BASES | CONSUMED | MCP
+    | AGENT | AGENTS | KNOWLEDGE | BASES | CONSUMED | MCP | TOOL
 
     // Microflow / Nanoflow
     | MICROFLOW | MICROFLOWS | NANOFLOW | NANOFLOWS
