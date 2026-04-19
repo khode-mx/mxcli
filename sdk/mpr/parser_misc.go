@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mendixlabs/mxcli/mdl/types"
 	"github.com/mendixlabs/mxcli/model"
 	"github.com/mendixlabs/mxcli/sdk/javaactions"
 	"github.com/mendixlabs/mxcli/sdk/pages"
@@ -81,7 +80,7 @@ func (r *Reader) parseSnippet(unitID, containerID string, contents []byte) (*pag
 }
 
 // parseJavaAction parses Java action contents from BSON.
-func (r *Reader) parseJavaAction(unitID, containerID string, contents []byte) (*types.JavaAction, error) {
+func (r *Reader) parseJavaAction(unitID, containerID string, contents []byte) (*JavaAction, error) {
 	contents, err := r.resolveContents(unitID, contents)
 	if err != nil {
 		return nil, err
@@ -92,7 +91,7 @@ func (r *Reader) parseJavaAction(unitID, containerID string, contents []byte) (*
 		return nil, fmt.Errorf("failed to unmarshal BSON: %w", err)
 	}
 
-	ja := &types.JavaAction{}
+	ja := &JavaAction{}
 	ja.ID = model.ID(unitID)
 	ja.TypeName = "JavaActions$JavaAction"
 	ja.ContainerID = model.ID(containerID)
@@ -138,7 +137,7 @@ func WriteJSON(element any) ([]byte, error) {
 }
 
 // parseJavaScriptAction parses JavaScript action contents from BSON.
-func (r *Reader) parseJavaScriptAction(unitID, containerID string, contents []byte) (*types.JavaScriptAction, error) {
+func (r *Reader) parseJavaScriptAction(unitID, containerID string, contents []byte) (*JavaScriptAction, error) {
 	contents, err := r.resolveContents(unitID, contents)
 	if err != nil {
 		return nil, err
@@ -149,7 +148,7 @@ func (r *Reader) parseJavaScriptAction(unitID, containerID string, contents []by
 		return nil, fmt.Errorf("failed to unmarshal BSON: %w", err)
 	}
 
-	jsa := &types.JavaScriptAction{}
+	jsa := &JavaScriptAction{}
 	jsa.ID = model.ID(unitID)
 	jsa.TypeName = "JavaScriptActions$JavaScriptAction"
 	jsa.ContainerID = model.ID(containerID)
@@ -250,7 +249,7 @@ func (r *Reader) parseJavaScriptAction(unitID, containerID string, contents []by
 }
 
 // ReadJavaScriptActionByName reads a JavaScript action by qualified name (Module.ActionName).
-func (r *Reader) ReadJavaScriptActionByName(qualifiedName string) (*types.JavaScriptAction, error) {
+func (r *Reader) ReadJavaScriptActionByName(qualifiedName string) (*JavaScriptAction, error) {
 	units, err := r.listUnitsByType("JavaScriptActions$JavaScriptAction")
 	if err != nil {
 		return nil, err
@@ -364,7 +363,7 @@ func (r *Reader) parsePageTemplate(unitID, containerID string, contents []byte) 
 }
 
 // parseNavigationDocument parses navigation document contents from BSON.
-func (r *Reader) parseNavigationDocument(unitID, containerID string, contents []byte) (*types.NavigationDocument, error) {
+func (r *Reader) parseNavigationDocument(unitID, containerID string, contents []byte) (*NavigationDocument, error) {
 	contents, err := r.resolveContents(unitID, contents)
 	if err != nil {
 		return nil, err
@@ -375,7 +374,7 @@ func (r *Reader) parseNavigationDocument(unitID, containerID string, contents []
 		return nil, fmt.Errorf("failed to unmarshal BSON: %w", err)
 	}
 
-	nav := &types.NavigationDocument{}
+	nav := &NavigationDocument{}
 	nav.ID = model.ID(unitID)
 	nav.TypeName = "Navigation$NavigationDocument"
 	nav.ContainerID = model.ID(containerID)
@@ -400,9 +399,9 @@ func (r *Reader) parseNavigationDocument(unitID, containerID string, contents []
 }
 
 // parseNavigationProfile parses a single navigation profile from BSON.
-func parseNavigationProfile(raw map[string]any) *types.NavigationProfile {
+func parseNavigationProfile(raw map[string]any) *NavigationProfile {
 	typeName := extractString(raw["$Type"])
-	profile := &types.NavigationProfile{
+	profile := &NavigationProfile{
 		Name: extractString(raw["Name"]),
 		Kind: extractString(raw["Kind"]),
 	}
@@ -414,13 +413,13 @@ func parseNavigationProfile(raw map[string]any) *types.NavigationProfile {
 			page := extractString(hp["HomePagePage"])
 			nanoflow := extractString(hp["HomePageNanoflow"])
 			if page != "" || nanoflow != "" {
-				profile.HomePage = &types.NavHomePage{Page: page, Microflow: nanoflow}
+				profile.HomePage = &NavHomePage{Page: page, Microflow: nanoflow}
 			}
 		}
 		// Native role-based home pages
 		for _, item := range extractBsonArray(raw["RoleBasedNativeHomePages"]) {
 			if rbMap, ok := item.(map[string]any); ok {
-				rbh := &types.NavRoleBasedHome{
+				rbh := &NavRoleBasedHome{
 					UserRole:  extractString(rbMap["UserRole"]),
 					Page:      extractString(rbMap["HomePagePage"]),
 					Microflow: extractString(rbMap["HomePageNanoflow"]),
@@ -446,13 +445,13 @@ func parseNavigationProfile(raw map[string]any) *types.NavigationProfile {
 			page := extractString(hp["Page"])
 			mf := extractString(hp["Microflow"])
 			if page != "" || mf != "" {
-				profile.HomePage = &types.NavHomePage{Page: page, Microflow: mf}
+				profile.HomePage = &NavHomePage{Page: page, Microflow: mf}
 			}
 		}
 		// Role-based home pages (stored as "HomeItems")
 		for _, item := range extractBsonArray(raw["HomeItems"]) {
 			if rbMap, ok := item.(map[string]any); ok {
-				rbh := &types.NavRoleBasedHome{
+				rbh := &NavRoleBasedHome{
 					UserRole:  extractString(rbMap["UserRole"]),
 					Page:      extractString(rbMap["Page"]),
 					Microflow: extractString(rbMap["Microflow"]),
@@ -489,7 +488,7 @@ func parseNavigationProfile(raw map[string]any) *types.NavigationProfile {
 	// Offline entity configs (both web and native)
 	for _, item := range extractBsonArray(raw["OfflineEntityConfigs"]) {
 		if oeMap, ok := item.(map[string]any); ok {
-			oe := &types.NavOfflineEntity{
+			oe := &NavOfflineEntity{
 				Entity:     extractString(oeMap["Entity"]),
 				SyncMode:   extractString(oeMap["SyncMode"]),
 				Constraint: extractString(oeMap["Constraint"]),
@@ -504,8 +503,8 @@ func parseNavigationProfile(raw map[string]any) *types.NavigationProfile {
 }
 
 // parseNavMenuItem parses a Menus$MenuItem from BSON.
-func parseNavMenuItem(raw map[string]any) *types.NavMenuItem {
-	mi := &types.NavMenuItem{}
+func parseNavMenuItem(raw map[string]any) *NavMenuItem {
+	mi := &NavMenuItem{}
 
 	// Extract caption text (Caption → Items → first Translation → Text)
 	if caption, ok := raw["Caption"].(map[string]any); ok {
@@ -553,8 +552,8 @@ func parseNavMenuItem(raw map[string]any) *types.NavMenuItem {
 }
 
 // parseNavMenuItemFromBottomBar parses a NativePages$BottomBarItem as a NavMenuItem.
-func parseNavMenuItemFromBottomBar(raw map[string]any) *types.NavMenuItem {
-	mi := &types.NavMenuItem{}
+func parseNavMenuItemFromBottomBar(raw map[string]any) *NavMenuItem {
+	mi := &NavMenuItem{}
 	if caption, ok := raw["Caption"].(map[string]any); ok {
 		mi.Caption = extractTextFromBson(caption)
 	}
@@ -590,7 +589,7 @@ func extractTextFromBson(raw map[string]any) string {
 }
 
 // parseImageCollection parses image collection contents from BSON.
-func (r *Reader) parseImageCollection(unitID, containerID string, contents []byte) (*types.ImageCollection, error) {
+func (r *Reader) parseImageCollection(unitID, containerID string, contents []byte) (*ImageCollection, error) {
 	contents, err := r.resolveContents(unitID, contents)
 	if err != nil {
 		return nil, err
@@ -601,7 +600,7 @@ func (r *Reader) parseImageCollection(unitID, containerID string, contents []byt
 		return nil, fmt.Errorf("failed to unmarshal BSON: %w", err)
 	}
 
-	ic := &types.ImageCollection{}
+	ic := &ImageCollection{}
 	ic.ID = model.ID(unitID)
 	ic.TypeName = "Images$ImageCollection"
 	ic.ContainerID = model.ID(containerID)
@@ -620,7 +619,7 @@ func (r *Reader) parseImageCollection(unitID, containerID string, contents []byt
 	if images, ok := raw["Images"].(bson.A); ok {
 		for _, img := range images {
 			if imgMap, ok := img.(map[string]any); ok {
-				image := types.Image{}
+				image := Image{}
 				if id := extractID(imgMap["$ID"]); id != "" {
 					image.ID = model.ID(id)
 				}
@@ -644,7 +643,7 @@ func (r *Reader) parseImageCollection(unitID, containerID string, contents []byt
 }
 
 // parseJsonStructure parses JSON structure contents from BSON.
-func (r *Reader) parseJsonStructure(unitID, containerID string, contents []byte) (*types.JsonStructure, error) {
+func (r *Reader) parseJsonStructure(unitID, containerID string, contents []byte) (*JsonStructure, error) {
 	contents, err := r.resolveContents(unitID, contents)
 	if err != nil {
 		return nil, err
@@ -655,7 +654,7 @@ func (r *Reader) parseJsonStructure(unitID, containerID string, contents []byte)
 		return nil, fmt.Errorf("failed to unmarshal BSON: %w", err)
 	}
 
-	js := &types.JsonStructure{}
+	js := &JsonStructure{}
 	js.ID = model.ID(unitID)
 	js.TypeName = "JsonStructures$JsonStructure"
 	js.ContainerID = model.ID(containerID)
@@ -689,8 +688,8 @@ func (r *Reader) parseJsonStructure(unitID, containerID string, contents []byte)
 }
 
 // parseJsonElement recursively parses a JsonStructures$JsonElement from BSON.
-func parseJsonElement(raw map[string]any) *types.JsonElement {
-	elem := &types.JsonElement{
+func parseJsonElement(raw map[string]any) *JsonElement {
+	elem := &JsonElement{
 		MaxLength:      -1,
 		FractionDigits: -1,
 		TotalDigits:    -1,

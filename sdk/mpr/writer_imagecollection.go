@@ -3,14 +3,13 @@
 package mpr
 
 import (
-	"github.com/mendixlabs/mxcli/mdl/types"
 	"github.com/mendixlabs/mxcli/model"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // CreateImageCollection creates a new empty image collection unit in the MPR.
-func (w *Writer) CreateImageCollection(ic *types.ImageCollection) error {
+func (w *Writer) CreateImageCollection(ic *ImageCollection) error {
 	if ic.ID == "" {
 		ic.ID = model.ID(generateUUID())
 	}
@@ -32,7 +31,7 @@ func (w *Writer) DeleteImageCollection(id string) error {
 	return w.deleteUnit(id)
 }
 
-func serializeImageCollection(ic *types.ImageCollection) ([]byte, error) {
+func serializeImageCollection(ic *ImageCollection) ([]byte, error) {
 	// Images array always starts with the array marker int32(3)
 	images := bson.A{int32(3)}
 	for i := range ic.Images {

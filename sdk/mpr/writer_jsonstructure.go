@@ -12,12 +12,12 @@ import (
 func PrettyPrintJSON(s string) string { return types.PrettyPrintJSON(s) }
 
 // BuildJsonElementsFromSnippet delegates to types.BuildJsonElementsFromSnippet.
-func BuildJsonElementsFromSnippet(snippet string, customNameMap map[string]string) ([]*types.JsonElement, error) {
+func BuildJsonElementsFromSnippet(snippet string, customNameMap map[string]string) ([]*JsonElement, error) {
 	return types.BuildJsonElementsFromSnippet(snippet, customNameMap)
 }
 
 // CreateJsonStructure creates a new JSON structure unit in the MPR.
-func (w *Writer) CreateJsonStructure(js *types.JsonStructure) error {
+func (w *Writer) CreateJsonStructure(js *JsonStructure) error {
 	if js.ID == "" {
 		js.ID = model.ID(generateUUID())
 	}
@@ -39,7 +39,7 @@ func (w *Writer) DeleteJsonStructure(id string) error {
 	return w.deleteUnit(id)
 }
 
-func serializeJsonStructure(js *types.JsonStructure) ([]byte, error) {
+func serializeJsonStructure(js *JsonStructure) ([]byte, error) {
 	elements := bson.A{int32(2)}
 	for _, elem := range js.Elements {
 		elements = append(elements, serializeJsonElement(elem))
@@ -62,7 +62,7 @@ func serializeJsonStructure(js *types.JsonStructure) ([]byte, error) {
 // serializeJsonElement serializes a single JsonElement to BSON.
 // Note: JsonStructures$JsonElement uses int32 for numeric properties (MinOccurs, MaxOccurs, etc.),
 // unlike most other Mendix document types which use int64. Verified against Studio Pro-generated BSON.
-func serializeJsonElement(elem *types.JsonElement) bson.D {
+func serializeJsonElement(elem *JsonElement) bson.D {
 	children := bson.A{int32(2)}
 	for _, child := range elem.Children {
 		children = append(children, serializeJsonElement(child))
