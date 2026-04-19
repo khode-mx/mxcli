@@ -8,12 +8,44 @@ import (
 	"github.com/mendixlabs/mxcli/sdk/workflows"
 )
 
+// ContainerKind represents the type of page container (page, layout, or snippet).
+type ContainerKind string
+
+const (
+	ContainerPage    ContainerKind = "page"
+	ContainerLayout  ContainerKind = "layout"
+	ContainerSnippet ContainerKind = "snippet"
+)
+
+// InsertPosition represents where a widget is inserted relative to a target.
+type InsertPosition string
+
+const (
+	InsertBefore InsertPosition = "before"
+	InsertAfter  InsertPosition = "after"
+)
+
+// PluggablePropertyOp represents the operation type for SetPluggableProperty.
+type PluggablePropertyOp string
+
+const (
+	PluggableOpAttribute        PluggablePropertyOp = "attribute"
+	PluggableOpAssociation      PluggablePropertyOp = "association"
+	PluggableOpPrimitive        PluggablePropertyOp = "primitive"
+	PluggableOpSelection        PluggablePropertyOp = "selection"
+	PluggableOpDataSource       PluggablePropertyOp = "datasource"
+	PluggableOpWidgets          PluggablePropertyOp = "widgets"
+	PluggableOpTextTemplate     PluggablePropertyOp = "texttemplate"
+	PluggableOpAction           PluggablePropertyOp = "action"
+	PluggableOpAttributeObjects PluggablePropertyOp = "attributeObjects"
+)
+
 // PageMutator provides fine-grained mutation operations on a single
 // page, layout, or snippet unit. Obtain one via PageMutationBackend.OpenPageForMutation.
 // All methods operate on the in-memory representation; call Save to persist.
 type PageMutator interface {
-	// ContainerType returns "page", "layout", or "snippet".
-	ContainerType() string
+	// ContainerType returns the kind of container (page, layout, or snippet).
+	ContainerType() ContainerKind
 
 	// --- Widget property operations ---
 
@@ -31,8 +63,8 @@ type PageMutator interface {
 	// --- Widget tree operations ---
 
 	// InsertWidget inserts serialized widgets at the given position
-	// relative to the target widget. Position is "before" or "after".
-	InsertWidget(targetWidget string, position string, widgets []pages.Widget) error
+	// relative to the target widget.
+	InsertWidget(targetWidget string, position InsertPosition, widgets []pages.Widget) error
 
 	// DropWidget removes widgets by name from the tree.
 	DropWidget(widgetRefs []string) error
@@ -56,11 +88,9 @@ type PageMutator interface {
 	// --- Pluggable widget operations ---
 
 	// SetPluggableProperty sets a typed property on a pluggable widget's object.
-	// propKey is the Mendix property key, opName is the operation type
-	// ("attribute", "association", "primitive", "selection", "datasource",
-	// "widgets", "texttemplate", "action", "attributeObjects").
-	// ctx carries the operation-specific values.
-	SetPluggableProperty(widgetRef string, propKey string, opName string, ctx PluggablePropertyContext) error
+	// propKey is the Mendix property key, op identifies the operation type,
+	// and ctx carries the operation-specific values.
+	SetPluggableProperty(widgetRef string, propKey string, op PluggablePropertyOp, ctx PluggablePropertyContext) error
 
 	// --- Introspection ---
 
