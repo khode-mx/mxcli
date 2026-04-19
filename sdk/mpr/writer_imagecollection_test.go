@@ -5,13 +5,12 @@ package mpr
 import (
 	"testing"
 
-	"github.com/mendixlabs/mxcli/mdl/types"
 	"github.com/mendixlabs/mxcli/model"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
 func TestSerializeImageCollection_EmptyImages(t *testing.T) {
-	ic := &types.ImageCollection{
+	ic := &ImageCollection{
 		BaseElement: model.BaseElement{ID: "ic-test-1"},
 		ContainerID: model.ID("module-id-1"),
 		Name:        "TestIcons",
@@ -59,7 +58,7 @@ func TestSerializeImageCollection_EmptyImages(t *testing.T) {
 }
 
 func TestSerializeImageCollection_DefaultExportLevel(t *testing.T) {
-	ic := &types.ImageCollection{
+	ic := &ImageCollection{
 		BaseElement: model.BaseElement{ID: "ic-test-2"},
 		ContainerID: model.ID("module-id-1"),
 		Name:        "Icons",

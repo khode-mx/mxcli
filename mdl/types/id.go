@@ -55,9 +55,9 @@ func UUIDToBlob(uuid string) []byte {
 	}
 	var clean strings.Builder
 	clean.Grow(32)
-	for _, c := range uuid {
-		if c != '-' {
-			clean.WriteByte(byte(c))
+	for i := 0; i < len(uuid); i++ {
+		if uuid[i] != '-' {
+			clean.WriteByte(uuid[i])
 		}
 	}
 	decoded, err := hex.DecodeString(clean.String())
