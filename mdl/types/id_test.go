@@ -39,6 +39,23 @@ func TestGenerateID_V4Bits(t *testing.T) {
 	}
 }
 
+func TestGenerateDeterministicID_V4Bits(t *testing.T) {
+	seeds := []string{"test", "hello", "System.User", "System.Session", ""}
+	for _, seed := range seeds {
+		id := GenerateDeterministicID(seed)
+		clean := strings.ReplaceAll(id, "-", "")
+		// Version nibble at hex position 12 should be '4'
+		if clean[12] != '4' {
+			t.Errorf("seed %q: expected version nibble '4', got %q in %q", seed, string(clean[12]), id)
+		}
+		// Variant nibble at hex position 16 should be 8, 9, a, or b
+		v := clean[16]
+		if v != '8' && v != '9' && v != 'a' && v != 'b' {
+			t.Errorf("seed %q: expected variant nibble in [89ab], got %q in %q", seed, string(v), id)
+		}
+	}
+}
+
 func TestGenerateDeterministicID_Stable(t *testing.T) {
 	id1 := GenerateDeterministicID("test-seed")
 	id2 := GenerateDeterministicID("test-seed")
