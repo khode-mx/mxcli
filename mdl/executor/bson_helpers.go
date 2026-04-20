@@ -111,10 +111,14 @@ func dSetArray(doc bson.D, key string, elements []any) {
 
 // extractBinaryIDFromDoc extracts a binary ID string from a bson.D field.
 func extractBinaryIDFromDoc(val any) string {
-	if bin, ok := val.(primitive.Binary); ok {
+	switch bin := val.(type) {
+	case primitive.Binary:
 		return types.BlobToUUID(bin.Data)
+	case []byte:
+		return types.BlobToUUID(bin)
+	default:
+		return ""
 	}
-	return ""
 }
 
 // ============================================================================
@@ -352,8 +356,7 @@ func setRawWidgetProperty(widget bson.D, propName string, value interface{}) err
 func setWidgetCaption(widget bson.D, value interface{}) error {
 	caption := dGetDoc(widget, "Caption")
 	if caption == nil {
-		setTranslatableText(widget, "Caption", value)
-		return nil
+		return mdlerrors.NewValidation("widget has no Caption property")
 	}
 	setTranslatableText(caption, "", value)
 	return nil

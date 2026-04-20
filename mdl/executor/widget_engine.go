@@ -129,12 +129,9 @@ func (e *PluggableWidgetEngine) Build(def *WidgetDefinition, w *ast.WidgetV3) (*
 		}
 	}
 
-	// 4. Apply child slots (.def.json)
-	if err := e.applyChildSlots(builder, slots, w, propertyTypeIDs); err != nil {
-		return nil, err
-	}
-
-	// 4.1 Auto datasource: map AST DataSource to first DataSource-type property.
+	// 4. Auto datasource: map AST DataSource to first DataSource-type property.
+	// This must run before child slots so that entityContext is available
+	// for child widgets that depend on the parent's data source.
 	dsHandledByMapping := false
 	for _, m := range mappings {
 		if m.Source == "DataSource" {
@@ -158,6 +155,11 @@ func (e *PluggableWidgetEngine) Build(def *WidgetDefinition, w *ast.WidgetV3) (*
 				}
 			}
 		}
+	}
+
+	// 4.1 Apply child slots (.def.json)
+	if err := e.applyChildSlots(builder, slots, w, propertyTypeIDs); err != nil {
+		return nil, err
 	}
 
 	// 4.3 Auto child slots: match AST children to Widgets-type template properties.
@@ -525,6 +527,9 @@ func (e *PluggableWidgetEngine) applyChildSlots(builder backend.WidgetObjectBuil
 		}
 
 		ctx := &BuildContext{}
+		if slot.Operation != "widgets" {
+			return mdlerrors.NewValidationf("childSlots operation must be %q, got %q for property %s", "widgets", slot.Operation, slot.PropertyKey)
+		}
 		if err := e.applyOperation(builder, slot.Operation, slot.PropertyKey, ctx); err != nil {
 			return err
 		}

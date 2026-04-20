@@ -62,7 +62,17 @@ func execAlterWorkflow(ctx *ExecContext, s *ast.AlterWorkflowStmt) error {
 		switch o := op.(type) {
 		case *ast.SetWorkflowPropertyOp:
 			switch o.Property {
-			case "OVERVIEW_PAGE", "PARAMETER":
+			case "OVERVIEW_PAGE":
+				// OVERVIEW_PAGE uses Entity as the page qualified name (Value is unused).
+				qn := o.Entity.Module + "." + o.Entity.Name
+				if qn == "." {
+					qn = ""
+				}
+				if err := mutator.SetPropertyWithEntity(o.Property, qn, qn); err != nil {
+					return mdlerrors.NewBackend("SET "+o.Property, err)
+				}
+			case "PARAMETER":
+				// PARAMETER uses Value as the variable name and Entity as the entity qualified name.
 				qn := o.Entity.Module + "." + o.Entity.Name
 				if qn == "." {
 					qn = ""
