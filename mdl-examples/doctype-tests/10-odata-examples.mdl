@@ -228,6 +228,10 @@ DEFAULT 'proxy.example.com';
 CREATE CONSTANT OdTest.ProxyPortConst
 TYPE String
 DEFAULT '8080';
+
+CREATE CONSTANT OdTest.FullConfigAPIServiceUrl
+TYPE String
+DEFAULT 'https://api.example.com/odata/v4';
 /
 
 CREATE ODATA CLIENT OdTest.FullConfigAPI (
@@ -235,7 +239,7 @@ CREATE ODATA CLIENT OdTest.FullConfigAPI (
   ODataVersion: OData4,
   MetadataUrl: 'https://api.example.com/odata/v4/$metadata',
   Timeout: 300,
-  ServiceUrl: 'https://api.example.com/odata/v4',
+  ServiceUrl: @OdTest.FullConfigAPIServiceUrl,
   UseAuthentication: Yes,
   HttpUsername: 'admin',
   HttpPassword: 'secret',
