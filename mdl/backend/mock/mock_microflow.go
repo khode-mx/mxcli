@@ -53,7 +53,7 @@ func (m *MockBackend) ParseMicroflowFromRaw(raw map[string]any, unitID, containe
 	if m.ParseMicroflowFromRawFunc != nil {
 		return m.ParseMicroflowFromRawFunc(raw, unitID, containerID)
 	}
-	return nil
+	panic("mock ParseMicroflowFromRaw called but ParseMicroflowFromRawFunc is not set")
 }
 
 func (m *MockBackend) ListNanoflows() ([]*microflows.Nanoflow, error) {

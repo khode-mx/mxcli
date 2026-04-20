@@ -4,6 +4,7 @@ package executor
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
@@ -173,6 +174,7 @@ func (e *PluggableWidgetEngine) Build(def *WidgetDefinition, w *ast.WidgetV3) (*
 			widgetsPropKeys = append(widgetsPropKeys, propKey)
 		}
 	}
+	sort.Strings(widgetsPropKeys)
 	// Phase 1: Named matching — match children by name against property keys
 	matchedChildren := make(map[int]bool)
 	for _, propKey := range widgetsPropKeys {

@@ -269,14 +269,8 @@ func (ob *mprWidgetObjectBuilder) CloneGallerySelectionProperty(propertyKey stri
 		return
 	}
 
-	ob.object = updateWidgetPropertyValue(ob.object, ob.propertyTypeIDs, propertyKey, func(val bson.D) bson.D {
-		// The val here is the WidgetValue — but we need the WidgetProperty level.
-		// CloneGallerySelectionProperty works on the Properties array directly.
-		return val
-	})
-
-	// Actually need to work at the Properties array level: find the property,
-	// clone it with new IDs and updated Selection, then append.
+	// Work at the Properties array level: find the property, clone it with new
+	// IDs and updated Selection, then append.
 	result := make(bson.D, 0, len(ob.object))
 	for _, elem := range ob.object {
 		if elem.Key == "Properties" {

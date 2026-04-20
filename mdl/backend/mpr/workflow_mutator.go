@@ -714,7 +714,11 @@ func collectNamesRecursive(flow bson.D, names map[string]bool) {
 // deduplicateNewActivityName ensures a new activity name doesn't conflict.
 func deduplicateNewActivityName(act workflows.WorkflowActivity, existingNames map[string]bool) {
 	name := act.GetName()
-	if name == "" || !existingNames[name] {
+	if name == "" {
+		return
+	}
+	if !existingNames[name] {
+		existingNames[name] = true
 		return
 	}
 	for i := 2; i < 1000; i++ {
