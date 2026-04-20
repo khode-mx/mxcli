@@ -246,6 +246,31 @@ func ParseEdmx(metadataXML string) (*EdmxDocument, error) {
 		}
 	}
 
+	// Second pass: apply schema-level external annotations to entity sets.
+	// Many OData 4.0 services place capability annotations in <Annotations Target="...">
+	// blocks at the schema level rather than inline within <EntitySet>.
+	// Target format: "Namespace.ContainerName/EntitySetName" or "ContainerName/EntitySetName".
+	if len(doc.EntitySets) > 0 {
+		esByName := make(map[string]*EdmEntitySet, len(doc.EntitySets))
+		for _, es := range doc.EntitySets {
+			esByName[es.Name] = es
+		}
+		for _, ds := range edmx.DataServices {
+			for _, s := range ds.Schemas {
+				for _, ext := range s.Annotations {
+					// Extract the entity set name: take the part after the last "/".
+					target := ext.Target
+					if idx := strings.LastIndex(target, "/"); idx >= 0 {
+						target = target[idx+1:]
+					}
+					if es, ok := esByName[target]; ok {
+						applyCapabilityAnnotations(es, ext.Annotations)
+					}
+				}
+			}
+		}
+	}
+
 	return doc, nil
 }
 
@@ -411,12 +436,21 @@ type xmlDataService struct {
 }
 
 type xmlSchema struct {
-	Namespace        string               `xml:"Namespace,attr"`
-	EntityTypes      []xmlEntityType      `xml:"EntityType"`
-	EnumTypes        []xmlEnumType        `xml:"EnumType"`
-	EntityContainers []xmlEntityContainer `xml:"EntityContainer"`
-	Actions          []xmlAction          `xml:"Action"`
-	Functions        []xmlAction          `xml:"Function"`
+	Namespace        string                  `xml:"Namespace,attr"`
+	EntityTypes      []xmlEntityType         `xml:"EntityType"`
+	EnumTypes        []xmlEnumType           `xml:"EnumType"`
+	EntityContainers []xmlEntityContainer    `xml:"EntityContainer"`
+	Actions          []xmlAction             `xml:"Action"`
+	Functions        []xmlAction             `xml:"Function"`
+	Annotations      []xmlExternalAnnotation `xml:"Annotations"`
+}
+
+// xmlExternalAnnotation represents a schema-level <Annotations Target="..."> block.
+// Many OData 4.0 services (including Azure, SAP, and some Oasis reference services)
+// place capability annotations here rather than inline within <EntitySet>.
+type xmlExternalAnnotation struct {
+	Target      string                      `xml:"Target,attr"`
+	Annotations []xmlCapabilitiesAnnotation `xml:"Annotation"`
 }
 
 type xmlEntityType struct {

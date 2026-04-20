@@ -266,3 +266,90 @@ func TestParseEdmx_AbstractAndOpenType(t *testing.T) {
 		t.Errorf("expected BaseType NS.Base, got %q", derived.BaseType)
 	}
 }
+
+// TestParseEdmx_ExternalAnnotations verifies that schema-level <Annotations Target="...">
+// blocks (as used by Azure, SAP, and OData reference services like TripPin RW) are
+// applied to the corresponding entity sets. CE6630 was caused by these annotations being
+// silently ignored, leaving Insertable=nil and defaulting to false.
+func TestParseEdmx_ExternalAnnotations(t *testing.T) {
+	xmlStr := `<?xml version="1.0"?>
+<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx">
+  <edmx:DataServices>
+    <Schema Namespace="NS" xmlns="http://docs.oasis-open.org/odata/ns/edm">
+      <EntityType Name="Airline">
+        <Key><PropertyRef Name="AirlineCode"/></Key>
+        <Property Name="AirlineCode" Type="Edm.String"/>
+        <Property Name="Name" Type="Edm.String"/>
+      </EntityType>
+      <EntityContainer Name="DefaultContainer">
+        <EntitySet Name="Airlines" EntityType="NS.Airline"/>
+      </EntityContainer>
+      <Annotations Target="NS.DefaultContainer/Airlines">
+        <Annotation Term="Org.OData.Capabilities.V1.InsertRestrictions">
+          <Record>
+            <PropertyValue Property="Insertable" Bool="true"/>
+          </Record>
+        </Annotation>
+        <Annotation Term="Org.OData.Capabilities.V1.DeleteRestrictions">
+          <Record>
+            <PropertyValue Property="Deletable" Bool="false"/>
+          </Record>
+        </Annotation>
+      </Annotations>
+    </Schema>
+  </edmx:DataServices>
+</edmx:Edmx>`
+
+	doc, err := ParseEdmx(xmlStr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.EntitySets) != 1 {
+		t.Fatalf("expected 1 entity set, got %d", len(doc.EntitySets))
+	}
+	es := doc.EntitySets[0]
+	if es.Insertable == nil || !*es.Insertable {
+		t.Error("expected Insertable=true from external annotation")
+	}
+	if es.Deletable == nil || *es.Deletable {
+		t.Error("expected Deletable=false from external annotation")
+	}
+	if es.Updatable != nil {
+		t.Error("expected Updatable=nil (not specified)")
+	}
+}
+
+// TestParseEdmx_ExternalAnnotations_WithoutSlash verifies that targets without a
+// container prefix (e.g. just the entity set name) are also resolved correctly.
+func TestParseEdmx_ExternalAnnotations_WithoutSlash(t *testing.T) {
+	xmlStr := `<?xml version="1.0"?>
+<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx">
+  <edmx:DataServices>
+    <Schema Namespace="NS" xmlns="http://docs.oasis-open.org/odata/ns/edm">
+      <EntityType Name="Item">
+        <Key><PropertyRef Name="ID"/></Key>
+        <Property Name="ID" Type="Edm.Int64"/>
+      </EntityType>
+      <EntityContainer Name="C">
+        <EntitySet Name="Items" EntityType="NS.Item"/>
+      </EntityContainer>
+      <Annotations Target="Items">
+        <Annotation Term="Org.OData.Capabilities.V1.UpdateRestrictions">
+          <Record>
+            <PropertyValue Property="Updatable" Bool="true"/>
+          </Record>
+        </Annotation>
+      </Annotations>
+    </Schema>
+  </edmx:DataServices>
+</edmx:Edmx>`
+
+	doc, err := ParseEdmx(xmlStr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	es := doc.EntitySets[0]
+	if es.Updatable == nil || !*es.Updatable {
+		t.Error("expected Updatable=true from external annotation without slash prefix")
+	}
+}
