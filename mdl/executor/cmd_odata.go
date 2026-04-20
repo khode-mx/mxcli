@@ -919,6 +919,9 @@ func createODataClient(ctx *ExecContext, stmt *ast.CreateODataClientStmt) error 
 							svc.HttpConfiguration = &model.HttpConfiguration{}
 						}
 						if stmt.ServiceUrl != "" {
+							if err := validateServiceURL(stmt.ServiceUrl); err != nil {
+								return err
+							}
 							svc.HttpConfiguration.OverrideLocation = true
 							svc.HttpConfiguration.CustomLocation = stmt.ServiceUrl
 						}
@@ -998,6 +1001,9 @@ func createODataClient(ctx *ExecContext, stmt *ast.CreateODataClientStmt) error 
 			ClientCertificate: stmt.ClientCertificate,
 		}
 		if stmt.ServiceUrl != "" {
+			if err := validateServiceURL(stmt.ServiceUrl); err != nil {
+				return err
+			}
 			cfg.OverrideLocation = true
 			cfg.CustomLocation = stmt.ServiceUrl
 		}
@@ -1079,6 +1085,9 @@ func alterODataClient(ctx *ExecContext, stmt *ast.AlterODataClientStmt) error {
 				case "description":
 					svc.Description = strVal
 				case "serviceurl":
+					if err := validateServiceURL(strVal); err != nil {
+						return err
+					}
 					if svc.HttpConfiguration == nil {
 						svc.HttpConfiguration = &model.HttpConfiguration{}
 					}
@@ -1378,6 +1387,15 @@ func dropODataService(ctx *ExecContext, stmt *ast.DropODataServiceStmt) error {
 	}
 
 	return mdlerrors.NewNotFoundMsg("OData service", fmt.Sprint(stmt.Name), fmt.Sprintf("OData service not found: %s", stmt.Name))
+}
+
+// validateServiceURL returns an error if url is not a constant reference (@Module.Name).
+// CE6825: Studio Pro requires the Service URL to be a constant, not a string literal.
+func validateServiceURL(url string) error {
+	if !strings.HasPrefix(url, "@") {
+		return mdlerrors.NewValidation("ServiceUrl must be a constant reference (e.g., @Module.ServiceUrlConstant) — Studio Pro CE6825: 'Service URL' must be a constant")
+	}
+	return nil
 }
 
 // formatExprValue formats a Mendix expression value for MDL output.
