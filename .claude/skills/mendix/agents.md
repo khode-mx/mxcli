@@ -128,3 +128,39 @@ LIST KNOWLEDGE BASES IN Module;
 LIST CONSUMED MCP SERVICES IN Module;
 LIST AGENTS IN Module;
 ```
+
+## Calling Agents from Microflows
+
+Dedicated `CALL AGENT` MDL syntax is **not yet implemented**. Use `CALL JAVA ACTION` with the AgentCommons Java actions instead:
+
+```sql
+-- Single-call (Task) agent — no chat history
+$Response = CALL JAVA ACTION AgentCommons.Agent_Call_WithoutHistory(
+  Agent = $Agent,
+  UserMessage = $UserInput
+);
+
+-- Conversational agent — with chat history
+$Response = CALL JAVA ACTION AgentCommons.Agent_Call_WithHistory(
+  Agent = $Agent,
+  ChatContext = $ChatContext,
+  UserMessage = $UserInput
+);
+
+-- Create a ChatContext wired to an agent (for ConversationalUI)
+$ChatContext = CALL JAVA ACTION AgentCommons.ChatContext_Create_ForAgent(
+  Agent = $Agent,
+  ActionMicroflow = Module.HandleToolCall,
+  Context = $ContextObject
+);
+```
+
+Retrieve the `AgentCommons.Agent` entity by qualified name before calling:
+
+```sql
+RETRIEVE $Agent FROM DATABASE AgentCommons.Agent
+  WHERE AgentCommons.Agent/QualifiedName = 'Module.MyAgent'
+  LIMIT 1;
+```
+
+The `AgentCommons.Agent` entity is populated at runtime by `ASU_AgentEditor` from the agent documents you create with `CREATE AGENT`.
