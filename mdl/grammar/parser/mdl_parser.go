@@ -1956,9 +1956,9 @@ func mdlparserParserInit() {
 		2243, 5, 19, 0, 0, 2243, 2244, 5, 33, 0, 0, 2244, 2249, 3, 828, 414, 0,
 		2245, 2246, 5, 48, 0, 0, 2246, 2247, 5, 429, 0, 0, 2247, 2249, 5, 565,
 		0, 0, 2248, 2235, 1, 0, 0, 0, 2248, 2242, 1, 0, 0, 0, 2248, 2245, 1, 0,
-		0, 0, 2249, 155, 1, 0, 0, 0, 2250, 2251, 5, 29, 0, 0, 2251, 2253, 5, 569,
-		0, 0, 2252, 2254, 3, 158, 79, 0, 2253, 2252, 1, 0, 0, 0, 2253, 2254, 1,
-		0, 0, 0, 2254, 157, 1, 0, 0, 0, 2255, 2257, 3, 160, 80, 0, 2256, 2255,
+		0, 0, 2249, 155, 1, 0, 0, 0, 2250, 2251, 5, 29, 0, 0, 2251, 2253, 3, 830,
+		415, 0, 2252, 2254, 3, 158, 79, 0, 2253, 2252, 1, 0, 0, 0, 2253, 2254,
+		1, 0, 0, 0, 2254, 157, 1, 0, 0, 0, 2255, 2257, 3, 160, 80, 0, 2256, 2255,
 		1, 0, 0, 0, 2257, 2258, 1, 0, 0, 0, 2258, 2256, 1, 0, 0, 0, 2258, 2259,
 		1, 0, 0, 0, 2259, 159, 1, 0, 0, 0, 2260, 2261, 5, 429, 0, 0, 2261, 2265,
 		5, 565, 0, 0, 2262, 2263, 5, 222, 0, 0, 2263, 2265, 5, 565, 0, 0, 2264,
@@ -27726,7 +27726,7 @@ type ICreateModuleStatementContext interface {
 
 	// Getter signatures
 	MODULE() antlr.TerminalNode
-	IDENTIFIER() antlr.TerminalNode
+	IdentifierOrKeyword() IIdentifierOrKeywordContext
 	ModuleOptions() IModuleOptionsContext
 
 	// IsCreateModuleStatementContext differentiates from other interfaces.
@@ -27769,8 +27769,20 @@ func (s *CreateModuleStatementContext) MODULE() antlr.TerminalNode {
 	return s.GetToken(MDLParserMODULE, 0)
 }
 
-func (s *CreateModuleStatementContext) IDENTIFIER() antlr.TerminalNode {
-	return s.GetToken(MDLParserIDENTIFIER, 0)
+func (s *CreateModuleStatementContext) IdentifierOrKeyword() IIdentifierOrKeywordContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IIdentifierOrKeywordContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IIdentifierOrKeywordContext)
 }
 
 func (s *CreateModuleStatementContext) ModuleOptions() IModuleOptionsContext {
@@ -27825,11 +27837,7 @@ func (p *MDLParser) CreateModuleStatement() (localctx ICreateModuleStatementCont
 	}
 	{
 		p.SetState(2251)
-		p.Match(MDLParserIDENTIFIER)
-		if p.HasError() {
-			// Recognition error - abort rule
-			goto errorExit
-		}
+		p.IdentifierOrKeyword()
 	}
 	p.SetState(2253)
 	p.GetErrorHandler().Sync(p)

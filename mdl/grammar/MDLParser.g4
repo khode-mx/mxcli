@@ -814,7 +814,7 @@ alterNotebookAction
 // =============================================================================
 
 createModuleStatement
-    : MODULE IDENTIFIER moduleOptions?
+    : MODULE identifierOrKeyword moduleOptions?
     ;
 
 moduleOptions

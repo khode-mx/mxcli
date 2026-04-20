@@ -9,8 +9,8 @@ import (
 
 func (b *Builder) ExitCreateModuleStatement(ctx *parser.CreateModuleStatementContext) {
 	name := ""
-	if id := ctx.IDENTIFIER(); id != nil {
-		name = id.GetText()
+	if iok := ctx.IdentifierOrKeyword(); iok != nil {
+		name = identifierOrKeywordText(iok)
 	}
 	b.statements = append(b.statements, &ast.CreateModuleStmt{
 		Name: name,
