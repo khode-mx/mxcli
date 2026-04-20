@@ -373,79 +373,66 @@ SHOW EXTERNAL ACTIONS IN OdTest;
 -- LEVEL 10: CREATE EXTERNAL ENTITIES (bulk from contract)
 -- ############################################################################
 --
--- These commands require a live OData client with cached $metadata
--- (fetched automatically during CREATE ODATA CLIENT). The service URL
--- must be reachable at creation time. All examples below are representative
--- of a real TripPin RW service integration; they are shown as comments
--- because services.odata.org is not reachable from CI.
+-- Bulk-creates external entities from the TripPin RW OData service.
+-- Validates mendixlabs/mxcli#143: key, attribute OData mapping, and
+-- capability annotations are all written correctly to BSON.
 --
--- Syntax variants:
---
---   CREATE EXTERNAL ENTITIES FROM Module.Client;
---   CREATE EXTERNAL ENTITIES FROM Module.Client INTO OtherModule;
---   CREATE EXTERNAL ENTITIES FROM Module.Client ENTITIES (TypeA, TypeB);
---   CREATE OR MODIFY EXTERNAL ENTITIES FROM Module.Client;
---   CREATE OR MODIFY EXTERNAL ENTITIES FROM Module.Client INTO OtherModule ENTITIES (TypeA);
+-- Requires network access to services.odata.org (public, no auth).
+-- CREATE ODATA CLIENT fetches and caches $metadata automatically.
 --
 -- ############################################################################
 
-/*
- * Test bulk import of external entities from TripPin OData service.
- * Validates the feature added in mendixlabs/mxcli#143.
- *
- * CREATE MODULE TripPinClient;
- *
- * CREATE MODULE ROLE TripPinClient."User"
- *   DESCRIPTION 'Role for TripPin API access';
- *
- * CREATE CONSTANT TripPinClient."TripPinServiceUrl"
- *   TYPE String
- *   DEFAULT 'https://services.odata.org/TripPinRESTierService/';
- *
- * CREATE ODATA CLIENT TripPinClient."TripPinApiClient" (
- *   ODataVersion: OData4,
- *   MetadataUrl: 'https://services.odata.org/TripPinRESTierService/$metadata',
- *   Timeout: 300,
- *   ServiceUrl: @TripPinClient.TripPinServiceUrl,
- *   UseAuthentication: No
- * );
- *
- * Level 10.1: Bulk import all entity types from the TripPin contract.
- * Creates one Mendix external entity per OData entity type; top-level
- * entity sets (Airlines, Airports, People) use the set name as the
- * Mendix entity name. Derived/contained types (Flight, PlanItem,
- * Trip, etc.) use the type name.
- *
- * CREATE EXTERNAL ENTITIES FROM TripPinClient."TripPinApiClient";
- *
- * Level 10.2: Import only specific entity types by name.
- *
- * CREATE EXTERNAL ENTITIES FROM TripPinClient."TripPinApiClient"
- *   ENTITIES (Airline, Airport);
- *
- * Level 10.3: Import all entities into a different module.
- *
- * CREATE EXTERNAL ENTITIES FROM TripPinClient."TripPinApiClient"
- *   INTO TripPinEntities;
- *
- * Level 10.4: Idempotent re-import - updates any existing entities.
- *
- * CREATE OR MODIFY EXTERNAL ENTITIES FROM TripPinClient."TripPinApiClient";
- *
- * Level 10.5: Combine INTO, ENTITIES filter, and OR MODIFY.
- *
- * CREATE OR MODIFY EXTERNAL ENTITIES FROM TripPinClient."TripPinApiClient"
- *   INTO TripPinEntities
- *   ENTITIES (Airline, Airport, Person);
+/**
+ * Level 10.0: Set up the TripPin module, role, and constant.
  */
+CREATE MODULE TripPinClient;
+/
 
--- ############################################################################
--- NOTE: CREATE ODATA CLIENT now auto-fetches and caches $metadata from the
--- MetadataUrl. CONTRACT BROWSING commands (SHOW CONTRACT ENTITIES/ACTIONS)
--- work on services with cached metadata. The test URLs above are not reachable
--- from CI, so contract browsing examples are not included here.
--- See cmd/mxcli/help_topics/odata.txt for syntax reference.
--- ############################################################################
+CREATE MODULE ROLE TripPinClient."User"
+  DESCRIPTION 'Role for TripPin API access';
+/
+
+CREATE CONSTANT TripPinClient."TripPinServiceUrl"
+  TYPE String
+  DEFAULT 'https://services.odata.org/TripPinRESTierService/';
+/
+
+/**
+ * Level 10.1: Register the TripPin RW service.
+ * CREATE ODATA CLIENT fetches and caches $metadata from MetadataUrl.
+ * ServiceUrl must reference a constant (CE6825).
+ */
+CREATE ODATA CLIENT TripPinClient."TripPinApiClient" (
+  ODataVersion: OData4,
+  MetadataUrl: 'https://services.odata.org/TripPinRESTierService/$metadata',
+  Timeout: 300,
+  ServiceUrl: @TripPinClient.TripPinServiceUrl,
+  UseAuthentication: No
+);
+/
+
+/**
+ * Level 10.2: Bulk import all entity types from the TripPin contract.
+ * Creates one external entity per OData entity type. Top-level entity
+ * sets (Airlines, Airports, People) use the set name; derived/contained
+ * types (Flight, PlanItem, Trip, etc.) use the type name.
+ */
+CREATE EXTERNAL ENTITIES FROM TripPinClient."TripPinApiClient";
+/
+
+/**
+ * Level 10.3: Import only specific entity types by name.
+ */
+CREATE OR MODIFY EXTERNAL ENTITIES FROM TripPinClient."TripPinApiClient"
+  ENTITIES (Airline, Airport);
+/
+
+/**
+ * Level 10.4: Import all entities into a different module.
+ */
+CREATE OR MODIFY EXTERNAL ENTITIES FROM TripPinClient."TripPinApiClient"
+  INTO TripPinClient;
+/
 
 -- ############################################################################
 -- LEVEL 8.8: DROP (cleanup)
@@ -470,7 +457,13 @@ DROP ODATA CLIENT OdTest.SalesforceAPI;
 /
 
 /**
- * Level 8.8c: Drop an OData service
+ * Level 8.8c: Drop the TripPin client (cascades to its external entities)
+ */
+DROP ODATA CLIENT TripPinClient."TripPinApiClient";
+/
+
+/**
+ * Level 8.8d: Drop an OData service
  */
 DROP ODATA SERVICE OdTest.CustomerAPI;
 /
