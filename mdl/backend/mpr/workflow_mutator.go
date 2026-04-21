@@ -171,9 +171,7 @@ func (m *mprWorkflowMutator) SetActivityProperty(activityRef string, atPos int, 
 			{Key: "$Type", Value: "Workflows$PageReference"},
 			{Key: "Page", Value: value},
 		}
-		if dSet(actDoc, "TaskPage", pageRef) {
-			// TaskPage key exists (nil value) — replaced in place via dSet.
-		} else {
+		if !dSet(actDoc, "TaskPage", pageRef) {
 			// TaskPage key absent — append to activity and replace in BSON tree.
 			actDoc = append(actDoc, bson.E{Key: "TaskPage", Value: pageRef})
 			m.replaceActivity(actDoc)
