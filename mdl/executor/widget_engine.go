@@ -496,8 +496,8 @@ func (e *PluggableWidgetEngine) applyChildSlots(builder backend.WidgetObjectBuil
 	var defaultWidgets []pages.Widget
 
 	for _, child := range w.Children {
-		upperType := strings.ToUpper(child.Type)
-		if slot, ok := slotContainers[upperType]; ok {
+		lowerType := strings.ToLower(child.Type)
+		if slot, ok := slotContainers[lowerType]; ok {
 			for _, slotChild := range child.Children {
 				widget, err := e.pageBuilder.buildWidgetV3(slotChild)
 				if err != nil {

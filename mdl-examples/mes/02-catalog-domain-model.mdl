@@ -151,7 +151,7 @@ index (SKU);
  */
 @position(350, 250)
 create persistent entity ProductCatalog.ProductImage
-extends System.image (
+extends System.Image (
   /** Caption describing the image */
   ImageCaption: string(500),
   /** Whether this is the primary display image */

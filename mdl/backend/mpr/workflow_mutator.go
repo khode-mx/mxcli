@@ -55,7 +55,7 @@ func (b *MprBackend) openWorkflowForMutation(unitID model.ID) (backend.WorkflowM
 // ---------------------------------------------------------------------------
 
 func (m *mprWorkflowMutator) SetProperty(prop string, value string) error {
-	switch prop {
+	switch strings.ToLower(prop) {
 	case "display":
 		wfName := dGetDoc(m.rawData, "WorkflowName")
 		if wfName == nil {
@@ -85,11 +85,11 @@ func (m *mprWorkflowMutator) SetProperty(prop string, value string) error {
 		}
 		return nil
 
-	case "EXPORT_LEVEL":
+	case "export_level":
 		dSet(m.rawData, "ExportLevel", value)
 		return nil
 
-	case "DUE_DATE":
+	case "due_date":
 		dSet(m.rawData, "DueDate", value)
 		return nil
 
@@ -100,7 +100,7 @@ func (m *mprWorkflowMutator) SetProperty(prop string, value string) error {
 
 func (m *mprWorkflowMutator) SetPropertyWithEntity(prop string, value string, entity string) error {
 	switch prop {
-	case "OVERVIEW_PAGE":
+	case "overview_page":
 		if value == "" {
 			dSet(m.rawData, "AdminPage", nil)
 		} else {
@@ -158,18 +158,23 @@ func (m *mprWorkflowMutator) SetActivityProperty(activityRef string, atPos int, 
 		return err
 	}
 
-	switch prop {
+	switch strings.ToLower(prop) {
 	case "page":
 		taskPage := dGetDoc(actDoc, "TaskPage")
 		if taskPage != nil {
+			// TaskPage exists and has a value — update the Page field in place.
 			dSet(taskPage, "Page", value)
-		} else {
-			pageRef := bson.D{
-				{Key: "$ID", Value: bsonutil.NewIDBsonBinary()},
-				{Key: "$Type", Value: "Workflows$PageReference"},
-				{Key: "Page", Value: value},
-			}
-			dSet(actDoc, "TaskPage", pageRef)
+			return nil
+		}
+		pageRef := bson.D{
+			{Key: "$ID", Value: bsonutil.NewIDBsonBinary()},
+			{Key: "$Type", Value: "Workflows$PageReference"},
+			{Key: "Page", Value: value},
+		}
+		if !dSet(actDoc, "TaskPage", pageRef) {
+			// TaskPage key absent — append to activity and replace in BSON tree.
+			actDoc = append(actDoc, bson.E{Key: "TaskPage", Value: pageRef})
+			m.replaceActivity(actDoc)
 		}
 		return nil
 
@@ -180,7 +185,7 @@ func (m *mprWorkflowMutator) SetActivityProperty(activityRef string, atPos int, 
 		}
 		return nil
 
-	case "TARGETING_MICROFLOW":
+	case "targeting_microflow":
 		userTargeting := bson.D{
 			{Key: "$ID", Value: bsonutil.NewIDBsonBinary()},
 			{Key: "$Type", Value: "Workflows$MicroflowUserTargeting"},
@@ -189,7 +194,7 @@ func (m *mprWorkflowMutator) SetActivityProperty(activityRef string, atPos int, 
 		dSet(actDoc, "UserTargeting", userTargeting)
 		return nil
 
-	case "TARGETING_XPATH":
+	case "targeting_xpath":
 		userTargeting := bson.D{
 			{Key: "$ID", Value: bsonutil.NewIDBsonBinary()},
 			{Key: "$Type", Value: "Workflows$XPathUserTargeting"},
@@ -198,7 +203,7 @@ func (m *mprWorkflowMutator) SetActivityProperty(activityRef string, atPos int, 
 		dSet(actDoc, "UserTargeting", userTargeting)
 		return nil
 
-	case "DUE_DATE":
+	case "due_date":
 		dSet(actDoc, "DueDate", value)
 		return nil
 
@@ -554,6 +559,42 @@ func (m *mprWorkflowMutator) Save() error {
 // ---------------------------------------------------------------------------
 // Internal helpers — activity search
 // ---------------------------------------------------------------------------
+
+// replaceActivity replaces an activity document in the workflow's BSON tree
+// by matching on $ID. This is needed when appending new keys to an activity
+// document, because the slice header returned by findActivityByCaption cannot
+// propagate appends back to the parent bson.A.
+func (m *mprWorkflowMutator) replaceActivity(updated bson.D) {
+	actID := extractBinaryIDFromDoc(dGet(updated, "$ID"))
+	if actID == "" {
+		return
+	}
+	flow := dGetDoc(m.rawData, "Flow")
+	if flow == nil {
+		return
+	}
+	replaceActivityRecursive(flow, actID, updated)
+}
+
+func replaceActivityRecursive(flow bson.D, actID string, updated bson.D) bool {
+	elements := dGetArrayElements(dGet(flow, "Activities"))
+	for i, elem := range elements {
+		actDoc, ok := elem.(bson.D)
+		if !ok {
+			continue
+		}
+		if extractBinaryIDFromDoc(dGet(actDoc, "$ID")) == actID {
+			elements[i] = updated
+			return true
+		}
+		for _, nestedFlow := range getNestedFlows(actDoc) {
+			if replaceActivityRecursive(nestedFlow, actID, updated) {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 // findActivityByCaption searches the workflow for an activity matching caption.
 func (m *mprWorkflowMutator) findActivityByCaption(caption string, atPosition int) (bson.D, error) {

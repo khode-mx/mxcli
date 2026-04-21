@@ -655,7 +655,7 @@ func captureDescribe(ctx *ExecContext, objectType string, qualifiedName string) 
 	defer func() { ctx.Output = origOutput }()
 
 	var err error
-	switch strings.ToUpper(objectType) {
+	switch strings.ToLower(objectType) {
 	case "entity":
 		err = describeEntity(ctx, qn)
 	case "microflow", "nanoflow":
@@ -713,7 +713,7 @@ func captureDescribeParallel(ctx *ExecContext, objectType string, qualifiedName 
 	}
 
 	var err error
-	switch strings.ToUpper(objectType) {
+	switch strings.ToLower(objectType) {
 	case "entity":
 		err = describeEntity(localCtx, qn)
 	case "microflow", "nanoflow":

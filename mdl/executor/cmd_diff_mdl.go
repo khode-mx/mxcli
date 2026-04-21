@@ -350,7 +350,7 @@ func microflowStatementToMDL(ctx *ExecContext, stmt ast.MicroflowStatement, inde
 			nodeStr = "'" + nodeStr + "'"
 		}
 		msgStr := diffExpressionToString(ctx, s.Message)
-		stmt := fmt.Sprintf("%slog %s node %s %s", indentStr, strings.ToUpper(s.Level.String()), nodeStr, msgStr)
+		stmt := fmt.Sprintf("%slog %s node %s %s", indentStr, strings.ToLower(s.Level.String()), nodeStr, msgStr)
 		if len(s.Template) > 0 {
 			var params []string
 			for _, p := range s.Template {

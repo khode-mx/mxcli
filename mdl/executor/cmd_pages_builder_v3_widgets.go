@@ -108,7 +108,7 @@ func (pb *pageBuilder) buildDataGridV3(w *ast.WidgetV3) (*pages.CustomWidget, er
 	var columns []backend.DataGridColumnSpec
 	var headerWidgets []pages.Widget
 	for _, child := range w.Children {
-		switch strings.ToUpper(child.Type) {
+		switch strings.ToLower(child.Type) {
 		case "column":
 			attr := child.GetAttribute()
 			if attr == "" && child.Name != "" && len(child.Children) == 0 {
@@ -687,7 +687,7 @@ func (pb *pageBuilder) buildNavigationListV3(w *ast.WidgetV3) (*pages.Navigation
 
 	// Build items from children (ITEM widgets)
 	for _, child := range w.Children {
-		if strings.ToUpper(child.Type) == "item" {
+		if strings.ToLower(child.Type) == "item" {
 			item, err := pb.buildNavigationListItemV3(child)
 			if err != nil {
 				return nil, err

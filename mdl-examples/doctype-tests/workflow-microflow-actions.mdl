@@ -29,7 +29,7 @@ end workflow;
 -- ############################################################################
 
 create microflow TestModule.MF_WorkflowActions (
-  $workflow: System.workflow,
+  $workflow: System.Workflow,
   $ContextObj: TestModule.DeliveryContext,
   $UserTask: System.WorkflowUserTask
 )

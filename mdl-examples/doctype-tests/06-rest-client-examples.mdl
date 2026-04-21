@@ -793,7 +793,7 @@ begin
   -- $latestHttpResponse is a system variable (System.HttpResponse) that is
   -- automatically populated after SEND REST REQUEST. Check its Content
   -- attribute to determine if the call returned data.
-  if $latestHttpResponse/content != empty then
+  if $latestHttpResponse/Content != empty then
     set $success = true;
     log info node 'RestTest' 'ACT_TestHeaders: headers echoed';
   else
