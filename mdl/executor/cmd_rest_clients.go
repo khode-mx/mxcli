@@ -178,7 +178,7 @@ func outputRestOperation(w io.Writer, op *model.RestClientOperation) {
 
 	// Body
 	if op.BodyType != "" {
-		switch op.BodyType {
+		switch strings.ToLower(op.BodyType) {
 		case "template":
 			fmt.Fprintf(w, "    Body: template '%s',\n", strings.ReplaceAll(op.BodyVariable, "'", "''"))
 		case "export_mapping":
@@ -190,7 +190,7 @@ func outputRestOperation(w io.Writer, op *model.RestClientOperation) {
 				fmt.Fprintf(w, "    Body: mapping %s,\n", op.BodyVariable)
 			}
 		default:
-			fmt.Fprintf(w, "    Body: %s from %s,\n", op.BodyType, op.BodyVariable)
+			fmt.Fprintf(w, "    Body: %s from %s,\n", strings.ToLower(op.BodyType), op.BodyVariable)
 		}
 	}
 
@@ -200,7 +200,7 @@ func outputRestOperation(w io.Writer, op *model.RestClientOperation) {
 	}
 
 	// Response
-	switch op.ResponseType {
+	switch strings.ToLower(op.ResponseType) {
 	case "none":
 		fmt.Fprintln(w, "    Response: none")
 	case "json":
