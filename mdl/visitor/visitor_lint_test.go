@@ -45,9 +45,11 @@ func TestLint_ModuleOnly(t *testing.T) {
 	if stmt.Target == nil {
 		t.Fatal("Expected non-nil Target")
 	}
-	// For "LINT MyModule.*", qualifiedName is just "MyModule" (no module prefix)
-	if stmt.Target.Name != "MyModule" && stmt.Target.Module != "MyModule" {
-		t.Errorf("Target mismatch: got Module=%q Name=%q", stmt.Target.Module, stmt.Target.Name)
+	if stmt.Target.Name != "MyModule" {
+		t.Errorf("Expected Target.Name %q, got %q", "MyModule", stmt.Target.Name)
+	}
+	if stmt.Target.Module != "" {
+		t.Errorf("Expected Target.Module %q, got %q", "", stmt.Target.Module)
 	}
 }
 

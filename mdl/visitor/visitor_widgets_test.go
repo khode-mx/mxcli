@@ -44,7 +44,13 @@ func TestUpdateWidgets_DryRun(t *testing.T) {
 		}
 		return
 	}
-	stmt := prog.Statements[0].(*ast.UpdateWidgetsStmt)
+	if len(prog.Statements) == 0 {
+		t.Fatal("Expected at least one statement")
+	}
+	stmt, ok := prog.Statements[0].(*ast.UpdateWidgetsStmt)
+	if !ok {
+		t.Fatalf("Expected *ast.UpdateWidgetsStmt, got %T", prog.Statements[0])
+	}
 	if !stmt.DryRun {
 		t.Error("Expected DryRun true")
 	}

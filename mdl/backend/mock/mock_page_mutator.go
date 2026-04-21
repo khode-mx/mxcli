@@ -12,7 +12,8 @@ var _ backend.PageMutator = (*MockPageMutator)(nil)
 
 // MockPageMutator implements backend.PageMutator. Every interface method is
 // backed by a public function field. If the field is nil the method returns
-// zero values / nil error (never panics).
+// nil error (never panics). ContainerType defaults to ContainerPage when unset;
+// all other methods return zero values.
 type MockPageMutator struct {
 	ContainerTypeFunc        func() backend.ContainerKind
 	SetWidgetPropertyFunc    func(widgetRef string, prop string, value any) error
