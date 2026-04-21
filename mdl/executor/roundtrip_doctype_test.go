@@ -137,7 +137,7 @@ func TestMxCheck_DoctypeScripts(t *testing.T) {
 			}
 
 			// Filter out version-gated sections that don't match this project's Mendix version
-			pv := env.executor.reader.ProjectVersion()
+			pv := env.executor.Reader().ProjectVersion()
 			filtered, skippedLines := filterByVersion(string(content), pv)
 			if skippedLines > 0 {
 				t.Logf("Mendix %s: skipped %d version-gated lines", pv.ProductVersion, skippedLines)
