@@ -85,11 +85,11 @@ func (m *mprWorkflowMutator) SetProperty(prop string, value string) error {
 		}
 		return nil
 
-	case "EXPORT_LEVEL":
+	case "export_level":
 		dSet(m.rawData, "ExportLevel", value)
 		return nil
 
-	case "DUE_DATE":
+	case "due_date":
 		dSet(m.rawData, "DueDate", value)
 		return nil
 
@@ -100,7 +100,7 @@ func (m *mprWorkflowMutator) SetProperty(prop string, value string) error {
 
 func (m *mprWorkflowMutator) SetPropertyWithEntity(prop string, value string, entity string) error {
 	switch prop {
-	case "OVERVIEW_PAGE":
+	case "overview_page":
 		if value == "" {
 			dSet(m.rawData, "AdminPage", nil)
 		} else {
@@ -180,7 +180,7 @@ func (m *mprWorkflowMutator) SetActivityProperty(activityRef string, atPos int, 
 		}
 		return nil
 
-	case "TARGETING_MICROFLOW":
+	case "targeting_microflow":
 		userTargeting := bson.D{
 			{Key: "$ID", Value: bsonutil.NewIDBsonBinary()},
 			{Key: "$Type", Value: "Workflows$MicroflowUserTargeting"},
@@ -189,7 +189,7 @@ func (m *mprWorkflowMutator) SetActivityProperty(activityRef string, atPos int, 
 		dSet(actDoc, "UserTargeting", userTargeting)
 		return nil
 
-	case "TARGETING_XPATH":
+	case "targeting_xpath":
 		userTargeting := bson.D{
 			{Key: "$ID", Value: bsonutil.NewIDBsonBinary()},
 			{Key: "$Type", Value: "Workflows$XPathUserTargeting"},
@@ -198,7 +198,7 @@ func (m *mprWorkflowMutator) SetActivityProperty(activityRef string, atPos int, 
 		dSet(actDoc, "UserTargeting", userTargeting)
 		return nil
 
-	case "DUE_DATE":
+	case "due_date":
 		dSet(actDoc, "DueDate", value)
 		return nil
 

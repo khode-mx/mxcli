@@ -24,7 +24,7 @@ func (pb *pageBuilder) buildLayoutGridV3(w *ast.WidgetV3) (*pages.LayoutGrid, er
 
 	// Build rows from children
 	for _, child := range w.Children {
-		if strings.ToUpper(child.Type) == "row" {
+		if strings.ToLower(child.Type) == "row" {
 			row, err := pb.buildLayoutGridRowV3(child)
 			if err != nil {
 				return nil, err
@@ -46,7 +46,7 @@ func (pb *pageBuilder) buildLayoutGridRowV3(w *ast.WidgetV3) (*pages.LayoutGridR
 
 	// Build columns from children
 	for _, child := range w.Children {
-		if strings.ToUpper(child.Type) == "column" {
+		if strings.ToLower(child.Type) == "column" {
 			col, err := pb.buildLayoutGridColumnV3(child)
 			if err != nil {
 				return nil, err
@@ -228,7 +228,7 @@ func (pb *pageBuilder) buildTabContainerV3(w *ast.WidgetV3) (*pages.TabContainer
 
 	// Build tab pages from children
 	for _, child := range w.Children {
-		if strings.ToUpper(child.Type) == "tabpage" {
+		if strings.ToLower(child.Type) == "tabpage" {
 			tp, err := pb.buildTabPageV3(child)
 			if err != nil {
 				return nil, err

@@ -65,13 +65,13 @@ end;
 
 -- Targeting microflow: (System.Workflow, context) -> List of System.User
 create microflow WFTest.ACT_TargetUsers (
-  $workflow: System.workflow,
+  $workflow: System.Workflow,
   $context: WFTest.OrderContext
 )
-returns list of System.user as $users
+returns list of System.User as $users
 begin
   @position(200,200)
-  retrieve $users from System.user;
+  retrieve $users from System.User;
   @position(400,200) return $users;
 end;
 /
@@ -109,7 +109,7 @@ create page WFTest.AlternateTaskPage (
 create page WFTest.OverviewPage (
   title: 'Workflow Overview',
   layout: Atlas_Core.Atlas_Default,
-  params: { $workflow: System.workflow }
+  params: { $workflow: System.Workflow }
 ) {
   layoutgrid g1 {
     row r1 {

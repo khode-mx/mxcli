@@ -257,7 +257,7 @@ func (pb *pageBuilder) buildWidgetV3(w *ast.WidgetV3) (pages.Widget, error) {
 	var widget pages.Widget
 	var err error
 
-	switch strings.ToUpper(w.Type) {
+	switch strings.ToLower(w.Type) {
 	case "dataview":
 		widget, err = pb.buildDataViewV3(w)
 	case "datagrid":
@@ -419,7 +419,7 @@ func applyWidgetAppearance(widget pages.Widget, w *ast.WidgetV3, theme *ThemeReg
 	if len(astProps) > 0 {
 		var dpValues []pages.DesignPropertyValue
 		for _, p := range astProps {
-			switch strings.ToUpper(p.Value) {
+			switch strings.ToLower(p.Value) {
 			case "on":
 				dpValues = append(dpValues, pages.DesignPropertyValue{
 					Key:       p.Key,
@@ -533,7 +533,7 @@ func (pb *pageBuilder) buildDataSourceV3(ds *ast.DataSourceV3) (pages.DataSource
 		// Handle ORDER BY
 		for _, ob := range ds.OrderBy {
 			direction := pages.SortDirectionAscending
-			if strings.ToUpper(ob.Direction) == "desc" {
+			if strings.ToLower(ob.Direction) == "desc" {
 				direction = pages.SortDirectionDescending
 			}
 			sortItem := &pages.GridSort{

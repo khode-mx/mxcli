@@ -124,7 +124,7 @@ drop configuration 'Staging';
 /**
  * Example 4.1: Set default language
  */
-alter settings LANGUAGE DefaultLanguageCode = 'en_US';
+alter settings language DefaultLanguageCode = 'en_US';
 
 /**
  * Example 4.2: Configure workflow settings

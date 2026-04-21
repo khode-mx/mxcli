@@ -154,7 +154,7 @@ create page StyleTest.P003_Design_Properties
 (
   title: 'Design Properties',
   layout: Atlas_Core.Atlas_Default,
-  url: 'style_003_design_properties/{Task}',
+  url: 'style_003_design_properties/{task}',
   params: { $task: StyleTest.task }
 )
 {

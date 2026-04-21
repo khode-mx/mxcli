@@ -30,6 +30,9 @@ var scriptModuleDeps = map[string][]string{
 // These are syntax showcase scripts that intentionally omit entities, constants,
 // headers etc. that full validation requires.
 var scriptKnownCEErrors = map[string][]string{
+	"03-page-examples.mdl": {
+		"CE3637", // Data view listen to gallery in sibling layout-grid column — Mendix scoping limitation
+	},
 	"02-microflow-examples.mdl": {
 		"CE0117", // Expression error in LOG WARNING on Mendix 10.x (string concat syntax difference)
 	},

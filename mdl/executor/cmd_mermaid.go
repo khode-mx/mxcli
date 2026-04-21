@@ -30,8 +30,8 @@ func describeMermaid(ctx *ExecContext, objectType, name string) error {
 		qn = ast.QualifiedName{Module: name}
 	}
 
-	switch strings.ToUpper(objectType) {
-	case "entity", "DOMAINMODEL":
+	switch strings.ToLower(objectType) {
+	case "entity", "domainmodel":
 		return domainModelToMermaid(ctx, qn.Module)
 	case "microflow":
 		return microflowToMermaid(ctx, qn)

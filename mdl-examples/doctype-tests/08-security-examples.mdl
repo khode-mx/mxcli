@@ -191,11 +191,11 @@ describe user role 'Administrator';
 /**
  * Create a simple module role without description.
  */
-create module role SecTest.user;
+create module role SecTest.User;
 /
 
 -- Describe a specific module role (shows DDL + which user roles include it)
-describe module role SecTest.user;
+describe module role SecTest.User;
 
 -- ============================================================================
 -- Level 2.2: Module Role with Description
@@ -235,7 +235,7 @@ create module role SecTest.Viewer description 'Read-only access for viewing data
 /**
  * Allow the User role to execute the customer creation microflow.
  */
-grant execute on microflow SecTest.ACT_Customer_Create to SecTest.user;
+grant execute on microflow SecTest.ACT_Customer_Create to SecTest.User;
 /
 
 -- Verify the grant
@@ -249,7 +249,7 @@ show access on microflow SecTest.ACT_Customer_Create;
 /**
  * Allow both User and Administrator roles to process orders.
  */
-grant execute on microflow SecTest.ACT_Order_Process to SecTest.user, SecTest.Administrator;
+grant execute on microflow SecTest.ACT_Order_Process to SecTest.User, SecTest.Administrator;
 /
 
 -- ============================================================================
@@ -269,7 +269,7 @@ grant execute on microflow SecTest.ACT_Customer_Delete to SecTest.Administrator;
 /**
  * Remove User's ability to process orders (admin-only now).
  */
-revoke execute on microflow SecTest.ACT_Order_Process from SecTest.user;
+revoke execute on microflow SecTest.ACT_Order_Process from SecTest.User;
 /
 
 -- Verify the revoke
@@ -290,7 +290,7 @@ revoke execute on microflow SecTest.ACT_Customer_Delete from SecTest.Administrat
 /**
  * Granting a role that already has access is a no-op (safe to repeat).
  */
-grant execute on microflow SecTest.ACT_Customer_Create to SecTest.user;
+grant execute on microflow SecTest.ACT_Customer_Create to SecTest.User;
 /
 
 
@@ -308,7 +308,7 @@ grant execute on microflow SecTest.ACT_Customer_Create to SecTest.user;
 /**
  * Allow users to view the customer overview page.
  */
-grant view on page SecTest.Customer_Overview to SecTest.user;
+grant view on page SecTest.Customer_Overview to SecTest.User;
 /
 
 -- Verify
@@ -322,7 +322,7 @@ show access on page SecTest.Customer_Overview;
 /**
  * Allow both users and administrators to view orders.
  */
-grant view on page SecTest.Order_Overview to SecTest.user, SecTest.Administrator;
+grant view on page SecTest.Order_Overview to SecTest.User, SecTest.Administrator;
 /
 
 -- ============================================================================
@@ -332,7 +332,7 @@ grant view on page SecTest.Order_Overview to SecTest.user, SecTest.Administrator
 /**
  * Remove User's view access on order overview (admin-only now).
  */
-revoke view on page SecTest.Order_Overview from SecTest.user;
+revoke view on page SecTest.Order_Overview from SecTest.User;
 /
 
 -- Verify - should only show Administrator
@@ -374,7 +374,7 @@ grant SecTest.Viewer on SecTest.Customer (read *);
 /**
  * Grant read access to specific attributes, write to a subset.
  */
-grant SecTest.user on SecTest.Customer (read (Name, Email), write (Email));
+grant SecTest.User on SecTest.Customer (read (Name, Email), write (Email));
 /
 
 -- ============================================================================
@@ -384,7 +384,7 @@ grant SecTest.user on SecTest.Customer (read (Name, Email), write (Email));
 /**
  * Grant access only to active customers using an XPath constraint.
  */
-grant SecTest.user on SecTest.Order (read *, write *) where '[Status = ''Open'']';
+grant SecTest.User on SecTest.Order (read *, write *) where '[Status = ''Open'']';
 /
 
 -- Verify entity access
@@ -398,7 +398,7 @@ show access on SecTest.Customer;
 /**
  * GRANT is additive: adding Notes access preserves existing Name and Email.
  */
-grant SecTest.user on SecTest.Customer (read (Notes));
+grant SecTest.User on SecTest.Customer (read (Notes));
 /
 
 -- ============================================================================
@@ -409,13 +409,13 @@ grant SecTest.user on SecTest.Customer (read (Notes));
  * Remove read access on a specific attribute (Notes).
  * Other permissions are preserved.
  */
-revoke SecTest.user on SecTest.Customer (read (Notes));
+revoke SecTest.User on SecTest.Customer (read (Notes));
 /
 
 /**
  * Downgrade write to read-only on Email.
  */
-revoke SecTest.user on SecTest.Customer (write (Email));
+revoke SecTest.User on SecTest.Customer (write (Email));
 /
 
 -- ============================================================================
@@ -446,7 +446,7 @@ show access on SecTest.Customer;
 /**
  * Create a user role and assign a single module role.
  */
-create or modify user role RegularUser (System.user, SecTest.user);
+create or modify user role RegularUser (System.User, SecTest.User);
 /
 
 -- ============================================================================
@@ -456,7 +456,7 @@ create or modify user role RegularUser (System.user, SecTest.user);
 /**
  * A user role can include roles from multiple modules.
  */
-create or modify user role PowerUser (System.user, SecTest.user, SecTest.Administrator);
+create or modify user role PowerUser (System.User, SecTest.User, SecTest.Administrator);
 /
 
 -- ============================================================================
@@ -607,7 +607,7 @@ create module role SecTest.Manager description 'Can manage customers and orders'
  * Step 2: Grant microflow access based on roles.
  * Users can create customers, managers and admins can do everything.
  */
-grant execute on microflow SecTest.ACT_Customer_Create to SecTest.user, SecTest.Manager;
+grant execute on microflow SecTest.ACT_Customer_Create to SecTest.User, SecTest.Manager;
 grant execute on microflow SecTest.ACT_Customer_Delete to SecTest.Manager, SecTest.Administrator;
 grant execute on microflow SecTest.ACT_Order_Process to SecTest.Manager, SecTest.Administrator;
 /
@@ -616,7 +616,7 @@ grant execute on microflow SecTest.ACT_Order_Process to SecTest.Manager, SecTest
  * Step 3: Grant page access based on roles.
  * All roles can see customers, only managers+ can see orders.
  */
-grant view on page SecTest.Customer_Overview to SecTest.user, SecTest.Manager, SecTest.Administrator;
+grant view on page SecTest.Customer_Overview to SecTest.User, SecTest.Manager, SecTest.Administrator;
 grant view on page SecTest.Order_Overview to SecTest.Manager, SecTest.Administrator;
 /
 
@@ -648,8 +648,8 @@ show access on page SecTest.Order_Overview;
 -- When a module has partial access rules (not all entities covered by all
 -- roles), MxBuild reports CE0066 regardless of security level.
 revoke SecTest.Administrator on SecTest.Customer;
-revoke SecTest.user on SecTest.Customer;
-revoke SecTest.user on SecTest.Order;
+revoke SecTest.User on SecTest.Customer;
+revoke SecTest.User on SecTest.Order;
 revoke SecTest.Manager on SecTest.Customer;
 
 

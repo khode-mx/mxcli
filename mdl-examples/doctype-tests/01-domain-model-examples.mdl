@@ -1692,7 +1692,7 @@ create persistent entity DmTest.Attachment extends System.FileDocument (
  * plus adds metadata for product catalog display.
  */
 @position(2300, 200)
-create persistent entity DmTest.ProductPhoto extends System.image (
+create persistent entity DmTest.ProductPhoto extends System.Image (
   /** Photo caption for display */
   PhotoCaption: string(200),
   /** Display sort order */
@@ -1784,7 +1784,7 @@ create persistent entity DmTest.InternalDocument extends System.FileDocument;
  * Both keywords are supported; EXTENDS is preferred for new code.
  */
 @position(2300, 600)
-create persistent entity DmTest.ProfilePhoto generalization System.image (
+create persistent entity DmTest.ProfilePhoto generalization System.Image (
   /** Whether this photo has been approved by admin */
   IsApproved: boolean default false
 );

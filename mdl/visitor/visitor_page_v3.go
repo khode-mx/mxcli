@@ -1088,10 +1088,10 @@ func buildDesignPropertyEntryV3(ctx parser.IDesignPropertyEntryV3Context) *ast.D
 
 	// Value: second STRING_LITERAL, ON, or OFF
 	if entryCtx.ON() != nil {
-		return &ast.DesignPropertyEntryV3{Key: key, Value: "ON"}
+		return &ast.DesignPropertyEntryV3{Key: key, Value: "on"}
 	}
 	if entryCtx.OFF() != nil {
-		return &ast.DesignPropertyEntryV3{Key: key, Value: "OFF"}
+		return &ast.DesignPropertyEntryV3{Key: key, Value: "off"}
 	}
 	if len(allStrings) >= 2 {
 		return &ast.DesignPropertyEntryV3{Key: key, Value: unquoteString(allStrings[1].GetText())}

@@ -62,8 +62,8 @@ func execAlterWorkflow(ctx *ExecContext, s *ast.AlterWorkflowStmt) error {
 		switch o := op.(type) {
 		case *ast.SetWorkflowPropertyOp:
 			switch o.Property {
-			case "OVERVIEW_PAGE":
-				// OVERVIEW_PAGE uses Entity as the page qualified name (Value is unused).
+			case "overview_page":
+				// overview_page uses Entity as the page qualified name (Value is unused).
 				qn := o.Entity.Module + "." + o.Entity.Name
 				if qn == "." {
 					qn = ""
@@ -91,7 +91,7 @@ func execAlterWorkflow(ctx *ExecContext, s *ast.AlterWorkflowStmt) error {
 			switch o.Property {
 			case "page":
 				value = o.PageName.Module + "." + o.PageName.Name
-			case "TARGETING_MICROFLOW":
+			case "targeting_microflow":
 				value = o.Microflow.Module + "." + o.Microflow.Name
 			}
 			if err := mutator.SetActivityProperty(o.ActivityRef, o.AtPosition, o.Property, value); err != nil {

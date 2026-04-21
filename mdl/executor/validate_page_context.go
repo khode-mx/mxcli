@@ -75,9 +75,9 @@ func walkWidgetsWithContext(widgets []*ast.WidgetV3, paramNames map[string]bool,
 		}
 
 		// Check if this widget type is a data container that sets context
-		widgetType := strings.ToUpper(w.Type)
+		widgetType := strings.ToLower(w.Type)
 		switch widgetType {
-		case "dataview", "datagrid", "listview", "gallery", "TEMPLATEVIEW":
+		case "dataview", "datagrid", "listview", "gallery", "templateview":
 			if ds == nil {
 				// Data container without DataSource — context comes from enclosing container
 				childHasContext = hasEntityContext

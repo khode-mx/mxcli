@@ -402,12 +402,7 @@ func describeEntity(ctx *ExecContext, name ast.QualifiedName) error {
 				if mfName == "" {
 					continue
 				}
-				eventName := string(eh.Event)
-				if eventName == "RollBack" {
-					eventName = "rollback"
-				} else {
-					eventName = strings.ToUpper(eventName)
-				}
+				eventName := strings.ToLower(string(eh.Event))
 				// Show parameter: ($currentObject) or ()
 				paramStr := "()"
 				if eh.PassEventObject {
@@ -419,7 +414,7 @@ func describeEntity(ctx *ExecContext, name ast.QualifiedName) error {
 					options = " raise error"
 				}
 				fmt.Fprintf(ctx.Output, "\non %s %s call %s%s%s",
-					strings.ToUpper(string(eh.Moment)), eventName, mfName, paramStr, options)
+					strings.ToLower(string(eh.Moment)), eventName, mfName, paramStr, options)
 			}
 
 			fmt.Fprintln(ctx.Output, ";")

@@ -146,7 +146,7 @@ func outputRestOperation(w io.Writer, op *model.RestClientOperation) {
 	}
 
 	fmt.Fprintf(w, "  operation %s {\n", op.Name)
-	fmt.Fprintf(w, "    Method: %s,\n", op.HttpMethod)
+	fmt.Fprintf(w, "    Method: %s,\n", strings.ToLower(op.HttpMethod))
 	fmt.Fprintf(w, "    Path: '%s',\n", op.Path)
 
 	// Parameters: ($var: Type, ...)
@@ -178,10 +178,10 @@ func outputRestOperation(w io.Writer, op *model.RestClientOperation) {
 
 	// Body
 	if op.BodyType != "" {
-		switch op.BodyType {
+		switch strings.ToLower(op.BodyType) {
 		case "template":
 			fmt.Fprintf(w, "    Body: template '%s',\n", strings.ReplaceAll(op.BodyVariable, "'", "''"))
-		case "EXPORT_MAPPING":
+		case "export_mapping":
 			if op.BodyVariable != "" && len(op.BodyMappings) > 0 {
 				fmt.Fprintf(w, "    Body: mapping %s {\n", op.BodyVariable)
 				writeExportMappings(w, op.BodyMappings, 6)
@@ -190,7 +190,7 @@ func outputRestOperation(w io.Writer, op *model.RestClientOperation) {
 				fmt.Fprintf(w, "    Body: mapping %s,\n", op.BodyVariable)
 			}
 		default:
-			fmt.Fprintf(w, "    Body: %s from %s,\n", op.BodyType, op.BodyVariable)
+			fmt.Fprintf(w, "    Body: %s from %s,\n", strings.ToLower(op.BodyType), op.BodyVariable)
 		}
 	}
 
@@ -200,7 +200,7 @@ func outputRestOperation(w io.Writer, op *model.RestClientOperation) {
 	}
 
 	// Response
-	switch op.ResponseType {
+	switch strings.ToLower(op.ResponseType) {
 	case "none":
 		fmt.Fprintln(w, "    Response: none")
 	case "json":
@@ -410,7 +410,7 @@ func buildRestClientOperation(opDef *ast.RestOperationDef) *model.RestClientOper
 
 	// Convert body mapping (export direction: Left=jsonField, Right=entityAttr)
 	if opDef.BodyMapping != nil {
-		op.BodyType = "EXPORT_MAPPING"
+		op.BodyType = "export_mapping"
 		op.BodyVariable = opDef.BodyMapping.Entity.String()
 		op.BodyMappings = convertMappingEntries(opDef.BodyMapping.Entries, false)
 	}
