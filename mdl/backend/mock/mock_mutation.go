@@ -3,6 +3,8 @@
 package mock
 
 import (
+	"fmt"
+
 	"github.com/mendixlabs/mxcli/mdl/backend"
 	"github.com/mendixlabs/mxcli/model"
 	"github.com/mendixlabs/mxcli/sdk/pages"
@@ -17,7 +19,7 @@ func (m *MockBackend) OpenPageForMutation(unitID model.ID) (backend.PageMutator,
 	if m.OpenPageForMutationFunc != nil {
 		return m.OpenPageForMutationFunc(unitID)
 	}
-	return nil, nil
+	return nil, fmt.Errorf("MockBackend.OpenPageForMutation not configured")
 }
 
 // ---------------------------------------------------------------------------
@@ -28,7 +30,7 @@ func (m *MockBackend) OpenWorkflowForMutation(unitID model.ID) (backend.Workflow
 	if m.OpenWorkflowForMutationFunc != nil {
 		return m.OpenWorkflowForMutationFunc(unitID)
 	}
-	return nil, nil
+	return nil, fmt.Errorf("MockBackend.OpenWorkflowForMutation not configured")
 }
 
 // ---------------------------------------------------------------------------
@@ -93,4 +95,18 @@ func (m *MockBackend) BuildCreateAttributeObject(attributePath string, objectTyp
 		return m.BuildCreateAttributeObjectFunc(attributePath, objectTypeID, propertyTypeID, valueTypeID)
 	}
 	return nil, nil
+}
+
+func (m *MockBackend) BuildDataGrid2Widget(id model.ID, name string, spec backend.DataGridSpec, projectPath string) (*pages.CustomWidget, error) {
+	if m.BuildDataGrid2WidgetFunc != nil {
+		return m.BuildDataGrid2WidgetFunc(id, name, spec, projectPath)
+	}
+	return nil, fmt.Errorf("MockBackend.BuildDataGrid2Widget not configured")
+}
+
+func (m *MockBackend) BuildFilterWidget(spec backend.FilterWidgetSpec, projectPath string) (pages.Widget, error) {
+	if m.BuildFilterWidgetFunc != nil {
+		return m.BuildFilterWidgetFunc(spec, projectPath)
+	}
+	return nil, fmt.Errorf("MockBackend.BuildFilterWidget not configured")
 }

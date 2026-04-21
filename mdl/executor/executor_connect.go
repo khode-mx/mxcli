@@ -6,29 +6,28 @@ import (
 	"fmt"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
-	mprbackend "github.com/mendixlabs/mxcli/mdl/backend/mpr"
 	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
-	"github.com/mendixlabs/mxcli/sdk/mpr"
 )
 
 func execConnect(ctx *ExecContext, s *ast.ConnectStmt) error {
 	e := ctx.executor
-	if ctx.ConnectedForWrite() {
-		e.writer.Close()
+	if e.backend != nil && e.backend.IsConnected() {
+		if err := e.backend.Disconnect(); err != nil {
+			fmt.Fprintf(ctx.Output, "Warning: disconnect error: %v\n", err)
+		}
 	}
 
-	writer, err := mpr.NewWriter(s.Path)
-	if err != nil {
+	if e.backendFactory == nil {
+		return mdlerrors.NewBackend("connect", fmt.Errorf("no backend factory configured"))
+	}
+	b := e.backendFactory()
+	if err := b.Connect(s.Path); err != nil {
 		return mdlerrors.NewBackend("connect", err)
 	}
 
-	e.writer = writer
-	e.reader = writer.Reader()
+	e.backend = b
 	e.mprPath = s.Path
 	e.cache = &executorCache{} // Initialize fresh cache
-
-	// Wrap the writer in an MprBackend for ctx.Backend propagation.
-	e.backend = mprbackend.Wrap(writer, s.Path)
 
 	// Propagate connection state back to ctx so subsequent code in this
 	// dispatch cycle sees the updated values.
@@ -44,7 +43,7 @@ func execConnect(ctx *ExecContext, s *ast.ConnectStmt) error {
 	ctx.ThemeRegistry = nil
 
 	// Display connection info with version
-	pv := e.reader.ProjectVersion()
+	pv := e.backend.ProjectVersion()
 	if !ctx.Quiet {
 		fmt.Fprintf(ctx.Output, "Connected to: %s (Mendix %s)\n", s.Path, pv.ProductVersion)
 	}
@@ -63,20 +62,23 @@ func reconnect(ctx *ExecContext) error {
 	}
 
 	// Close existing connection
-	if ctx.ConnectedForWrite() {
-		e.writer.Close()
+	if e.backend != nil && e.backend.IsConnected() {
+		if err := e.backend.Disconnect(); err != nil {
+			fmt.Fprintf(ctx.Output, "Warning: disconnect error: %v\n", err)
+		}
 	}
 
 	// Reopen connection
-	writer, err := mpr.NewWriter(e.mprPath)
-	if err != nil {
+	if e.backendFactory == nil {
+		return mdlerrors.NewBackend("reconnect", fmt.Errorf("no backend factory configured"))
+	}
+	b := e.backendFactory()
+	if err := b.Connect(e.mprPath); err != nil {
 		return mdlerrors.NewBackend("reconnect", err)
 	}
 
-	e.writer = writer
-	e.reader = writer.Reader()
+	e.backend = b
 	e.cache = &executorCache{} // Reset cache
-	e.backend = mprbackend.Wrap(writer, e.mprPath)
 
 	// Propagate reconnection state back to ctx.
 	ctx.Backend = e.backend
@@ -93,7 +95,7 @@ func reconnect(ctx *ExecContext) error {
 
 func execDisconnect(ctx *ExecContext) error {
 	e := ctx.executor
-	if !ctx.ConnectedForWrite() {
+	if e.backend == nil || !e.backend.IsConnected() {
 		fmt.Fprintln(ctx.Output, "Not connected")
 		return nil
 	}
@@ -103,10 +105,10 @@ func execDisconnect(ctx *ExecContext) error {
 		fmt.Fprintf(ctx.Output, "Warning: finalization error: %v\n", err)
 	}
 
-	e.writer.Close()
+	if err := e.backend.Disconnect(); err != nil {
+		fmt.Fprintf(ctx.Output, "Warning: disconnect error: %v\n", err)
+	}
 	fmt.Fprintf(ctx.Output, "Disconnected from: %s\n", e.mprPath)
-	e.writer = nil
-	e.reader = nil
 	e.mprPath = ""
 	e.cache = nil
 	e.backend = nil
@@ -125,19 +127,19 @@ func execDisconnect(ctx *ExecContext) error {
 
 func execStatus(ctx *ExecContext) error {
 	e := ctx.executor
-	if !ctx.ConnectedForWrite() {
+	if e.backend == nil || !e.backend.IsConnected() {
 		fmt.Fprintln(ctx.Output, "Status: Not connected")
 		return nil
 	}
 
-	pv := e.reader.ProjectVersion()
+	pv := e.backend.ProjectVersion()
 	fmt.Fprintf(ctx.Output, "Status: Connected\n")
 	fmt.Fprintf(ctx.Output, "Project: %s\n", e.mprPath)
 	fmt.Fprintf(ctx.Output, "Mendix Version: %s\n", pv.ProductVersion)
 	fmt.Fprintf(ctx.Output, "MPR Format: v%d\n", pv.FormatVersion)
 
 	// Show module count
-	modules, err := e.reader.ListModules()
+	modules, err := e.backend.ListModules()
 	if err == nil {
 		fmt.Fprintf(ctx.Output, "Modules: %d\n", len(modules))
 	}

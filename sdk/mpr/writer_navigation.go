@@ -6,34 +6,21 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/mendixlabs/mxcli/mdl/types"
 	"github.com/mendixlabs/mxcli/model"
 
 	"go.mongodb.org/mongo-driver/bson"
 )
 
 // NavigationProfileSpec describes the desired state for a navigation profile.
-type NavigationProfileSpec struct {
-	HomePages    []NavHomePageSpec
-	LoginPage    string // qualified page name, empty to clear
-	NotFoundPage string // qualified page name, empty to clear
-	MenuItems    []NavMenuItemSpec
-	HasMenu      bool // true = replace menu (even if empty)
-}
+// Aliased from mdl/types to avoid duplicate definitions.
+type NavigationProfileSpec = types.NavigationProfileSpec
 
 // NavHomePageSpec describes a home page entry.
-type NavHomePageSpec struct {
-	IsPage  bool
-	Target  string // qualified name
-	ForRole string // empty for default
-}
+type NavHomePageSpec = types.NavHomePageSpec
 
 // NavMenuItemSpec describes a menu item.
-type NavMenuItemSpec struct {
-	Caption   string
-	Page      string
-	Microflow string
-	Items     []NavMenuItemSpec
-}
+type NavMenuItemSpec = types.NavMenuItemSpec
 
 // UpdateNavigationProfile patches a navigation profile's home pages, login page, and menu.
 func (w *Writer) UpdateNavigationProfile(navDocID model.ID, profileName string, spec NavigationProfileSpec) error {

@@ -7,6 +7,7 @@ package mprbackend
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/mendixlabs/mxcli/mdl/types"
@@ -492,7 +493,9 @@ func TestUnconvertNavMenuItemSpec_Isolated(t *testing.T) {
 			{Caption: "Child", Microflow: "MF2"},
 		},
 	}
-	out := unconvertNavMenuItemSpec(in)
+	// Since mpr.NavMenuItemSpec is aliased to types.NavMenuItemSpec,
+	// unconvert is now a pass-through. Verify the alias holds.
+	var out mpr.NavMenuItemSpec = in
 	if out.Caption != "Parent" || out.Page != "Page1" || out.Microflow != "MF1" {
 		t.Errorf("field mismatch: %+v", out)
 	}
@@ -503,7 +506,7 @@ func TestUnconvertNavMenuItemSpec_Isolated(t *testing.T) {
 
 func TestUnconvertNavMenuItemSpec_NilItems(t *testing.T) {
 	in := types.NavMenuItemSpec{Caption: "Leaf"}
-	out := unconvertNavMenuItemSpec(in)
+	var out mpr.NavMenuItemSpec = in
 	if out.Items != nil {
 		t.Errorf("expected nil Items for leaf: %+v", out.Items)
 	}
@@ -596,5 +599,53 @@ func TestUnconvertImageCollection(t *testing.T) {
 	if len(out.Images) != 1 || out.Images[0].Name != "logo.png" || out.Images[0].Data[0] != 0x89 {
 		t.Errorf("image mismatch: %+v", out.Images)
 	}
+}
+
+// ============================================================================
+// Field-count drift assertions
+// ============================================================================
+//
+// These tests catch silent field drift: if a struct gains a new field but
+// the convert/unconvert function is not updated, the test fails.
+
+func assertFieldCount(t *testing.T, name string, v any, expected int) {
+	t.Helper()
+	actual := reflect.TypeOf(v).NumField()
+	if actual != expected {
+		t.Errorf("%s field count changed: expected %d, got %d — update convert.go and this test", name, expected, actual)
+	}
+}
+
+func TestFieldCountDrift(t *testing.T) {
+	// mpr → types pairs (manually copied in convert.go).
+	// If a struct gains a field, update the convert function AND this count.
+	assertFieldCount(t, "mpr.FolderInfo", mpr.FolderInfo{}, 3)
+	assertFieldCount(t, "types.FolderInfo", types.FolderInfo{}, 3)
+	assertFieldCount(t, "mpr.UnitInfo", mpr.UnitInfo{}, 4)
+	assertFieldCount(t, "types.UnitInfo", types.UnitInfo{}, 4)
+	assertFieldCount(t, "mpr.RenameHit", mpr.RenameHit{}, 4)
+	assertFieldCount(t, "types.RenameHit", types.RenameHit{}, 4)
+	assertFieldCount(t, "mpr.RawUnit", mpr.RawUnit{}, 4)
+	assertFieldCount(t, "types.RawUnit", types.RawUnit{}, 4)
+	assertFieldCount(t, "mpr.RawUnitInfo", mpr.RawUnitInfo{}, 5)
+	assertFieldCount(t, "types.RawUnitInfo", types.RawUnitInfo{}, 5)
+	assertFieldCount(t, "mpr.RawCustomWidgetType", mpr.RawCustomWidgetType{}, 6)
+	assertFieldCount(t, "types.RawCustomWidgetType", types.RawCustomWidgetType{}, 6)
+	assertFieldCount(t, "mpr.JavaAction", mpr.JavaAction{}, 4)
+	assertFieldCount(t, "types.JavaAction", types.JavaAction{}, 4)
+	assertFieldCount(t, "mpr.JavaScriptAction", mpr.JavaScriptAction{}, 12)
+	assertFieldCount(t, "types.JavaScriptAction", types.JavaScriptAction{}, 12)
+	assertFieldCount(t, "mpr.NavigationDocument", mpr.NavigationDocument{}, 4)
+	assertFieldCount(t, "types.NavigationDocument", types.NavigationDocument{}, 4)
+	assertFieldCount(t, "mpr.JsonStructure", mpr.JsonStructure{}, 8)
+	assertFieldCount(t, "types.JsonStructure", types.JsonStructure{}, 8)
+	assertFieldCount(t, "mpr.JsonElement", mpr.JsonElement{}, 14)
+	assertFieldCount(t, "types.JsonElement", types.JsonElement{}, 14)
+	assertFieldCount(t, "mpr.ImageCollection", mpr.ImageCollection{}, 6)
+	assertFieldCount(t, "types.ImageCollection", types.ImageCollection{}, 6)
+	assertFieldCount(t, "mpr.EntityMemberAccess", mpr.EntityMemberAccess{}, 3)
+	assertFieldCount(t, "types.EntityMemberAccess", types.EntityMemberAccess{}, 3)
+	assertFieldCount(t, "mpr.EntityAccessRevocation", mpr.EntityAccessRevocation{}, 6)
+	assertFieldCount(t, "types.EntityAccessRevocation", types.EntityAccessRevocation{}, 6)
 }
 

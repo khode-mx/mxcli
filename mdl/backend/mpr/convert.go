@@ -263,36 +263,10 @@ func convertNavMenuItem(in *mpr.NavMenuItem) *types.NavMenuItem {
 // Conversion helpers: mdl/types -> sdk/mpr (for write methods)
 // ---------------------------------------------------------------------------
 
+// unconvertNavProfileSpec is now a pass-through since mpr.NavigationProfileSpec
+// is aliased to types.NavigationProfileSpec.
 func unconvertNavProfileSpec(s types.NavigationProfileSpec) mpr.NavigationProfileSpec {
-	out := mpr.NavigationProfileSpec{
-		LoginPage:    s.LoginPage,
-		NotFoundPage: s.NotFoundPage,
-		HasMenu:      s.HasMenu,
-	}
-	if s.HomePages != nil {
-		out.HomePages = make([]mpr.NavHomePageSpec, len(s.HomePages))
-		for i, hp := range s.HomePages {
-			out.HomePages[i] = mpr.NavHomePageSpec{IsPage: hp.IsPage, Target: hp.Target, ForRole: hp.ForRole}
-		}
-	}
-	if s.MenuItems != nil {
-		out.MenuItems = make([]mpr.NavMenuItemSpec, len(s.MenuItems))
-		for i, mi := range s.MenuItems {
-			out.MenuItems[i] = unconvertNavMenuItemSpec(mi)
-		}
-	}
-	return out
-}
-
-func unconvertNavMenuItemSpec(in types.NavMenuItemSpec) mpr.NavMenuItemSpec {
-	out := mpr.NavMenuItemSpec{Caption: in.Caption, Page: in.Page, Microflow: in.Microflow}
-	if in.Items != nil {
-		out.Items = make([]mpr.NavMenuItemSpec, len(in.Items))
-		for i, sub := range in.Items {
-			out.Items[i] = unconvertNavMenuItemSpec(sub)
-		}
-	}
-	return out
+	return s
 }
 
 func unconvertEntityMemberAccessSlice(in []types.EntityMemberAccess) []mpr.EntityMemberAccess {

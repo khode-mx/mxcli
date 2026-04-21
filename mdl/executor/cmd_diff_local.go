@@ -497,6 +497,9 @@ func attributeBsonToMDL(_ *ExecContext, raw map[string]any) string {
 func microflowBsonToMDL(ctx *ExecContext, raw map[string]any, qualifiedName string) string {
 	qn := splitQualifiedName(qualifiedName)
 	mf := ctx.Backend.ParseMicroflowFromRaw(raw, model.ID(qn.Name), "")
+	if mf == nil {
+		return fmt.Sprintf("MICROFLOW %s\n  -- parse failed --\nEND MICROFLOW\n", qualifiedName)
+	}
 
 	entityNames, microflowNames := buildNameLookups(ctx)
 	return renderMicroflowMDL(ctx, mf, qn, entityNames, microflowNames, nil)

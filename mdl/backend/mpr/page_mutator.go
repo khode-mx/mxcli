@@ -9,6 +9,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
+
 	"github.com/mendixlabs/mxcli/mdl/backend"
 	"github.com/mendixlabs/mxcli/mdl/bsonutil"
 	"github.com/mendixlabs/mxcli/mdl/types"
@@ -580,10 +582,14 @@ func dSetArray(doc bson.D, key string, elements []any) {
 
 // extractBinaryIDFromDoc extracts a binary ID string from a bson.D field.
 func extractBinaryIDFromDoc(val any) string {
-	if bin, ok := val.(primitive.Binary); ok {
+	switch bin := val.(type) {
+	case primitive.Binary:
 		return types.BlobToUUID(bin.Data)
+	case []byte:
+		return types.BlobToUUID(bin)
+	default:
+		return ""
 	}
-	return ""
 }
 
 // ---------------------------------------------------------------------------
@@ -1305,8 +1311,7 @@ func setRawWidgetPropertyMut(widget bson.D, propName string, value any) error {
 func setWidgetCaptionMut(widget bson.D, value any) error {
 	caption := dGetDoc(widget, "Caption")
 	if caption == nil {
-		setTranslatableText(widget, "Caption", value)
-		return nil
+		return mdlerrors.NewValidation("widget has no Caption property")
 	}
 	setTranslatableText(caption, "", value)
 	return nil
