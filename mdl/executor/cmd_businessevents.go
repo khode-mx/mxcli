@@ -331,7 +331,7 @@ func createBusinessEventService(ctx *ExecContext, stmt *ast.CreateBusinessEventS
 		msg.TypeName = "BusinessEvents$Message"
 
 		// Set publish/subscribe based on operation
-		switch strings.ToUpper(msgDef.Operation) {
+		switch strings.ToLower(msgDef.Operation) {
 		case "publish":
 			msg.CanSubscribe = true // Service publishes → others subscribe
 		case "subscribe":

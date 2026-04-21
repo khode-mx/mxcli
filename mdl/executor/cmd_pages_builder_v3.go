@@ -257,7 +257,7 @@ func (pb *pageBuilder) buildWidgetV3(w *ast.WidgetV3) (pages.Widget, error) {
 	var widget pages.Widget
 	var err error
 
-	switch strings.ToUpper(w.Type) {
+	switch strings.ToLower(w.Type) {
 	case "dataview":
 		widget, err = pb.buildDataViewV3(w)
 	case "datagrid":
