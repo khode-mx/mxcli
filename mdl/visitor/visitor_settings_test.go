@@ -38,7 +38,10 @@ func TestAlterSettings_Constant(t *testing.T) {
 		}
 		return
 	}
-	stmt := prog.Statements[0].(*ast.AlterSettingsStmt)
+	stmt, ok := prog.Statements[0].(*ast.AlterSettingsStmt)
+	if !ok {
+		t.Fatalf("Expected AlterSettingsStmt, got %T", prog.Statements[0])
+	}
 	if stmt.ConstantId != "MyModule.APIEndpoint" {
 		t.Errorf("Got ConstantId %q", stmt.ConstantId)
 	}
@@ -56,7 +59,10 @@ func TestAlterSettings_DropConstant(t *testing.T) {
 		}
 		return
 	}
-	stmt := prog.Statements[0].(*ast.AlterSettingsStmt)
+	stmt, ok := prog.Statements[0].(*ast.AlterSettingsStmt)
+	if !ok {
+		t.Fatalf("Expected AlterSettingsStmt, got %T", prog.Statements[0])
+	}
 	if !stmt.DropConstant {
 		t.Error("Expected DropConstant true")
 	}

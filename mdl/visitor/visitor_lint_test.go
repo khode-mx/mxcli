@@ -38,7 +38,10 @@ func TestLint_ModuleOnly(t *testing.T) {
 		}
 		return
 	}
-	stmt := prog.Statements[0].(*ast.LintStmt)
+	stmt, ok := prog.Statements[0].(*ast.LintStmt)
+	if !ok {
+		t.Fatalf("Expected LintStmt, got %T", prog.Statements[0])
+	}
 	if !stmt.ModuleOnly {
 		t.Error("Expected ModuleOnly true")
 	}
@@ -62,7 +65,10 @@ func TestLint_WithFormat(t *testing.T) {
 		}
 		return
 	}
-	stmt := prog.Statements[0].(*ast.LintStmt)
+	stmt, ok := prog.Statements[0].(*ast.LintStmt)
+	if !ok {
+		t.Fatalf("Expected LintStmt, got %T", prog.Statements[0])
+	}
 	if stmt.Format != "json" {
 		t.Errorf("Expected json format, got %q", stmt.Format)
 	}
@@ -77,7 +83,10 @@ func TestShowLintRules(t *testing.T) {
 		}
 		return
 	}
-	stmt := prog.Statements[0].(*ast.LintStmt)
+	stmt, ok := prog.Statements[0].(*ast.LintStmt)
+	if !ok {
+		t.Fatalf("Expected LintStmt, got %T", prog.Statements[0])
+	}
 	if !stmt.ShowRules {
 		t.Error("Expected ShowRules true")
 	}

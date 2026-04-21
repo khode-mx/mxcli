@@ -41,7 +41,10 @@ func TestCreateModuleRole_NoDescription(t *testing.T) {
 		}
 		return
 	}
-	stmt := prog.Statements[0].(*ast.CreateModuleRoleStmt)
+	stmt, ok := prog.Statements[0].(*ast.CreateModuleRoleStmt)
+	if !ok {
+		t.Fatalf("Expected CreateModuleRoleStmt, got %T", prog.Statements[0])
+	}
 	if stmt.Description != "" {
 		t.Errorf("Expected empty description, got %q", stmt.Description)
 	}
@@ -104,7 +107,10 @@ func TestCreateUserRole_OrModify(t *testing.T) {
 		}
 		return
 	}
-	stmt := prog.Statements[0].(*ast.CreateUserRoleStmt)
+	stmt, ok := prog.Statements[0].(*ast.CreateUserRoleStmt)
+	if !ok {
+		t.Fatalf("Expected CreateUserRoleStmt, got %T", prog.Statements[0])
+	}
 	if !stmt.CreateOrModify {
 		t.Error("Expected CreateOrModify true")
 	}
@@ -146,7 +152,10 @@ func TestAlterUserRole_Remove(t *testing.T) {
 		}
 		return
 	}
-	stmt := prog.Statements[0].(*ast.AlterUserRoleStmt)
+	stmt, ok := prog.Statements[0].(*ast.AlterUserRoleStmt)
+	if !ok {
+		t.Fatalf("Expected AlterUserRoleStmt, got %T", prog.Statements[0])
+	}
 	if stmt.Add {
 		t.Error("Expected Add false")
 	}
@@ -229,7 +238,10 @@ func TestGrantEntityAccess_MultipleRoles(t *testing.T) {
 		}
 		return
 	}
-	stmt := prog.Statements[0].(*ast.GrantEntityAccessStmt)
+	stmt, ok := prog.Statements[0].(*ast.GrantEntityAccessStmt)
+	if !ok {
+		t.Fatalf("Expected GrantEntityAccessStmt, got %T", prog.Statements[0])
+	}
 	if len(stmt.Roles) != 2 {
 		t.Fatalf("Expected 2 roles, got %d", len(stmt.Roles))
 	}
@@ -265,7 +277,10 @@ func TestRevokeEntityAccess_Partial(t *testing.T) {
 		}
 		return
 	}
-	stmt := prog.Statements[0].(*ast.RevokeEntityAccessStmt)
+	stmt, ok := prog.Statements[0].(*ast.RevokeEntityAccessStmt)
+	if !ok {
+		t.Fatalf("Expected RevokeEntityAccessStmt, got %T", prog.Statements[0])
+	}
 	if len(stmt.Rights) != 1 {
 		t.Fatalf("Expected 1 right, got %d", len(stmt.Rights))
 	}
@@ -500,7 +515,10 @@ func TestAlterProjectSecurity_DemoUsers(t *testing.T) {
 		}
 		return
 	}
-	stmt := prog.Statements[0].(*ast.AlterProjectSecurityStmt)
+	stmt, ok := prog.Statements[0].(*ast.AlterProjectSecurityStmt)
+	if !ok {
+		t.Fatalf("Expected AlterProjectSecurityStmt, got %T", prog.Statements[0])
+	}
 	if stmt.SecurityLevel != "" {
 		t.Errorf("Expected empty security level, got %q", stmt.SecurityLevel)
 	}
@@ -545,7 +563,10 @@ func TestCreateDemoUser_OrModify(t *testing.T) {
 		}
 		return
 	}
-	stmt := prog.Statements[0].(*ast.CreateDemoUserStmt)
+	stmt, ok := prog.Statements[0].(*ast.CreateDemoUserStmt)
+	if !ok {
+		t.Fatalf("Expected CreateDemoUserStmt, got %T", prog.Statements[0])
+	}
 	if !stmt.CreateOrModify {
 		t.Error("Expected CreateOrModify true")
 	}
@@ -596,7 +617,10 @@ func TestUpdateSecurity_InModule(t *testing.T) {
 		}
 		return
 	}
-	stmt := prog.Statements[0].(*ast.UpdateSecurityStmt)
+	stmt, ok := prog.Statements[0].(*ast.UpdateSecurityStmt)
+	if !ok {
+		t.Fatalf("Expected UpdateSecurityStmt, got %T", prog.Statements[0])
+	}
 	if stmt.Module != "MyModule" {
 		t.Errorf("Expected MyModule, got %q", stmt.Module)
 	}
