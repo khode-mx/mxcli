@@ -304,7 +304,7 @@ Nested folders use `/` separator: `'Parent/Child/Grandchild'`. Missing folders a
 | Drop workflow | `drop workflow Module.Name;` | |
 
 **Workflow Activity Types:**
-- `user task <name> '<caption>' [page Mod.Page] [targeting microflow Mod.MF] [outcomes '<out>' { } ...];`
+- `user task <name> '<caption>' [page Mod.Page] [targeting [users|groups] microflow Mod.MF] [targeting [users|groups] xpath '<expr>'] [outcomes '<out>' { } ...];`
 - `call microflow Mod.MF [comment '<text>'] [outcomes '<out>' { } ...];`
 - `call workflow Mod.WF [comment '<text>'];`
 - `decision ['<caption>'] outcomes '<out>' { } ...;`
@@ -340,8 +340,8 @@ Modify an existing workflow's properties, activities, outcomes, paths, condition
 | Set parameter | `set parameter $Var: Module.Entity` | Workflow context parameter |
 | Set activity page | `set activity name page Module.Page` | Change user task page |
 | Set activity description | `set activity name description 'text'` | Activity description |
-| Set activity targeting | `set activity name targeting microflow Module.MF` | Target user assignment |
-| Set activity XPath | `set activity name targeting xpath '[expr]'` | XPath targeting |
+| Set activity targeting | `set activity name targeting [users\|groups] microflow Module.MF` | Target user/group assignment |
+| Set activity XPath | `set activity name targeting [users\|groups] xpath '[expr]'` | XPath targeting |
 | Set activity due date | `set activity name due date 'expr'` | Activity-level due date |
 | Insert activity | `insert after name call microflow Module.MF` | Insert after named activity |
 | Drop activity | `drop activity name` | Remove activity by name |

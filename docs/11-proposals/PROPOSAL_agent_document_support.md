@@ -14,9 +14,9 @@ Mendix 11.9 introduces **Agents** as a first-class concept for building agentic 
 | **AgentCommons** | Agent management: versioned agents, tools, knowledge bases, MCP, test cases |
 | **AgentEditorCommons** | Bridge between Studio Pro Agent Editor extension and AgentCommons runtime entities |
 | **MCPClient** | Model Context Protocol client: server connections, tool/prompt discovery, execution |
-| **ConversationalUI** | Chat widgets, message rendering, tool approval UI, trace monitoring, token dashboards |
+| **ConversationalUI** | Chat widgets, message rendering, tool approval UI, trace monitoring, token & observability dashboards |
 
-Currently, `mxcli` has no visibility into agent documents. `show structure` reports the Agents module as empty because it only contains `CustomBlobDocument` units, which are not parsed. An AI coding agent cannot discover, inspect, or create agents via MDL.
+Currently, `mxcli` has no visibility into agent documents. `SHOW STRUCTURE` reports the Agents module as empty because it only contains `CustomBlobDocument` units, which are not parsed. An AI coding agent cannot discover, inspect, or create agents via MDL.
 
 ## BSON Structure
 
@@ -27,28 +27,28 @@ All four agent-editor document types (Agent, Model, Knowledge Base, Consumed MCP
 ```
 CustomBlobDocuments$CustomBlobDocument:
   $ID: bytes
-  $type: "CustomBlobDocuments$CustomBlobDocument"
+  $Type: "CustomBlobDocuments$CustomBlobDocument"
   Name: string
-  Contents: string (json payload — schema depends on CustomDocumentType)
-  CustomDocumentType: "agenteditor.agent"
+  Contents: string (JSON payload — schema depends on CustomDocumentType)
+  DocumentType: "agenteditor.agent"
                     | "agenteditor.model"
                     | "agenteditor.knowledgebase"
                     | "agenteditor.consumedMCPService"
-  documentation: string
+  Documentation: string
   Excluded: bool
   ExportLevel: "Hidden"
   Metadata:
     $ID: bytes
-    $type: "CustomBlobDocuments$CustomBlobDocumentMetadata"
+    $Type: "CustomBlobDocuments$CustomBlobDocumentMetadata"
     CreatedByExtension: "extension/agent-editor"
-    ReadableTypeName: "agent" | "model" | "knowledge base" | "consumed mcp service"
+    ReadableTypeName: "Agent" | "Model" | "Knowledge base" | "Consumed MCP service"
 ```
 
 Key observations about the wrapper:
 - `CustomDocumentType` is the discriminator for the inner JSON schema
 - `Contents` is a JSON string (not nested BSON) — the agent editor extension owns the inner schema
 - `Metadata.ReadableTypeName` is a human-friendly label (also used as the UI badge in Studio Pro)
-- `Excluded` is `false` for documents created in the new Agent Editor extension; observed as `true` on the 4 older agents in the project (likely pre-release format)
+- `Excluded` is `false` by default; can be changed to `true` by the user. Then the document cannot be used by other app logic and no errors will be shown for this document.
 
 ### MODEL — `Contents` JSON schema
 
@@ -56,7 +56,7 @@ Observed in `Agents.MyFirstModel`:
 
 ```json
 {
-  "type": "",
+  "type": "Text generation",
   "name": "",
   "displayName": "",
   "provider": "MxCloudGenAI",
@@ -76,7 +76,7 @@ Observed in `Agents.MyFirstModel`:
 
 - `provider` is a top-level discriminator — `"MxCloudGenAI"` is the only observed value. `providerFields` shape depends on `provider`.
 - `providerFields.key` references a **String constant** (holding the Mendix Cloud GenAI Portal key) by `{documentId, qualifiedName}`.
-- `type`, `name`, `displayName`, `environment`, `deepLinkURL`, `keyId`, `keyName`, `resourceName` are all empty in the sample — they're **Portal-populated** when the user clicks **Test Key** in Studio Pro, not user-set fields.
+- `type`, `name`, `displayName`, `environment`, `deepLinkURL`, `keyId`, `keyName`, `resourceName` are all empty in the sample — they values are decoded from the key the user selects as a string constant. After decoding the key, a call to the backend might update the reference to the exact model if that was changed in the Mendix Cloud GenAI portal. This check can also be triggered by the user when clicking **Test Key** in Studio Pro.
 
 ### KNOWLEDGE BASE — `Contents` JSON schema
 
@@ -94,14 +94,14 @@ Observed in `Agents.Knowledge_base`:
     "modelDisplayName": "",
     "modelName": "",
     "key": {
-      "documentId": "51b85be5-f040-4562-bf4c-086347d387a9",
-      "qualifiedName": "Agents.LLMKey"
+      "documentId": "51b85be5-f040-4562-bf4c-086347d38712",
+      "qualifiedName": "Agents.KnowledbaseKey"
     }
   }
 }
 ```
 
-Same shape as Model, but `providerFields` includes embedding-model info (`modelDisplayName`, `modelName`) instead of `resourceName`. The `key` reference points to the same String constant.
+Same shape as Model, but `providerFields` includes embedding-model info (`modelDisplayName`, `modelName`) instead of `resourceName`. The `key` reference points to a String constant with a knowledge base key generated in the Mendix Cloud GenAI portal.
 
 ### CONSUMED MCP SERVICE — `Contents` JSON schema
 
@@ -112,13 +112,22 @@ Observed in `Agents.Consumed_MCP_service`:
   "protocolVersion": "v2025_03_26",
   "documentation": " fqwef qwec qwefc",
   "version": "0.0.1",
-  "connectionTimeoutSeconds": 30
+  "connectionTimeoutSeconds": 30,
+  "endpoint" : {
+    "documentId": "51b85be5-f040-4562-bf4c-086347d38734",
+    "qualifiedName": "Agents.MCPEndpoint"
+  },
+  "authenticationMicroflow" : {
+    "documentId": "51b85be5-f040-4562-bf4c-086347d387ab",
+    "qualifiedName": "Agents.AuthenticationMicroflow"
+  }
 }
 ```
 
-Notably **absent**: no endpoint URL and no credentials microflow reference. Those are presumably configured at runtime via the `MCPClient.ConsumedMCPService` entity (see the `Agents.MCP_Server_Endpoint` String constant in the same project — used by a runtime microflow, not embedded in the document). This matches real-world deployment: endpoints typically differ across dev/staging/prod.
+Endpoint is a reference to a string constant with the MCP endpoint. If the server requried authentication those can be created in an authentication microflow which the user can optionally select. An authentication microflow cannot have input parameters and needs to return a list of `System.HttpHeader`.
+For MCP tool discovery inside Studio Pro, user can add headers in the UI. Those will not be persisted, nor transferred into the authentication microflow to be used at runtime.
 
-Enum values for `protocolVersion`: `"v2024_11_05"` or `"v2025_03_26"`.
+Enum values for `protocolVersion`: `"v2024_11_05"` or `"v2025_03_26"`. Use `v2025_03_26` for newer MCP servers that support streamable http transport, `v2024_11_05` for servers that only support SSE transport.
 
 ### AGENT — `Contents` JSON schema
 
@@ -127,17 +136,21 @@ Simple agent (observed in `AgentEditorCommons.TranslationAgent`):
 ```json
 {
   "description": "",
-  "systemPrompt": "Translate the given text into {{description}}.",
+  "systemPrompt": "Translate the given text into {{Description}}.",
   "userPrompt": "...",
-  "usageType": "task",
+  "usageType": "Task",
   "variables": [
-    { "key": "description", "isAttributeInEntity": true }
+    { "key": "Description", "isAttributeInEntity": true }
   ],
   "tools": [],
   "knowledgebaseTools": [],
   "entity": {
     "documentId": "83d81a7b-4a84-416e-a64f-0ffa981c8408",
     "qualifiedName": "System.Language"
+  },
+  "model": {
+    "documentId": "3addaaa1-8bd3-4654-8cc9-2c886d0a01e9",
+    "qualifiedName": "Agents.MyFirstModel"
   }
 }
 ```
@@ -149,7 +162,7 @@ Fully-populated agent (observed in `Agents.Agent007`):
   "description": "doing your stuff for you",
   "systemPrompt": "Do you intereesting and useful stuff that makes me money",
   "userPrompt": "Just do it",
-  "usageType": "task",
+  "usageType": "Task",
   "variables": [],
   "tools": [
     {
@@ -157,10 +170,21 @@ Fully-populated agent (observed in `Agents.Agent007`):
       "name": "",
       "description": "",
       "enabled": true,
-      "toolType": "mcp",
+      "toolType": "MCP",
       "document": {
         "qualifiedName": "Agents.Consumed_MCP_service",
         "documentId": "47c9987a-e922-44eb-a389-e641f325ce15"
+      }
+    },
+    {
+      "id": "044bc8c2-8ca6-4166-b8f0-9d2245aba8c7",
+      "name": "GetBankHolidays",
+      "description": "Gets bank holidays",
+      "enabled": true,
+      "toolType": "Microflow",
+      "document": {
+        "qualifiedName": "Agents.GetBankHolidays",
+        "documentId": "47c9987a-e922-44eb-a389-e641f325ce18"
       }
     }
   ],
@@ -176,7 +200,8 @@ Fully-populated agent (observed in `Agents.Agent007`):
         "documentId": "cccc0b5b-7600-47a9-8f6e-5761ce2fc620"
       },
       "collectionIdentifier": "agent1-collection",
-      "maxResults": 3
+      "maxResults": 3,
+      "minSimilarity": 0.5
     }
   ],
   "model": {
@@ -184,19 +209,25 @@ Fully-populated agent (observed in `Agents.Agent007`):
     "qualifiedName": "Agents.MyFirstModel"
   },
   "maxTokens": 16384,
-  "toolChoice": "Auto"
+  "temperature": 0.5,
+  "topP": 1.0,
+  "toolChoice": "Tool",
+  "toolChoiceToolName": "GetBankHolidays"
 }
 ```
 
 Agent schema observations:
-- **`model`**: Reference to a Model document by `{documentId, qualifiedName}`. Optional in the older samples (model set at runtime); present on new Agent Editor agents.
-- **`tools[]`**: Array of tool references. Each entry has a UUID `id`, name, description, `enabled` boolean, and a `toolType` discriminator. Observed `toolType` values: `"mcp"` (a whole MCP service attached as tools). A microflow-tool sample is still missing — likely `"microflow"` with a `microflow` reference instead of `document`.
-- **`knowledgebaseTools[]`**: Array of KB references. Same base fields plus `collectionIdentifier` and `maxResults`. No `minSimilarity` observed in current schema.
-- **`variables[]`**: Empty in `Agent007`; populated in older samples with `{key, isAttributeInEntity}`.
+- **`model`**: Reference to a Model document by `{documentId, qualifiedName}`.
+- **`entity`** the prompts might contain some variables (words in the user prompt surrounded by double curly brackets, i.e. {{Language}}). Variables will be replaced at runtime by attribute values on an initialized object of type entity. Therefore it is neccessary that the variables key is the same as an attribute on the entity.
+- **`usageType`**: Defaults to `"Task"` agents which have aan optional system prompt and a required user prompt. `"Chat"` agents (introduced in v1.1.0 of the agent editor) do not have a user prompt on the agent definition since that will be provided by the user at runtime.
+- **`tools[]`**: Optional. Array of tool references. Each entry has a UUID `id`, unique `name`, `description`, `enabled` boolean, and a `toolType` discriminator. Observed `toolType` values: `"MCP"` (a whole MCP service attached as tools) or a microflow-tool `"Microflow"` where `document` referencces a microflow document. Tool microflows need to return a String and can only have primitive types and GenAICommons.Request or GenAICommons.Tool objects as input parameters.
+- **`knowledgebaseTools[]`**: Optional. Array of KB references. Same base fields plus `collectionIdentifier`, `maxResults` and `minSimilarity`. ToolType is irrelevant for knowledgebaseTools. MaxResults needs to be a positive integer, minSimilarity is a decimal between 0 and 1.
+- **`variables[]`**: Should be left empty this will be automatically populated by the extension based on the detected variables in the user or system prompt.
 - **`entity`**: Optional. Present on older agents with `isAttributeInEntity: true` variables; absent on `Agent007`.
-- **`maxTokens`**, **`toolChoice`**: Agent-level inference parameters. Enum values for `toolChoice` observed: `"Auto"` (capitalized, not the lowercase `auto` used by `GenAICommons.ENUM_ToolChoice` at runtime). Other likely values: `"none"`, `"Any"`, `"tool"`.
-- **`temperature`**, **`topP`**: Not observed in any sample — omitted when not set.
-- **No `UserAccessApproval`/`access` field** on tools. That's a runtime-only concern (set on `AgentCommons.Tool` entity, not the document). **This is a correction to earlier versions of this proposal.**
+- **`maxTokens`**: Optional. Can be set by the user to restrict the number of tokens to consume in one agent call.
+- **`toolChoice`**: Optional. Agent-level inference parameters. Enum values for `toolChoice` observed: `"Auto"` (capitalized, not the lowercase `auto` used by `GenAICommons.ENUM_ToolChoice` at runtime). Other values: `"None"`, `"Any"`, `"Tool"`. If tool choice is set to `Tool`, then also the `toolChoiceToolName` needs to be set by the unique name referencing one tool in `tools[]`. Only tools where `toolType` = "Microflow" can become tool choice.
+- **`temperature`**, **`topP`**: Optional. Can be set by the user to influence the randomness of the response.
+- **No `UserAccessApproval`/`Access` field** on tools. That's a runtime-only concern (set on `AgentCommons.Tool` entity, not the document). **This is a correction to earlier versions of this proposal.**
 
 ### Observed documents in test3 project
 
@@ -216,7 +247,7 @@ Agent schema observations:
 ### SHOW AGENTS
 
 ```sql
-show agents [in module]
+SHOW AGENTS [IN Module]
 ```
 
 Output:
@@ -231,16 +262,16 @@ Output:
 ### DESCRIBE AGENT
 
 ```sql
-describe agent AgentEditorCommons.TranslationAgent
+DESCRIBE AGENT AgentEditorCommons.TranslationAgent
 ```
 
 Output (round-trippable MDL):
 
 ```sql
-create agent AgentEditorCommons."TranslationAgent" (
-  UsageType: task,
-  entity: System.Language,
-  variables: ("description": EntityAttribute),
+CREATE AGENT AgentEditorCommons."TranslationAgent" (
+  UsageType: Task,
+  Entity: System.Language,
+  Variables: ("Description": EntityAttribute),
   SystemPrompt: 'Translate the given text into {{Description}}.',
   UserPrompt: 'What is a multi-agent AI system?...'
 );
@@ -249,16 +280,16 @@ create agent AgentEditorCommons."TranslationAgent" (
 
 ### CREATE AGENT
 
-The syntax follows the same shape as `create rest client`: top-level configuration in `(...)` followed by a `{...}` body containing one block per attached resource (`tool`, `knowledge base`, `mcp service`). Simple agents with no resources omit the body entirely.
+The syntax follows the same shape as `CREATE REST CLIENT`: top-level configuration in `(...)` followed by a `{...}` body containing one block per attached resource (`TOOL`, `KNOWLEDGE BASE`, `CONSUMED MCP SERVICE`). Simple agents with no resources omit the body entirely.
 
 **Simple task agent (no body needed):**
 
 ```sql
-create agent MyModule."SentimentAnalyzer" (
-  UsageType: task,
-  entity: MyModule.FeedbackItem,
-  variables: ("FeedbackText": EntityAttribute),
-  model: MyModule.GPT4Model,
+CREATE AGENT MyModule."SentimentAnalyzer" (
+  UsageType: Task,
+  Entity: MyModule.FeedbackItem,
+  Variables: ("FeedbackText": EntityAttribute),
+  Model: MyModule.GPT4Model,
   SystemPrompt: 'Analyze the sentiment of {{FeedbackText}}. Classify as positive, negative, or neutral.',
   UserPrompt: '{{FeedbackText}}'
 );
@@ -267,25 +298,25 @@ create agent MyModule."SentimentAnalyzer" (
 **Agent with tools, knowledge bases, and MCP services (matches `Agents.Agent007`):**
 
 ```sql
-create agent Agents."Agent007" (
-  UsageType: task,
-  model: Agents.MyFirstModel,
+CREATE AGENT Agents."Agent007" (
+  UsageType: Task,
+  Model: Agents.MyFirstModel,
   MaxTokens: 16384,
   ToolChoice: Auto,
-  description: 'doing your stuff for you',
+  Description: 'doing your stuff for you',
   SystemPrompt: 'Do you intereesting and useful stuff that makes me money',
   UserPrompt: 'Just do it'
 )
 {
-  mcp service Agents.Consumed_MCP_service {
+  CONSUMED MCP SERVICE Agents.Consumed_MCP_service {
     Enabled: true
   }
 
-  knowledge base My_mem {
-    source: Agents.Knowledge_base,
-    collection: 'agent1-collection',
+  KNOWLEDGE BASE My_mem {
+    Source: Agents.Knowledge_base,
+    Collection: 'agent1-collection',
     MaxResults: 3,
-    description: 'My memory of useful stuff',
+    Description: 'My memory of useful stuff',
     Enabled: true
   }
 };
@@ -293,46 +324,46 @@ create agent Agents."Agent007" (
 
 **Block-level property reference:**
 
-Each block maps to one entry in the agent's `Contents` JSON (`tools[]` for TOOL/MCP SERVICE, `knowledgebaseTools[]` for KNOWLEDGE BASE). Block IDs (the `id` UUID field in JSON) are auto-generated by the writer.
+Each block maps to one entry in the agent's `Contents` JSON (`tools[]` for TOOL/CONSUMED MCP SERVICE, `knowledgebaseTools[]` for KNOWLEDGE BASE). Block IDs (the `id` UUID field in JSON) are auto-generated by the writer.
 
 | Block | Referenced by | Properties | Maps to JSON field |
 |---|---|---|---|
-| `mcp service <QualifiedName> { ... }` | ConsumedMCPService document | `Enabled`, `description` | `tools[]` entry with `toolType: "mcp"`, `document: {...}` |
-| `tool <Name> { microflow: ... }` | microflow name | `microflow`, `Enabled`, `description` | `tools[]` entry with `toolType: "microflow"` *(shape speculative — see Open Questions)* |
-| `knowledge base <Name> { source: ... }` | KB document via `source:` | `source` (required), `collection`, `MaxResults`, `description`, `Enabled` | `knowledgebaseTools[]` entry |
+| `CONSUMED MCP SERVICE <QualifiedName> { ... }` | ConsumedMCPService document | `Enabled`, `Description` | `tools[]` entry with `toolType: "MCP"`, `document: {...}` |
+| `TOOL <Name> { Microflow: <QualifiedName>, Description, Enabled }` | microflow name | `Microflow`, `Enabled`, `Description` | `tools[]` entry with `toolType: "Microflow"`, `document: { qualifiedName: <microflow>, documentId: <uuid> }`. Microflow tools must be microflow references (qualified name) and the target microflow must return a `String`; input parameters are limited to primitives and `GenAICommons.Request`/`GenAICommons.Tool` types. |
+| `KNOWLEDGE BASE <Name> { Source: ... }` | KB document via `Source:` | `Source` (required), `Collection`, `MaxResults`, `Description`, `Enabled` | `knowledgebaseTools[]` entry |
 
 ### DROP AGENT
 
 ```sql
-drop agent MyModule."SentimentAnalyzer"
+DROP AGENT MyModule."SentimentAnalyzer"
 ```
 
 ### What Goes Where: Design-Time vs. Call-Time
 
-Everything inside `create agent` — including the properties in the top-level `(...)` — is **design-time configuration that is stored in the agent document**. None of it is an invocation parameter. Runtime inputs are supplied at the `call agent` site.
+Everything inside `CREATE AGENT` — including the properties in the top-level `(...)` — is **design-time configuration that is stored in the agent document**. None of it is an invocation parameter. Runtime inputs are supplied at the `CALL AGENT` site.
 
-The layering follows the same pattern as `create rest client`:
+The layering follows the same pattern as `CREATE REST CLIENT`:
 
 | Layer | REST CLIENT | AGENT |
 |---|---|---|
-| **Document-level static config** (stored in document) | `BaseUrl`, `authentication` | `UsageType`, `description`, `entity`, `model`, `MaxTokens`, `ToolChoice`, `SystemPrompt`, `UserPrompt` |
-| **Input contract** (what the caller must bring at call time) | `parameters: ($id: string)` on each operation | `variables: ("Topic": string, ...)` on the agent |
-| **Attached resources** (body blocks) | `operation` blocks | `tool` / `knowledge base` / `mcp service` blocks |
-| **Runtime invocation** (values supplied at call site) | `send rest request Mod.Api.GetItems (id = $x)` | `call agent with HISTORY $agent request $req context $obj` |
+| **Document-level static config** (stored in document) | `BaseUrl`, `Authentication` | `UsageType`, `Description`, `Entity`, `Model`, `MaxTokens`, `ToolChoice`, `SystemPrompt`, `UserPrompt` |
+| **Input contract** (what the caller must bring at call time) | `Parameters: ($id: String)` on each operation | `Variables: ("Topic": String, ...)` on the agent |
+| **Attached resources** (body blocks) | `OPERATION` blocks | `TOOL` / `KNOWLEDGE BASE` / `CONSUMED MCP SERVICE` blocks |
+| **Runtime invocation** (values supplied at call site) | `SEND REST REQUEST Mod.Api.GetItems (id = $x)` | `CALL AGENT WITH HISTORY $agent REQUEST $req CONTEXT $obj` |
 
 In other words:
 
-- `UsageType`, `entity`, `SystemPrompt`, `UserPrompt` are the same kind of property as `BaseUrl` on a REST client — baked into the document, changed by editing the document.
-- `variables: (...)` is the same kind of property as `parameters: (...)` on a REST operation — it declares the **schema** of what the caller must supply, not the values. Actual values arrive at runtime: for `EntityAttribute` variables, they're read from matching attributes on the `context` object; for free-form variables (future extension), they'd be passed directly.
-- `tool`, `knowledge base`, `mcp service` blocks describe **capabilities the agent carries with it** — the LLM can invoke them autonomously at runtime, but they aren't something the caller passes in.
+- `UsageType`, `Entity`, `SystemPrompt`, `UserPrompt` are the same kind of property as `BaseUrl` on a REST client — baked into the document, changed by editing the document.
+- `Variables: (...)` is the same kind of property as `Parameters: (...)` on a REST operation — it declares the **schema** of what the caller must supply, not the values. Actual values arrive at runtime: for `EntityAttribute` variables, they're read from matching attributes on the `CONTEXT` object; for free-form variables (future extension), they'd be passed directly.
+- `TOOL`, `KNOWLEDGE BASE`, `CONSUMED MCP SERVICE` blocks describe **capabilities the agent carries with it** — the LLM can invoke them autonomously at runtime, but they aren't something the caller passes in.
 
 Example — all of this is stored in the agent document:
 
 ```sql
-create agent Reviews."SentimentAnalyzer" (
-  UsageType: task,                                             -- design-time mode
-  entity: Reviews.ProductReview,                               -- context entity contract
-  variables: ("ProductName": EntityAttribute,                  -- input contract
+CREATE AGENT Reviews."SentimentAnalyzer" (
+  UsageType: Task,                                             -- design-time mode
+  Entity: Reviews.ProductReview,                               -- context entity contract
+  Variables: ("ProductName": EntityAttribute,                  -- input contract; which attributes to read from the context object at runtime
               "ReviewText": EntityAttribute),
   SystemPrompt: 'Analyze the review for {{ProductName}}.',     -- prompt template
   UserPrompt: '{{ReviewText}}'                                 -- prompt template
@@ -342,7 +373,7 @@ create agent Reviews."SentimentAnalyzer" (
 And this is the runtime call — the only place values flow in:
 
 ```sql
-call agent without HISTORY $agent context $Review into $response;
+CALL AGENT WITHOUT HISTORY $Agent CONTEXT $Review INTO $Response;
 -- $Review is a Reviews.ProductReview instance;
 -- its ProductName and ReviewText attributes satisfy the Variables contract.
 ```
@@ -351,20 +382,21 @@ call agent without HISTORY $agent context $Review into $response;
 
 | Decision | Rationale |
 |----------|-----------|
-| `agent` as document type keyword | Matches `Metadata.ReadableTypeName = "agent"` and Mendix UI terminology |
-| Top-level `(key: value)` config + `{...}` body with singular blocks | Mirrors `create rest client ... (...) { operation Name {...} }` exactly — same shape, same mental model |
-| `model: <QualifiedName>` in top-level config | Agent documents can reference a Model document directly via the `model` JSON field (confirmed in `Agent007`). Making it a peer of `UsageType` mirrors how the Agent Editor UI presents it |
-| `ToolChoice: Auto` PascalCase enum literal | Matches the real JSON value (`"Auto"`), which differs from the lowercase `auto` used by `GenAICommons.ENUM_ToolChoice` at runtime. Values: `Auto`, `none`, `Any`, `tool` |
+| `AGENT` as document type keyword | Matches `Metadata.ReadableTypeName = "Agent"` and Mendix UI terminology |
+| Top-level `(Key: Value)` config + `{...}` body with singular blocks | Mirrors `CREATE REST CLIENT ... (...) { OPERATION Name {...} }` exactly — same shape, same mental model |
+| `Model: <QualifiedName>` in top-level config | Agent documents can reference a Model document directly via the `model` JSON field (confirmed in `Agent007`). |
+| `UsageType: Task` determines if user prompt is a template or not | Task agents have a fixed user prompt, potentially containing variables, while `Chat` agents do not have a predefined userprompt, because it is determined by the user at runtime. |
+| `ToolChoice: Auto` PascalCase enum literal | Matches the real JSON value (`"Auto"`), which differs from the lowercase `auto` used by `GenAICommons.ENUM_ToolChoice` at runtime. Values: `Auto`, `None`, `Any`, `Tool`. When `ToolChoice` is set to `Tool`, the `toolChoiceToolName` property must be set to the agent-local tool `name` (the `name` field in `tools[]`). The writer/validator must ensure the named tool exists on the agent, is unique, has `toolType: "Microflow"`, and is `Enabled: true`; otherwise emit a validation error. `toolChoiceToolName` selects the microflow tool the agent will prefer when `ToolChoice` is fixed to `Tool`. |
 | `MaxTokens: <int>` on the agent | Matches the JSON `maxTokens` field; agent-level inference parameter |
-| `tool`, `knowledge base`, `mcp service` as singular block types | Matches the `operation` singular used in REST CLIENT; each block defines one resource |
-| `mcp service <QualifiedName> { Enabled, description }` | The name is the qualified name of a ConsumedMCPService document (the whole service is attached as a bundle of tools) |
-| `knowledge base <Name> { source: <doc>, collection, MaxResults, ... }` | `<Name>` is the per-agent identifier stored in JSON `name`; `source:` references the KB document. Matches `Agent007`'s `My_mem` KB entry |
-| `tool <Name> { microflow: ..., description, Enabled }` | Speculative: microflow-tool JSON shape not yet observed (test3 only has MCP tools). Final shape TBD when we capture a sample |
-| `variables: (...)` is the input-schema analog of REST CLIENT's `parameters: (...)` | Declares what the caller must supply; values flow in via the `context` object at the `call agent` site. Inline form matches REST CLIENT's `parameters: ($id: string)` |
-| No `access:` on tool blocks | `UserAccessApproval` is NOT stored in the agent document JSON — it's a runtime-only concern on the `AgentCommons.Tool` entity. (Earlier drafts of this proposal incorrectly placed it on the block.) |
+| `TOOL`, `KNOWLEDGE BASE`, `CONSUMED MCP SERVICE` as singular block types | Matches the `OPERATION` singular used in REST CLIENT; each block defines one resource |
+| `CONSUMED MCP SERVICE <QualifiedName> { Enabled, Description }` | The name is the qualified name of a ConsumedMCPService document (the whole service is attached as a bundle of tools) |
+| `KNOWLEDGE BASE <Name> { Source: <doc>, Collection, MaxResults, ... }` | `<Name>` is the per-agent identifier stored in JSON `name`; `Source:` references the KB document. Matches `Agent007`'s `My_mem` KB entry |
+| `TOOL <Name> { Microflow: <QualifiedName>, Description, Enabled }` | Microflow tool references a microflow by qualified name; the writer encodes this in `tools[]` with `toolType: "Microflow"` and `document: { qualifiedName: <microflow>, documentId: <uuid> }`. Target microflows must return a `String`; input parameters are restricted to primitives and `GenAICommons.Request`/`GenAICommons.Tool` types. |
+| `Variables: (...)` is the input-schema analog of REST CLIENT's `Parameters: (...)` | Declares what the caller must supply; values flow in via the `CONTEXT` object at the `CALL AGENT` site. Inline form matches REST CLIENT's `Parameters: ($id: String)` |
+| No `Access:` on tool blocks | `UserAccessApproval` is NOT stored in the agent document JSON — it's a runtime-only concern on the `AgentCommons.Tool` entity. (Earlier drafts of this proposal incorrectly placed it on the block.) |
 | Body omitted when there are no tools/KB/MCP | Same concession REST CLIENT makes implicitly — empty bodies are awkward; drop them |
 | Prompts as string literals | Consistent with other MDL string properties; `{{var}}` placeholders are just text |
-| Auto-generated `id` UUIDs on block entries | Each tool/KB entry has a UUID `id` in the JSON (Studio Pro-generated). The MDL writer will generate these; they round-trip stably through `describe` |
+| Auto-generated `id` UUIDs on block entries | Each tool/KB entry has a UUID `id` in the JSON (Studio Pro-generated). The MDL writer will generate these; they round-trip stably through `DESCRIBE` |
 
 ## What Already Exists
 
@@ -392,31 +424,32 @@ package agents
 
 import "github.com/nicholasgasior/modelsdk-go/model"
 
-type agent struct {
+type Agent struct {
     ContainerID   model.ID
     ID            model.ID
     Name          string
-    documentation string
+    Documentation string
 
-    // Parsed from Contents json
-    description  string
+    // Parsed from Contents JSON
+    Description  string
     SystemPrompt string
     UserPrompt   string
-    UsageType    string        // "task", "Conversational"
-    variables    []Variable
+    UsageType    string        // "Task", "Chat"
+    Variables    []Variable
     Tools        []ToolRef     // tools[] array
     KBTools      []KBToolRef   // knowledgebaseTools[] array
-    model        *DocRef       // optional, points to a model document
-    entity       *EntityRef    // optional, points to a domain entity
+    Model        *DocRef       // optional, points to a Model document
+    Entity       *EntityRef    // optional, points to a domain entity
     MaxTokens    *int          // optional
-    ToolChoice   string        // optional: "Auto", "none", "Any", "tool"
-    Temperature  *float64      // optional, not yet observed
-    TopP         *float64      // optional, not yet observed
+    ToolChoice   string        // optional: "Auto", "None", "Any", "Tool"
+    ToolChoiceToolName *string // optional: when ToolChoice == "Tool", the agent-local tool `name` to prefer
+    Temperature  *float64      // optional
+    TopP         *float64      // optional
 }
 
 type Variable struct {
-    key                 string
-    IsAttributeInEntity bool
+    Key                 string
+    IsAttributeInEntity bool // true when an attribute with name == Key is found on the referenced entity
 }
 
 type EntityRef struct {
@@ -425,69 +458,71 @@ type EntityRef struct {
 }
 
 type DocRef struct {
-    DocumentID    string // UUID of the referenced CustomBlobDocument
+    DocumentID    string // UUID of the referenced CustomBlobDocument or a microflow
     QualifiedName string // Module.DocumentName
 }
 
 // Entry in the agent's tools[] array
 type ToolRef struct {
     ID          string  // per-tool UUID (generated by writer)
-    Name        string
-    description string
-    Enabled     bool
-    ToolType    string  // "mcp" | "microflow" (microflow shape TBD)
-    Document    *DocRef // set when ToolType=="mcp", references ConsumedMCPService
-    microflow   string  // set when ToolType=="microflow" (speculative)
+    Name        string  // only relevant for microflow tools; unique tool name (used by `toolChoiceToolName`); Tool name must start with a letter or underscore and contain only letters, numbers, and underscores.
+    Description string  // only relevant for microflow tools
+    Enabled     bool    // diabled tools will be ignored at runtime
+    ToolType    string  // "MCP" | "Microflow"
+    Document    *DocRef // references ConsumedMCPService for ToolType=="MCP", references a microflow for ToolType=="Microflow"
 }
 
 // Entry in the agent's knowledgebaseTools[] array
 type KBToolRef struct {
     ID                   string
     Name                 string
-    description          string
+    Description          string
     Enabled              bool
-    ToolType             string  // empty string in observed sample
+    ToolType             string  // unused for knowledge base tools
     Document             *DocRef // references KnowledgeBase document
     CollectionIdentifier string
     MaxResults           int
+    MinSimilarity        float64 // decimal between 0.0 and 1.0
 }
 
-// Peer document types (same wrapper, different Contents json)
+// Peer document types (same wrapper, different Contents JSON)
 
-type model struct {
+type Model struct {
     ContainerID   model.ID
     ID            model.ID
     Name          string
-    documentation string
+    Documentation string
 
-    type        string                 // Portal-populated, usually empty
+    Type        string                 // Portal-populated, usually empty
     DisplayName string                 // Portal-populated
     Provider    string                 // "MxCloudGenAI"
     Fields      map[string]interface{} // providerFields — shape depends on provider
-    KeyConstant *ConstantRef           // providerFields.key → string constant
+    KeyConstant *ConstantRef           // providerFields.key → String constant
 }
 
 type KnowledgeBase struct {
     ContainerID   model.ID
     ID            model.ID
     Name          string
-    documentation string
+    Documentation string
 
     Provider    string                 // "MxCloudGenAI"
     Fields      map[string]interface{} // providerFields (includes modelDisplayName, modelName)
-    KeyConstant *ConstantRef
+    KeyConstant *ConstantRef           // providerFields.key → String constant
 }
 
 type ConsumedMCPService struct {
     ContainerID              model.ID
     ID                       model.ID
     Name                     string
-    documentation            string
+    Documentation            string
 
     ProtocolVersion          string // "v2024_11_05" | "v2025_03_26"
-    version                  string // app-specified version
+    Version                  string // app-specified version
     InnerDocumentation       string // Contents.documentation (free text)
     ConnectionTimeoutSeconds int
+    Endpoint                 *DocRef // reference to a String constant document containing the MCP endpoint
+    AuthenticationMicroflow  *DocRef // optional microflow used to produce auth headers; must have no input params and return List<System.HttpHeader>
 }
 
 type ConstantRef struct {
@@ -502,8 +537,8 @@ In `sdk/mpr/parser_customblob.go` (generic — handles all four document types):
 
 - Parse `CustomBlobDocuments$CustomBlobDocument` documents
 - Dispatch by `CustomDocumentType`:
-  - `"agenteditor.agent"` → decode Contents JSON as `agent`
-  - `"agenteditor.model"` → decode as `model`
+  - `"agenteditor.agent"` → decode Contents JSON as `Agent`
+  - `"agenteditor.model"` → decode as `Model`
   - `"agenteditor.knowledgebase"` → decode as `KnowledgeBase`
   - `"agenteditor.consumedMCPService"` → decode as `ConsumedMCPService`
   - unknown → store raw Contents, warn
@@ -514,10 +549,10 @@ The parser should be tolerant: unknown JSON fields in `Contents` are ignored (th
 #### 1.3 Add Reader Methods
 
 ```go
-func (r *Reader) agents() []*agenteditor.Agent
+func (r *Reader) Agents() []*agenteditor.Agent
 func (r *Reader) AgentByQualifiedName(name string) *agenteditor.Agent
 
-func (r *Reader) models() []*agenteditor.Model
+func (r *Reader) Models() []*agenteditor.Model
 func (r *Reader) ModelByQualifiedName(name string) *agenteditor.Model
 
 func (r *Reader) KnowledgeBases() []*agenteditor.KnowledgeBase
@@ -532,20 +567,20 @@ func (r *Reader) ConsumedMCPServiceByQualifiedName(name string) *agenteditor.Con
 - `CATALOG.AGENTS` (module, name, qualified_name, usage_type, entity, model, variables, tool_count, kb_count)
 - `CATALOG.MODELS` (module, name, qualified_name, provider, key_constant)
 - `CATALOG.KNOWLEDGE_BASES` (module, name, qualified_name, provider, key_constant)
-- `CATALOG.CONSUMED_MCP_SERVICES` (module, name, qualified_name, protocol_version, timeout_seconds)
+- `CATALOG.CONSUMED_MCP_SERVICES` (module, name, qualified_name, endpoint_constant, protocol_version, authentication_microflow, timeout_seconds)
 
 #### 1.5 Add Grammar/AST/Visitor/Executor
 
-- Grammar: `show {agents | models | knowledge bases | consumed mcp services} [in module]`
-- Grammar: `describe {agent | model | knowledge base | consumed mcp service} qualifiedName`
+- Grammar: `SHOW {AGENTS | MODELS | KNOWLEDGE BASES | CONSUMED MCP SERVICES} [IN module]`
+- Grammar: `DESCRIBE {AGENT | MODEL | KNOWLEDGE BASE | CONSUMED MCP SERVICE} qualifiedName`
 - AST: `ShowCustomBlobStmt`, `DescribeCustomBlobStmt` (discriminated by type enum)
 - Executor: format output using standard table/MDL patterns
 
 **Recommended implementation order** (matches user preference to start with MODEL):
-1. Generic wrapper parser + `model` type + `show models` + `describe model` (smallest Contents JSON)
+1. Generic wrapper parser + `Model` type + `SHOW MODELS` + `DESCRIBE MODEL` (smallest Contents JSON)
 2. `ConsumedMCPService` (also small)
 3. `KnowledgeBase` (similar shape to Model)
-4. `agent` (largest, depends on the other three for resolving `model`/`document` references in its body)
+4. `Agent` (largest, depends on the other three for resolving `model`/`document` references in its body)
 
 ### Phase 2: Write Support (CREATE/DROP)
 
@@ -553,19 +588,19 @@ func (r *Reader) ConsumedMCPServiceByQualifiedName(name string) *agenteditor.Con
 
 In `sdk/mpr/writer_customblob.go` (generic wrapper for all four types):
 
-- Serialize any of `agent` / `model` / `KnowledgeBase` / `ConsumedMCPService` structs to a `CustomBlobDocuments$CustomBlobDocument` BSON
+- Serialize any of `Agent` / `Model` / `KnowledgeBase` / `ConsumedMCPService` structs to a `CustomBlobDocuments$CustomBlobDocument` BSON
 - Set `CustomDocumentType` per type (`agenteditor.agent`, `agenteditor.model`, etc.)
 - Set `Metadata.CreatedByExtension = "extension/agent-editor"`
-- Set `Metadata.ReadableTypeName` per type (`"agent"`, `"model"`, `"knowledge base"`, `"consumed mcp service"`)
+- Set `Metadata.ReadableTypeName` per type (`"Agent"`, `"Model"`, `"Knowledge base"`, `"Consumed MCP service"`)
 - Serialize `Contents` as a JSON string (per-type encoder)
 - Set `Excluded = false`, `ExportLevel = "Hidden"` (matches the new Agent Editor defaults)
 - Generate stable UUIDs for `$ID` and `Metadata.$ID`
-- For `agent`: generate UUIDs for `id` field on each `tools[]` and `knowledgebaseTools[]` entry
-- For `model` / `KnowledgeBase`: resolve the `key` constant reference to `{documentId, qualifiedName}` by looking up the String constant in the reader
+- For `Agent`: generate UUIDs for `id` field on each `tools[]` and `knowledgebaseTools[]` entry
+- For `Model` / `KnowledgeBase` / `ConsumedMCPService`: resolve the `Key` or `Endpoint` constant reference to `{documentId, qualifiedName}` by looking up the String constant in the reader
 
 #### 2.2 Add Grammar/AST/Visitor/Executor for CREATE/DROP
 
-- Grammar: `create agent qualifiedName properties variablesClause?`
+- Grammar: `CREATE AGENT qualifiedName properties variablesClause?`
 - AST: `CreateAgentStmt`, `DropAgentStmt`
 - Executor: validate, write BSON, register in module
 
@@ -573,17 +608,17 @@ In `sdk/mpr/writer_customblob.go` (generic wrapper for all four types):
 
 - Entity reference must exist (if specified)
 - Variables marked `EntityAttribute` must correspond to attributes on the referenced entity
-- `UsageType` must be a known value (`task` or `Conversational`)
+- `UsageType` must be a known value (`Task` or `Chat`)
 - Variable names used in `{{...}}` in prompts should match declared variables (warning, not error)
 
 ### Phase 3: Integration & Catalog
 
 #### 3.1 Catalog Integration
 
-- Include agents in `show structure` output
+- Include agents in `SHOW STRUCTURE` output
 - Add `CATALOG.AGENTS` table for SQL queries
-- Include agent references in `show references` / `show impact`
-- Wire into `refresh catalog` (both fast and full modes)
+- Include agent references in `SHOW REFERENCES` / `SHOW IMPACT`
+- Wire into `REFRESH CATALOG` (both fast and full modes)
 
 #### 3.2 Version Gating
 
@@ -593,7 +628,7 @@ In `sdk/mpr/writer_customblob.go` (generic wrapper for all four types):
   agents:
     agent_document:
       min_version: "11.9.0"
-      mdl: "create agent Module.Name (...) { tool ... { ... } ... }"
+      mdl: "CREATE AGENT Module.Name (...) { TOOL ... { ... } ... }"
       notes: "Requires AgentEditorCommons marketplace module"
   ```
 - Executor pre-check: `checkFeature("agent_document")` before CREATE
@@ -602,32 +637,32 @@ In `sdk/mpr/writer_customblob.go` (generic wrapper for all four types):
 
 - Hover on agent names shows system prompt summary
 - Go-to-definition navigates to agent document
-- Completion for `describe agent` with agent names
+- Completion for `DESCRIBE AGENT` with agent names
 
 ### Phase 4: Supporting Document Types and Microflow Activities
 
 Full agent support requires MDL coverage of related `CustomBlobDocument` types and the new "Call Agent" microflow activity. These are split into sub-phases but all are needed for the examples in this proposal to work end-to-end.
 
-#### 4.1 `create model` Document
+#### 4.1 `CREATE MODEL` Document
 
-Models are peer `CustomBlobDocument`s that reference a Mendix Cloud GenAI Portal key stored in a **String constant**. The minimum input from the user is the provider and the constant reference — Portal metadata (`displayName`, `keyId`, `keyName`, `environment`, `resourceName`, etc.) is filled by Studio Pro when the user clicks **Test Key** and shouldn't be user-set in MDL.
+Models are peer `CustomBlobDocument`s that reference a Mendix Cloud GenAI Portal key stored in a **String constant**. The minimum input from the user is the provider and the constant reference — Portal metadata (`displayName`, `keyId`, `keyName`, `environment`, `resourceName`, etc.) is filled by Studio Pro when a constant with a valid key value is selected.
 
 Matches the observed BSON for `Agents.MyFirstModel`:
 
 ```sql
-create model Agents."MyFirstModel" (
+CREATE MODEL Agents."MyFirstModel" (
   Provider: MxCloudGenAI,
-  key: Agents.LLMKey
+  Key: Agents.LLMKey
 );
 ```
 
-`describe model` may show Portal-populated fields when present (round-trip preserves them, but they're not user-editable in MDL):
+`DESCRIBE MODEL` may show Portal-populated fields when present (round-trip preserves them, but they're not user-editable in MDL):
 
 ```sql
 -- What DESCRIBE produces for a model that has been activated against the Portal
-create model Agents."MyFirstModel" (
+CREATE MODEL Agents."MyFirstModel" (
   Provider: MxCloudGenAI,
-  key: Agents.LLMKey,
+  Key: Agents.LLMKey,
   DisplayName: 'GPT-4 Turbo',          -- Portal-populated, read-only in MDL
   KeyName: 'prod-gpt4',                -- Portal-populated, read-only in MDL
   Environment: 'production'            -- Portal-populated, read-only in MDL
@@ -650,29 +685,30 @@ At runtime, `AgentEditorCommons.ASU_AgentEditor` reads the constant and creates 
 }
 ```
 
-#### 4.2 `create knowledge base` Document
+#### 4.2 `CREATE KNOWLEDGE BASE` Document
 
-Same shape as Model, but `providerFields` carries embedding-model info instead of model-resource info. User-settable fields are just `Provider` and `key`:
+Same shape as Model, but `providerFields` carries besides information about the knowledgebase also a refrence to an embedding-model. User-settable fields are just `Provider` and `Key`:
 
 ```sql
-create knowledge base Agents."Knowledge_base" (
+CREATE KNOWLEDGE BASE Agents."Knowledge_base" (
   Provider: MxCloudGenAI,
-  key: Agents.LLMKey
+  Key: Agents.KBKey
 );
 ```
 
-`describe` can round-trip Portal-populated fields:
+`DESCRIBE` can round-trip Portal-populated fields:
 
 ```sql
-create knowledge base Agents."Knowledge_base" (
+CREATE KNOWLEDGE BASE Agents."Knowledge_base" (
   Provider: MxCloudGenAI,
-  key: Agents.LLMKey,
+  Key: Agents.KBKey,
   ModelDisplayName: 'text-embedding-3-large',   -- Portal-populated
   ModelName: 'text-embedding-3-large'           -- Portal-populated
 );
 ```
 
-Referenced from agents via `knowledge base <Name> { source: <QualifiedName>, ... }` blocks inside the agent body.
+Referenced from agents via `KNOWLEDGE BASE <Name> { Source: <QualifiedName>, ... }` blocks inside the agent body.
+At runtime, `AgentEditorCommons.ASU_AgentEditor` reads the constant and creates the corresponding `GenAICommons.ConsumedKnowledgeBase`.
 
 **JSON output shape:**
 ```json
@@ -682,72 +718,83 @@ Referenced from agents via `knowledge base <Name> { source: <QualifiedName>, ...
   "providerFields": {
     "environment": "", "deepLinkURL": "", "keyId": "", "keyName": "",
     "modelDisplayName": "", "modelName": "",
-    "key": { "documentId": "<uuid>", "qualifiedName": "Agents.LLMKey" }
+    "key": { "documentId": "<uuid>", "qualifiedName": "Agents.KBKey" }
   }
 }
 ```
 
-#### 4.3 `create consumed mcp service` Document
+#### 4.3 `CREATE CONSUMED MCP SERVICE` Document
 
-Matches the observed BSON for `Agents.Consumed_MCP_service`. Endpoint and credentials are **not** part of the document — they're runtime configuration on the `MCPClient.ConsumedMCPService` entity. The document only carries protocol version, app-level version, timeout, and documentation.
+Matches the observed BSON for `Agents.Consumed_MCP_service`. The document carries protocol version, app-level version, timeout, documentation, and an endpoint constant reference. It can also carry an optional authentication microflow reference.
 
 ```sql
-create consumed mcp service Agents."Consumed_MCP_service" (
+CREATE CONSUMED MCP SERVICE Agents."Consumed_MCP_service" (
   ProtocolVersion: v2025_03_26,
-  version: '0.0.1',
+  Version: '0.0.1',
   ConnectionTimeoutSeconds: 30,
-  documentation: 'Description of what this MCP service provides'
+  Endpoint: Agents.MCPEndpoint,
+  AuthenticationMicroflow: Agents.AuthenticationMicroflow,
+  Documentation: 'Description of what this MCP service provides'
 );
 ```
 
-Referenced from agents via `mcp service <QualifiedName> { ... }` blocks inside the agent body.
+Referenced from agents via `CONSUMED MCP SERVICE <QualifiedName> { ... }` blocks inside the agent body.
+At runtime, `AgentEditorCommons.ASU_AgentEditor` reads the constant and creates the corresponding `MCPClient.ConsumedMCPService`.
 
 **JSON output shape:**
 ```json
 {
   "protocolVersion": "v2025_03_26",
-  "documentation": "description of what this mcp service provides",
+  "documentation": "Description of what this MCP service provides",
   "version": "0.0.1",
-  "connectionTimeoutSeconds": 30
+  "connectionTimeoutSeconds": 30,
+  "endpoint": {
+    "documentId": "<uuid>",
+    "qualifiedName": "Agents.MCPEndpoint"
+  },
+  "authenticationMicroflow": {
+    "documentId": "<uuid>",
+    "qualifiedName": "Agents.AuthenticationMicroflow"
+  }
 }
 ```
 
-> **Note:** `documentation` as a top-level property maps to the JSON `documentation` field (inside `Contents`), not to the outer BSON `documentation` field on the CustomBlobDocument wrapper. Two different fields with the same name — the MDL writer sets both consistently.
+> **Note:** `Documentation` as a top-level property maps to the JSON `documentation` field (inside `Contents`), not to the outer BSON `Documentation` field on the CustomBlobDocument wrapper. Two different fields with the same name — the MDL writer sets both consistently.
 
-#### 4.4 `call agent` / `NEW CHAT for agent` Microflow Activities
+#### 4.4 `CALL AGENT` / `NEW CHAT FOR AGENT` Microflow Activities
 
 New MDL microflow statements mapping to the Agents Kit toolbox actions (see the "New MDL Statement" section under "Building Smart Apps" for syntax):
 
 | MDL Statement | Java Action | Purpose |
 |---------------|-------------|---------|
-| `call agent with HISTORY $agent request $req [context $obj] into $response` | `AgentCommons.Agent_Call_WithHistory` | Call a conversational agent with chat history |
-| `call agent without HISTORY $agent [context $obj] [request $req] [FILES $fc] into $response` | `AgentCommons.Agent_Call_WithoutHistory` | Call a single-call (Task) agent |
-| `NEW CHAT for agent $agent action microflow <mf> [context $obj] [model $dm] into $ChatContext` | `AgentCommons.ChatContext_Create_ForAgent` | Create a ChatContext wired to an agent |
+| `CALL AGENT WITH HISTORY $agent REQUEST $req [CONTEXT $obj] INTO $Response` | `AgentCommons.Agent_Call_WithHistory` | Call a conversational agent with chat history |
+| `CALL AGENT WITHOUT HISTORY $agent [CONTEXT $obj] [REQUEST $req] [FILES $fc] INTO $Response` | `AgentCommons.Agent_Call_WithoutHistory` | Call a single-call (Task) agent |
+| `NEW CHAT FOR AGENT $agent ACTION MICROFLOW <mf> [CONTEXT $obj] [MODEL $dm] INTO $ChatContext` | `AgentCommons.ChatContext_Create_ForAgent` | Create a ChatContext wired to an agent |
 
 These need a new BSON activity type (or mapping to the generic Java action call — see Open Question 4).
 
 #### 4.5 ALTER AGENT
 
-Follows the same shape as `alter page` — in-place modifications to top-level properties and body blocks:
+Follows the same shape as `ALTER PAGE` — in-place modifications to top-level properties and body blocks:
 
 ```sql
-alter agent MyModule."SentimentAnalyzer" {
-  set SystemPrompt = 'New prompt with {{Variable}}.';
-  set variables = ("FeedbackText": EntityAttribute, "NewVar": string);
-  set model = MyModule.OtherModel;
-  set ToolChoice = none;
+ALTER AGENT MyModule."SentimentAnalyzer" {
+  SET SystemPrompt = 'New prompt with {{Variable}}.';
+  SET Variables = ("FeedbackText": EntityAttribute, "NewVar": String);
+  SET Model = MyModule.OtherModel;
+  SET ToolChoice = None;
 
-  insert mcp service MyModule.NewMCPService {
+  INSERT CONSUMED MCP SERVICE MyModule.NewMCPService {
     Enabled: true
   };
 
-  insert knowledge base NewKB {
-    source: MyModule.OtherKB,
-    collection: 'other-collection',
+  INSERT KNOWLEDGE BASE NewKB {
+    Source: MyModule.OtherKB,
+    Collection: 'other-collection',
     MaxResults: 5
   };
 
-  drop mcp service MyModule.OldMCPService;
+  DROP CONSUMED MCP SERVICE MyModule.OldMCPService;
 };
 ```
 
@@ -766,18 +813,18 @@ A "smart app" in Mendix typically has these layers, all expressible in MDL:
 │                     Conversational UI                           │
 │         Chat widget, tool approval, trace monitoring            │
 ├─────────────────────────────────────────────────────────────────┤
-│                      agent Layer                                │
-│  agent documents (create agent) — prompts, variables,           │
-│           tools, knowledge bases, mcp servers                   │
+│                      Agent Layer                                │
+│  Agent documents (CREATE AGENT) — prompts, variables,           │
+│           tools, knowledge bases, MCP servers                   │
 ├──────────────┬────────────────────┬─────────────────────────────┤
-│    Tools     │   knowledge bases  │      mcp services           │
-│  microflows  │   RAG retrieval    │  external tool servers      │
+│    Tools     │   Knowledge Bases  │      MCP Services           │
+│  Microflows  │   RAG retrieval    │  External tool servers      │
 ├──────────────┴────────────────────┴─────────────────────────────┤
-│              model Documents + MxGenAIConnector                 │
-│      model key constant → DeployedModel at runtime              │
+│              Model Documents + MxGenAIConnector                 │
+│      Model key constant → DeployedModel at runtime              │
 ├─────────────────────────────────────────────────────────────────┤
-│                    Domain model                                 │
-│           entities, associations, enumerations                  │
+│                    Domain Model                                 │
+│           Entities, associations, enumerations                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -786,9 +833,9 @@ A "smart app" in Mendix typically has these layers, all expressible in MDL:
 Unlike the initial draft of this proposal, agents in Mendix are **not** wired up by building the request manually in an action microflow. The correct flow is:
 
 1. **Studio Pro design time** — the developer creates agent documents (and model documents) in Studio Pro. Tools, knowledge bases, and MCP servers are **attached to the agent in the agent document itself** (not added at runtime).
-2. **Model key** — a Mendix Cloud GenAI Portal key is stored in a String constant on the model document. At runtime, `ASU_AgentEditor` (registered as after-startup microflow) reads the key and auto-creates the corresponding `GenAICommons.DeployedModel`.
+2. **Model key** — a Mendix Cloud GenAI Portal key is stored in a String constant on the model document. At runtime, `ASU_AgentEditor` (registered as after-startup microflow) reads the key and auto-creates the corresponding `GenAICommons.DeployedModel`, the `GenAICommons.ConsumedKnowledgeBase`, `MCPlient.ConsumedMCPService` and links all up in `AgentCommons.Agent` objects.
 3. **Call Agent activity** — in a microflow, a single **"Call Agent With History"** or **"Call Agent Without History"** toolbox action does everything: resolve the agent's in-use version, select its deployed model, replace variable placeholders from the context object, wire in tools/knowledge bases/MCP servers declared on the agent, and call the LLM.
-4. **Conversational UI** — to use the agent in a chat, call **"New Chat for Agent"** which creates a `ChatContext` pre-configured with the agent's deployed model, system prompt, and action microflow. The action microflow for chat just calls **"Call Agent With History"** with the request built by `default Preprocessing`.
+4. **Conversational UI** — to use the agent in a chat, call **"New Chat for Agent"** which creates a `ChatContext` pre-configured with the agent's deployed model, system prompt, and action microflow. The action microflow for chat just calls **"Call Agent With History"** with the request built by `Default Preprocessing`.
 
 ### Prerequisites
 
@@ -799,13 +846,13 @@ Before any agent can be used, the following one-time setup is required (see the 
 --    The Encryption module is a prerequisite; its setup is outside MDL.
 
 -- 2. Register ASU_AgentEditor as an after-startup microflow
-alter settings model AfterStartupMicroflow = AgentEditorCommons.ASU_AgentEditor;
+ALTER SETTINGS MODEL AfterStartupMicroflow = AgentEditorCommons.ASU_AgentEditor;
 
 -- 3. A model key constant must hold a Mendix Cloud GenAI Portal key.
 --    Use one constant per model. The agent editor references this constant
 --    in the model document.
-create constant "MyApp"."DefaultModelKey" (
-  type: string,
+CREATE CONSTANT "MyApp"."DefaultModelKey" (
+  Type: String,
   DefaultValue: ''   -- set via environment config or configuration UI
 );
 
@@ -817,14 +864,14 @@ create constant "MyApp"."DefaultModelKey" (
 --    (This is handled in .gitignore, outside MDL.)
 ```
 
-### New MDL Statement: `call agent` Microflow Activity
+### New MDL Statement: `CALL AGENT` Microflow Activity
 
 Because "Call Agent" is a first-class Mendix toolbox activity (distinct from a generic Java action call), this proposal also introduces a corresponding MDL microflow statement:
 
 ```
-call agent with HISTORY <agent> request <request> [context <obj>] into $response
-call agent without HISTORY <agent> [context <obj>] [request <req>] [FILES <fc>] into $response
-NEW CHAT for agent <agent> action microflow <microflow> [context <obj>] [model <dm>] into $ChatContext
+CALL AGENT WITH HISTORY <agent> REQUEST <request> [CONTEXT <obj>] INTO $Response
+CALL AGENT WITHOUT HISTORY <agent> [CONTEXT <obj>] [REQUEST <req>] [FILES <fc>] INTO $Response
+NEW CHAT FOR AGENT <agent> ACTION MICROFLOW <microflow> [CONTEXT <obj>] [MODEL <dm>] INTO $ChatContext
 ```
 
 These map directly to the `AgentCommons.Agent_Call_WithHistory`, `AgentCommons.Agent_Call_WithoutHistory`, and `AgentCommons.ChatContext_Create_ForAgent` Java actions (all exposed in the **"Agents Kit"** toolbox category). The MDL form exists so these show up as the actual "Call Agent" activity in Studio Pro rather than as opaque Java action calls.
@@ -840,55 +887,55 @@ A conversational agent that helps customer support reps by looking up orders, ch
 ```sql
 -- Domain model for the support system
 
-@position(100, 100)
-create persistent entity Support."Customer" (
-  "Name": string(200) not null error 'Name is required',
-  "Email": string(200),
-  "Phone": string(50),
-  "AccountTier": enumeration(Support.AccountTier)
+@Position(100, 100)
+CREATE PERSISTENT ENTITY Support."Customer" (
+  "Name": String(200) NOT NULL ERROR 'Name is required',
+  "Email": String(200),
+  "Phone": String(50),
+  "AccountTier": Enumeration(Support.AccountTier)
 );
 
-@position(350, 100)
-create persistent entity Support."Order" (
-  "OrderNumber": string(50) not null error 'Order number is required',
-  "OrderDate": datetime,
-  "TotalAmount": decimal,
-  "status": enumeration(Support.OrderStatus)
+@Position(350, 100)
+CREATE PERSISTENT ENTITY Support."Order" (
+  "OrderNumber": String(50) NOT NULL ERROR 'Order number is required',
+  "OrderDate": DateTime,
+  "TotalAmount": Decimal,
+  "Status": Enumeration(Support.OrderStatus)
 );
 
-@position(600, 100)
-create persistent entity Support."SupportTicket" (
-  "Subject": string(200),
-  "description": string(unlimited),
-  "Priority": enumeration(Support.TicketPriority),
-  "Resolution": string(unlimited),
-  "IsResolved": boolean default false
+@Position(600, 100)
+CREATE PERSISTENT ENTITY Support."SupportTicket" (
+  "Subject": String(200),
+  "Description": String(unlimited),
+  "Priority": Enumeration(Support.TicketPriority),
+  "Resolution": String(unlimited),
+  "IsResolved": Boolean DEFAULT false
 );
 
-create association Support."Order_Customer"
-  from Support."Order" to Support."Customer";
+CREATE ASSOCIATION Support."Order_Customer"
+  FROM Support."Order" TO Support."Customer";
 
-create association Support."SupportTicket_Customer"
-  from Support."SupportTicket" to Support."Customer";
+CREATE ASSOCIATION Support."SupportTicket_Customer"
+  FROM Support."SupportTicket" TO Support."Customer";
 
-create association Support."SupportTicket_Order"
-  from Support."SupportTicket" to Support."Order";
+CREATE ASSOCIATION Support."SupportTicket_Order"
+  FROM Support."SupportTicket" TO Support."Order";
 
-create enumeration Support."OrderStatus" (
+CREATE ENUMERATION Support."OrderStatus" (
   Pending = 'Pending',
   Shipped = 'Shipped',
   Delivered = 'Delivered',
   Returned = 'Returned'
 );
 
-create enumeration Support."TicketPriority" (
+CREATE ENUMERATION Support."TicketPriority" (
   Low = 'Low',
   Medium = 'Medium',
   High = 'High',
   Urgent = 'Urgent'
 );
 
-create enumeration Support."AccountTier" (
+CREATE ENUMERATION Support."AccountTier" (
   Standard = 'Standard',
   Premium = 'Premium',
   Enterprise = 'Enterprise'
@@ -897,83 +944,83 @@ create enumeration Support."AccountTier" (
 
 #### Step 2: Tool Microflows
 
-Tool microflows take the **Mendix data types that the LLM should fill in** as input parameters and must return a `string` (which becomes the tool result shown to the model). The Agent Editor infers the tool's JSON schema from the microflow signature — so parameter names and types are what the LLM sees.
+Tool microflows take the **Mendix data types that the LLM should fill in** as input parameters and must return a `String` (which becomes the tool result shown to the model). The Agent Editor infers the tool's JSON schema from the microflow signature — so parameter names and types are what the LLM sees.
 
 ```sql
 /**
  * Tool microflow: Look up a customer by email address.
  * The Agent Editor will expose this as a tool with input parameter "Email".
  */
-create microflow Support."Tool_LookupCustomer" (
-  $Email: string
+CREATE MICROFLOW Support."Tool_LookupCustomer" (
+  $Email: String
 )
-returns string
-begin
-  retrieve $Customer from database Support.Customer
-    where Email = $Email limit 1;
+RETURNS String
+BEGIN
+  RETRIEVE $Customer FROM DATABASE Support.Customer
+    WHERE Email = $Email LIMIT 1;
 
-  if $Customer != empty then
-    return 'Customer: ' + $Customer/Name
+  IF $Customer != empty THEN
+    RETURN 'Customer: ' + $Customer/Name
       + ', Tier: ' + getKey($Customer/AccountTier)
       + ', Phone: ' + $Customer/Phone;
-  else
-    return 'No customer found with email: ' + $Email;
-  end if;
-end;
+  ELSE
+    RETURN 'No customer found with email: ' + $Email;
+  END IF;
+END;
 /
 
 /**
  * Tool microflow: Look up recent orders for a customer by name.
  */
-create microflow Support."Tool_GetOrders" (
-  $CustomerName: string
+CREATE MICROFLOW Support."Tool_GetOrders" (
+  $CustomerName: String
 )
-returns string
-begin
-  retrieve $Customer from database Support.Customer
-    where Name = $CustomerName limit 1;
+RETURNS String
+BEGIN
+  RETRIEVE $Customer FROM DATABASE Support.Customer
+    WHERE Name = $CustomerName LIMIT 1;
 
-  if $Customer = empty then
-    return 'Customer not found: ' + $CustomerName;
-  end if;
+  IF $Customer = empty THEN
+    RETURN 'Customer not found: ' + $CustomerName;
+  END IF;
 
-  retrieve $OrderList from database Support.Order
-    where Support.Order_Customer = $Customer;
+  RETRIEVE $OrderList FROM DATABASE Support.Order
+    WHERE Support.Order_Customer = $Customer;
 
-  declare $Result string = '';
-  loop $Order in $OrderList
-  begin
-    set $Result = $Result + 'Order ' + $Order/OrderNumber
+  DECLARE $Result String = '';
+  LOOP $Order IN $OrderList
+  BEGIN
+    SET $Result = $Result + 'Order ' + $Order/OrderNumber
       + ' (' + formatDateTime($Order/OrderDate, 'yyyy-MM-dd') + ')'
       + ' - ' + formatDecimal($Order/TotalAmount, 2) + ' EUR'
-      + ' - Status: ' + getKey($Order/status) + '\n';
-  end loop;
+      + ' - Status: ' + getKey($Order/Status) + '\n';
+  END LOOP;
 
-  return if $Result = '' then 'No orders found' else $Result;
-end;
+  RETURN if $Result = '' then 'No orders found' else $Result;
+END;
 /
 
 /**
  * Tool microflow: Create a support ticket.
  * Multiple primitive parameters become structured input for the tool.
  */
-create microflow Support."Tool_CreateTicket" (
-  $Subject: string,
-  $description: string,
-  $Priority: enum Support.TicketPriority
+CREATE MICROFLOW Support."Tool_CreateTicket" (
+  $Subject: String,
+  $Description: String,
+  $Priority: ENUM Support.TicketPriority
 )
-returns string
-begin
-  $Ticket = create Support.SupportTicket (
+RETURNS String
+BEGIN
+  $Ticket = CREATE Support.SupportTicket (
     Subject = $Subject,
-    description = $description,
+    Description = $Description,
     Priority = $Priority,
     IsResolved = false
   );
-  commit $Ticket;
+  COMMIT $Ticket;
 
-  return 'Ticket created (ID: ' + toString($Ticket/System.id) + ').';
-end;
+  RETURN 'Ticket created (ID: ' + toString($Ticket/System.id) + ').';
+END;
 /
 ```
 
@@ -983,44 +1030,44 @@ Tools, knowledge bases, and MCP servers are declared in the **agent document its
 
 ```sql
 -- The agent definition — stored as a CustomBlobDocument in the project
-create agent Support."CustomerSupportAgent" (
-  UsageType: Conversational,
-  description: 'Customer support agent with lookup and ticketing tools',
+CREATE AGENT Support."CustomerSupportAgent" (
+  UsageType: Chat,
+  Description: 'Customer support agent with lookup and ticketing tools',
   SystemPrompt: 'You are a helpful customer support agent for an e-commerce company.
 
 Your capabilities:
 - Look up customer information by email
-- check order history and shipment status
-- create support tickets for unresolved issues
+- Check order history and shipment status
+- Create support tickets for unresolved issues
 
 Guidelines:
 - Always verify the customer identity before sharing order details
-- for Premium and Enterprise customers, prioritize their requests
-- if you cannot resolve an issue, create a support ticket
+- For Premium and Enterprise customers, prioritize their requests
+- If you cannot resolve an issue, create a support ticket
 - Be empathetic and professional in your responses'
 )
 {
-  tool LookupCustomer {
-    microflow: Support.Tool_LookupCustomer,
-    description: 'Look up a customer by their email address',
-    access: VisibleForUser
+  TOOL LookupCustomer {
+    Microflow: Support.Tool_LookupCustomer,
+    Description: 'Look up a customer by their email address',
+    Access: VisibleForUser
   }
 
-  tool GetOrders {
-    microflow: Support.Tool_GetOrders,
-    description: 'Get recent orders for a customer by name',
-    access: VisibleForUser
+  TOOL GetOrders {
+    Microflow: Support.Tool_GetOrders,
+    Description: 'Get recent orders for a customer by name',
+    Access: VisibleForUser
   }
 
-  tool CreateTicket {
-    microflow: Support.Tool_CreateTicket,
-    description: 'Create a new support ticket with the given subject, description, and priority',
-    access: UserConfirmationRequired
+  TOOL CreateTicket {
+    Microflow: Support.Tool_CreateTicket,
+    Description: 'Create a new support ticket with the given subject, description, and priority',
+    Access: UserConfirmationRequired
   }
 };
 ```
 
-The `access` property maps to `GenAICommons.ENUM_UserAccessApproval`:
+The `Access` property maps to `GenAICommons.ENUM_UserAccessApproval`:
 - `HiddenForUser` — tool executes silently
 - `VisibleForUser` — tool call is shown in the chat UI but executes automatically
 - `UserConfirmationRequired` — tool call is shown and user must approve before execution
@@ -1037,86 +1084,86 @@ With tools declared on the agent, the action microflow becomes a simple two-step
  * @param $ChatContext The conversation context from the chat widget
  * @returns Boolean indicating success
  */
-create microflow Support."Chat_CustomerSupport" (
+CREATE MICROFLOW Support."Chat_CustomerSupport" (
   $ChatContext: ConversationalUI.ChatContext
 )
-returns boolean
-begin
+RETURNS Boolean
+BEGIN
   -- 1. Default Preprocessing: extract user message, build Request with history
-  $request = call microflow ConversationalUI.ChatContext_Preprocessing(
+  $Request = CALL MICROFLOW ConversationalUI.ChatContext_Preprocessing(
     ChatContext = $ChatContext
-  ) on error rollback;
+  ) ON ERROR ROLLBACK;
 
-  if $request = empty then
-    return false;
-  end if;
+  IF $Request = empty THEN
+    RETURN false;
+  END IF;
 
   -- 2. Retrieve the agent (created automatically from the agent document
   --    when ASU_AgentEditor runs at startup)
-  retrieve $agent from database AgentCommons.Agent
-    where _QualifiedName = 'Support.CustomerSupportAgent' limit 1;
+  RETRIEVE $Agent FROM DATABASE AgentCommons.Agent
+    WHERE _QualifiedName = 'Support.CustomerSupportAgent' LIMIT 1;
 
   -- 3. Call Agent With History — single activity that:
   --    - Selects the in-use version + its deployed model
   --    - Wires in the agent's tools, knowledge bases, MCP servers
   --    - Calls Chat Completions
   --    - Handles tool-call round-trips
-  call agent with HISTORY $agent request $request into $response
-    on error rollback;
+  CALL AGENT WITH HISTORY $Agent REQUEST $Request INTO $Response
+    ON ERROR ROLLBACK;
 
   -- 4. Update the chat UI with the response (same as any ConversationalUI flow)
-  if $response != empty and $response/GenAICommons.Response_Message != empty then
-    $message = call microflow ConversationalUI.ChatContext_UpdateAssistantResponse(
+  IF $Response != empty AND $Response/GenAICommons.Response_Message != empty THEN
+    $Message = CALL MICROFLOW ConversationalUI.ChatContext_UpdateAssistantResponse(
       ChatContext = $ChatContext,
       MessageStatus = ConversationalUI.ENUM_MessageStatus.Success,
-      response = $response
-    ) on error rollback;
-    return true;
-  else
-    return false;
-  end if;
-end;
+      Response = $Response
+    ) ON ERROR ROLLBACK;
+    RETURN true;
+  ELSE
+    RETURN false;
+  END IF;
+END;
 /
 ```
 
 #### Step 5: Page with "Start Chat" Button
 
-The chat page uses `New Chat for agent` to create a `ChatContext` pre-configured with the agent's model, system prompt, and action microflow. This replaces the manual ProviderConfig wiring from the earlier draft.
+The chat page uses `New Chat for Agent` to create a `ChatContext` pre-configured with the agent's model, system prompt, and action microflow. This replaces the manual ProviderConfig wiring from the earlier draft.
 
 ```sql
 /**
  * Microflow that opens a support chat. Called from a "Start Chat" button.
  * Uses "New Chat for Agent" to create a ChatContext configured with this agent.
  */
-create microflow Support."ACT_StartSupportChat" ()
-begin
-  retrieve $agent from database AgentCommons.Agent
-    where _QualifiedName = 'Support.CustomerSupportAgent' limit 1;
+CREATE MICROFLOW Support."ACT_StartSupportChat" ()
+BEGIN
+  RETRIEVE $Agent FROM DATABASE AgentCommons.Agent
+    WHERE _QualifiedName = 'Support.CustomerSupportAgent' LIMIT 1;
 
-  NEW CHAT for agent $agent
-    action microflow Support.Chat_CustomerSupport
-    into $ChatContext
-    on error rollback;
+  NEW CHAT FOR AGENT $Agent
+    ACTION MICROFLOW Support.Chat_CustomerSupport
+    INTO $ChatContext
+    ON ERROR ROLLBACK;
 
-  show page Support.SupportChat($ChatContext = $ChatContext);
-end;
+  SHOW PAGE Support.SupportChat($ChatContext = $ChatContext);
+END;
 /
 
 /**
  * Customer support chat page.
  * Data source is the ChatContext passed from ACT_StartSupportChat.
  */
-create page Support."SupportChat" (
-  title: 'Customer Support',
-  layout: Atlas_Core.Atlas_Default
+CREATE PAGE Support."SupportChat" (
+  Title: 'Customer Support',
+  Layout: Atlas_Core.Atlas_Default
 ) {
-  header h1 {
-    dynamictext title (caption: 'AI Customer Support')
+  HEADER h1 {
+    DYNAMICTEXT title (Caption: 'AI Customer Support')
   }
-  dataview chatView (datasource: context ConversationalUI.ChatContext) {
+  DATAVIEW chatView (DataSource: CONTEXT ConversationalUI.ChatContext) {
     -- The ConversationalUI chat snippet renders the conversation,
     -- send box, tool call approvals, and message history
-    snippetcall chatWidget (snippet: ConversationalUI.Snippet_Output_WithHistory)
+    SNIPPETCALL chatWidget (Snippet: ConversationalUI.Snippet_Output_WithHistory)
   }
 };
 /
@@ -1126,27 +1173,27 @@ create page Support."SupportChat" (
 
 ```sql
 -- Module roles
-create module role Support."user";
-create module role Support."Admin";
+CREATE MODULE ROLE Support."User";
+CREATE MODULE ROLE Support."Admin";
 
 -- Entity access
-grant Support.User on Support.Customer (read *);
-grant Support.User on Support.Order (read *);
-grant Support.User on Support.SupportTicket (create, read *, write *);
-grant Support.Admin on Support.Customer (create, delete, read *, write *);
-grant Support.Admin on Support.Order (create, delete, read *, write *);
-grant Support.Admin on Support.SupportTicket (create, delete, read *, write *);
+GRANT Support.User ON Support.Customer (READ *);
+GRANT Support.User ON Support.Order (READ *);
+GRANT Support.User ON Support.SupportTicket (CREATE, READ *, WRITE *);
+GRANT Support.Admin ON Support.Customer (CREATE, DELETE, READ *, WRITE *);
+GRANT Support.Admin ON Support.Order (CREATE, DELETE, READ *, WRITE *);
+GRANT Support.Admin ON Support.SupportTicket (CREATE, DELETE, READ *, WRITE *);
 
 -- Microflow access
-grant execute on microflow Support.ACT_StartSupportChat to Support.User;
-grant execute on microflow Support.Chat_CustomerSupport to Support.User;
+GRANT EXECUTE ON MICROFLOW Support.ACT_StartSupportChat TO Support.User;
+GRANT EXECUTE ON MICROFLOW Support.Chat_CustomerSupport TO Support.User;
 -- Tool microflows must be callable because the agent invokes them
-grant execute on microflow Support.Tool_LookupCustomer to Support.User;
-grant execute on microflow Support.Tool_GetOrders to Support.User;
-grant execute on microflow Support.Tool_CreateTicket to Support.User;
+GRANT EXECUTE ON MICROFLOW Support.Tool_LookupCustomer TO Support.User;
+GRANT EXECUTE ON MICROFLOW Support.Tool_GetOrders TO Support.User;
+GRANT EXECUTE ON MICROFLOW Support.Tool_CreateTicket TO Support.User;
 
 -- Page access
-grant view on page Support.SupportChat to Support.User;
+GRANT VIEW ON PAGE Support.SupportChat TO Support.User;
 ```
 
 ---
@@ -1158,14 +1205,14 @@ An agent that connects to external MCP servers to access tools like web search, 
 #### Step 1: Domain Model
 
 ```sql
-create persistent entity Research."ResearchProject" (
-  "title": string(200),
-  "Objective": string(unlimited),
-  "status": enumeration(Research.ProjectStatus),
-  "Summary": string(unlimited)
+CREATE PERSISTENT ENTITY Research."ResearchProject" (
+  "Title": String(200),
+  "Objective": String(unlimited),
+  "Status": Enumeration(Research.ProjectStatus),
+  "Summary": String(unlimited)
 );
 
-create enumeration Research."ProjectStatus" (
+CREATE ENUMERATION Research."ProjectStatus" (
   InProgress = 'In Progress',
   Completed = 'Completed',
   OnHold = 'On Hold'
@@ -1174,24 +1221,24 @@ create enumeration Research."ProjectStatus" (
 
 #### Step 2: Credentials Microflow
 
-Before defining the consumed MCP service, create a microflow that returns the HTTP headers needed to authenticate to the server. The microflow must take no parameters and return `list<System.HttpHeader>`.
+Before defining the consumed MCP service, create a microflow that returns the HTTP headers needed to authenticate to the server. The microflow must take no parameters and return `List<System.HttpHeader>`.
 
 ```sql
 /**
  * Returns HTTP headers used to authenticate to the research MCP server.
  * Referenced from the ConsumedMCPService document.
  */
-create microflow Research."MCP_GetCredentials" ()
-returns list of System.HttpHeader
-begin
-  declare $headers list of System.HttpHeader = empty;
-  $AuthHeader = create System.HttpHeader (
-    key = 'Authorization',
-    value = 'Bearer ' + @Research.ResearchMCPToken
+CREATE MICROFLOW Research."MCP_GetCredentials" ()
+RETURNS List of System.HttpHeader
+BEGIN
+  DECLARE $Headers List of System.HttpHeader = empty;
+  $AuthHeader = CREATE System.HttpHeader (
+    Key = 'Authorization',
+    Value = 'Bearer ' + @Research.ResearchMCPToken
   );
-  set $headers = $headers + $AuthHeader;
-  return $headers;
-end;
+  SET $Headers = $Headers + $AuthHeader;
+  RETURN $Headers;
+END;
 /
 ```
 
@@ -1201,7 +1248,7 @@ The ConsumedMCPService is a model document (like the agent itself), not a runtim
 
 ```sql
 -- Proposed (future extension): declare a consumed MCP service as a document
-create consumed mcp service Research."ResearchTools" (
+CREATE CONSUMED MCP SERVICE Research."ResearchTools" (
   Endpoint: 'https://mcp.example.com/research',
   ProtocolVersion: v2025_03_26,
   GetCredentialsMicroflow: Research.MCP_GetCredentials,
@@ -1216,25 +1263,25 @@ At runtime, `ASU_AgentEditor` syncs this document into a `MCPClient.ConsumedMCPS
 The agent references the consumed MCP service by qualified name. At runtime, "Call Agent" automatically adds all (enabled) tools from the attached MCP server to the request.
 
 ```sql
-create agent Research."ResearchAssistant" (
-  UsageType: Conversational,
-  description: 'Research assistant with web search and document analysis via MCP',
-  entity: Research.ResearchProject,
-  variables: ("title": EntityAttribute, "Objective": EntityAttribute),
+CREATE AGENT Research."ResearchAssistant" (
+  UsageType: Chat,
+  Description: 'Research assistant with web search and document analysis via MCP',
+  Entity: Research.ResearchProject,
+  Variables: ("Title": EntityAttribute, "Objective": EntityAttribute),
   SystemPrompt: 'You are a research assistant helping with project: {{Title}}.
 
 Objective: {{Objective}}
 
-use the available tools to:
-1. search the web for relevant information
-2. read and analyze documents
+Use the available tools to:
+1. Search the web for relevant information
+2. Read and analyze documents
 3. Summarize findings
 
 Always cite your sources. Present findings in a structured format.'
 )
 {
-  mcp service Research.ResearchTools {
-    access: VisibleForUser
+  CONSUMED MCP SERVICE Research.ResearchTools {
+    Access: VisibleForUser
   }
 };
 ```
@@ -1249,43 +1296,43 @@ Because tools and MCP services are declared on the agent document, the action mi
  * Because MCP services are attached to the agent document, no MCP-specific
  * code is needed here — "Call Agent" handles it.
  */
-create microflow Research."Chat_Research" (
+CREATE MICROFLOW Research."Chat_Research" (
   $ChatContext: ConversationalUI.ChatContext
 )
-returns boolean
-begin
-  $request = call microflow ConversationalUI.ChatContext_Preprocessing(
+RETURNS Boolean
+BEGIN
+  $Request = CALL MICROFLOW ConversationalUI.ChatContext_Preprocessing(
     ChatContext = $ChatContext
-  ) on error rollback;
+  ) ON ERROR ROLLBACK;
 
-  if $request = empty then
-    return false;
-  end if;
+  IF $Request = empty THEN
+    RETURN false;
+  END IF;
 
-  retrieve $agent from database AgentCommons.Agent
-    where _QualifiedName = 'Research.ResearchAssistant' limit 1;
+  RETRIEVE $Agent FROM DATABASE AgentCommons.Agent
+    WHERE _QualifiedName = 'Research.ResearchAssistant' LIMIT 1;
 
   -- Retrieve the context object passed from the page (ResearchProject).
   -- Variables "Title" and "Objective" are replaced from this object's
   -- attributes by Call Agent automatically.
-  retrieve $ProjectList from $ChatContext/ConversationalUI.ChatContext_Owner
+  RETRIEVE $ProjectList FROM $ChatContext/ConversationalUI.ChatContext_Owner
     /System.User; -- simplified; real apps pass project via extension entity
-  declare $project Research.ResearchProject;
+  DECLARE $Project Research.ResearchProject;
 
-  call agent with HISTORY $agent request $request context $project into $response
-    on error rollback;
+  CALL AGENT WITH HISTORY $Agent REQUEST $Request CONTEXT $Project INTO $Response
+    ON ERROR ROLLBACK;
 
-  if $response != empty and $response/GenAICommons.Response_Message != empty then
-    call microflow ConversationalUI.ChatContext_UpdateAssistantResponse(
+  IF $Response != empty AND $Response/GenAICommons.Response_Message != empty THEN
+    CALL MICROFLOW ConversationalUI.ChatContext_UpdateAssistantResponse(
       ChatContext = $ChatContext,
       MessageStatus = ConversationalUI.ENUM_MessageStatus.Success,
-      response = $response
-    ) on error rollback;
-    return true;
-  else
-    return false;
-  end if;
-end;
+      Response = $Response
+    ) ON ERROR ROLLBACK;
+    RETURN true;
+  ELSE
+    RETURN false;
+  END IF;
+END;
 /
 ```
 
@@ -1293,34 +1340,34 @@ end;
 
 ### Example 3: Single-Call Agent for Data Processing
 
-Not all agents need a chat interface. A `task` (single-call) agent processes one request and returns a result — useful for batch operations, background processing, and microflow-embedded AI. The "Call Agent Without History" activity handles everything in one step.
+Not all agents need a chat interface. A `Task` (single-call) agent processes one request and returns a result — useful for batch operations, background processing, and microflow-embedded AI. The "Call Agent Without History" activity handles everything in one step.
 
 #### Step 1: Domain Model
 
 ```sql
-@position(100, 100)
-create persistent entity Reviews."ProductReview" (
-  "ProductName": string(200),
-  "ReviewText": string(unlimited),
-  "Sentiment": string(50),
-  "KeyThemes": string(unlimited),
-  "IsProcessed": boolean default false
+@Position(100, 100)
+CREATE PERSISTENT ENTITY Reviews."ProductReview" (
+  "ProductName": String(200),
+  "ReviewText": String(unlimited),
+  "Sentiment": String(50),
+  "KeyThemes": String(unlimited),
+  "IsProcessed": Boolean DEFAULT false
 );
 ```
 
 #### Step 2: Agent Document
 
 ```sql
-create agent Reviews."SentimentAnalyzer" (
-  UsageType: task,
-  description: 'Single-call agent that extracts sentiment and themes from a product review',
-  entity: Reviews.ProductReview,
-  variables: ("ProductName": EntityAttribute, "ReviewText": EntityAttribute),
+CREATE AGENT Reviews."SentimentAnalyzer" (
+  UsageType: Task,
+  Description: 'Single-call agent that extracts sentiment and themes from a product review',
+  Entity: Reviews.ProductReview,
+  Variables: ("ProductName": EntityAttribute, "ReviewText": EntityAttribute),
   SystemPrompt: 'Analyze the following product review for {{ProductName}}.
 
 Extract:
 1. Overall sentiment (Positive, Negative, Neutral, Mixed)
-2. key themes mentioned (comma-separated)
+2. Key themes mentioned (comma-separated)
 
 Respond in this exact format:
 Sentiment: <sentiment>
@@ -1331,7 +1378,7 @@ Themes: <theme1>, <theme2>, <theme3>',
 
 #### Step 3: Processing Microflow — One Activity
 
-The context object (`$Review`) carries the attribute values that replace `{{ProductName}}` and `{{ReviewText}}` in the prompts. "Call Agent Without History" resolves everything and returns the `response` in a single activity.
+The context object (`$Review`) carries the attribute values that replace `{{ProductName}}` and `{{ReviewText}}` in the prompts. "Call Agent Without History" resolves everything and returns the `Response` in a single activity.
 
 ```sql
 /**
@@ -1340,48 +1387,48 @@ The context object (`$Review`) carries the attribute values that replace `{{Prod
  *
  * @param $Review The review to analyze — its attributes replace prompt variables
  */
-create microflow Reviews."ProcessReview" (
+CREATE MICROFLOW Reviews."ProcessReview" (
   $Review: Reviews.ProductReview
 )
-begin
-  retrieve $agent from database AgentCommons.Agent
-    where _QualifiedName = 'Reviews.SentimentAnalyzer' limit 1;
+BEGIN
+  RETRIEVE $Agent FROM DATABASE AgentCommons.Agent
+    WHERE _QualifiedName = 'Reviews.SentimentAnalyzer' LIMIT 1;
 
   -- One activity: resolve version, deployed model, prompts, and call the LLM
-  call agent without HISTORY $agent context $Review into $response
-    on error rollback;
+  CALL AGENT WITHOUT HISTORY $Agent CONTEXT $Review INTO $Response
+    ON ERROR ROLLBACK;
 
-  if $response = empty or $response/GenAICommons.Response_Message = empty then
-    log warning node 'Reviews' 'Sentiment analysis failed for review: '
+  IF $Response = empty OR $Response/GenAICommons.Response_Message = empty THEN
+    LOG WARNING NODE 'Reviews' 'Sentiment analysis failed for review: '
       + toString($Review/System.id);
-    return;
-  end if;
+    RETURN;
+  END IF;
 
-  declare $ResponseText string = call microflow
-    GenAICommons.Response_GetModelResponseString(response = $response);
+  DECLARE $ResponseText String = CALL MICROFLOW
+    GenAICommons.Response_GetModelResponseString(Response = $Response);
 
-  change $Review (
+  CHANGE $Review (
     Sentiment = $ResponseText,
     IsProcessed = true
   );
-  commit $Review;
-end;
+  COMMIT $Review;
+END;
 /
 
 /**
  * Batch process all unprocessed reviews.
  */
-create microflow Reviews."ProcessAllReviews" (
-  $ReviewList: list of Reviews.ProductReview
+CREATE MICROFLOW Reviews."ProcessAllReviews" (
+  $ReviewList: List of Reviews.ProductReview
 )
-begin
-  loop $Review in $ReviewList
-  begin
-    if $Review/IsProcessed = false then
-      call microflow Reviews.ProcessReview(Review = $Review) on error continue;
-    end if;
-  end loop;
-end;
+BEGIN
+  LOOP $Review IN $ReviewList
+  BEGIN
+    IF $Review/IsProcessed = false THEN
+      CALL MICROFLOW Reviews.ProcessReview(Review = $Review) ON ERROR CONTINUE;
+    END IF;
+  END LOOP;
+END;
 /
 ```
 
@@ -1398,67 +1445,67 @@ A finance agent where sensitive tool calls (approving expenses) require user con
  * Read-only tool: Look up pending expense reports.
  * Safe for auto-execution (VisibleForUser).
  */
-create microflow Finance."Tool_LookupExpenses" (
-  $Department: string
+CREATE MICROFLOW Finance."Tool_LookupExpenses" (
+  $Department: String
 )
-returns string
-begin
-  retrieve $ExpenseList from database Finance.ExpenseReport
-    where Department = $Department and status = Finance.ExpenseStatus.Pending;
+RETURNS String
+BEGIN
+  RETRIEVE $ExpenseList FROM DATABASE Finance.ExpenseReport
+    WHERE Department = $Department AND Status = Finance.ExpenseStatus.Pending;
 
-  declare $Result string = '';
-  loop $Expense in $ExpenseList
-  begin
-    set $Result = $Result + 'Expense #' + $Expense/ReportNumber
+  DECLARE $Result String = '';
+  LOOP $Expense IN $ExpenseList
+  BEGIN
+    SET $Result = $Result + 'Expense #' + $Expense/ReportNumber
       + ' by ' + $Expense/SubmittedBy
       + ' - ' + formatDecimal($Expense/Amount, 2) + ' EUR: '
-      + $Expense/description + '\n';
-  end loop;
+      + $Expense/Description + '\n';
+  END LOOP;
 
-  return if $Result = '' then 'No pending expenses' else $Result;
-end;
+  RETURN if $Result = '' then 'No pending expenses' else $Result;
+END;
 /
 
 /**
  * Write tool: Approve an expense report.
  * Requires user confirmation before execution.
  */
-create microflow Finance."Tool_ApproveExpense" (
-  $ReportNumber: string,
-  $ApprovalNote: string
+CREATE MICROFLOW Finance."Tool_ApproveExpense" (
+  $ReportNumber: String,
+  $ApprovalNote: String
 )
-returns string
-begin
-  retrieve $Expense from database Finance.ExpenseReport
-    where ReportNumber = $ReportNumber limit 1;
+RETURNS String
+BEGIN
+  RETRIEVE $Expense FROM DATABASE Finance.ExpenseReport
+    WHERE ReportNumber = $ReportNumber LIMIT 1;
 
-  if $Expense = empty then
-    return 'Expense report not found: ' + $ReportNumber;
-  end if;
+  IF $Expense = empty THEN
+    RETURN 'Expense report not found: ' + $ReportNumber;
+  END IF;
 
-  change $Expense (
-    status = Finance.ExpenseStatus.Approved,
+  CHANGE $Expense (
+    Status = Finance.ExpenseStatus.Approved,
     ApprovalNote = $ApprovalNote,
     ApprovedDate = [%CurrentDateTime%]
   );
-  commit $Expense;
+  COMMIT $Expense;
 
-  return 'Expense ' + $ReportNumber + ' approved.';
-end;
+  RETURN 'Expense ' + $ReportNumber + ' approved.';
+END;
 /
 ```
 
 #### Step 2: Agent with Mixed Access Levels
 
-The `access` modifier per tool controls what ConversationalUI does at runtime:
+The `ACCESS` modifier per tool controls what ConversationalUI does at runtime:
 - `VisibleForUser` — tool call shown in chat, executes automatically
 - `UserConfirmationRequired` — chat shows an approval dialog, user clicks Approve/Decline
 - `HiddenForUser` — executes silently (use for internal/lookup tools)
 
 ```sql
-create agent Finance."ExpenseApprovalAgent" (
-  UsageType: Conversational,
-  description: 'Review and approve expense reports with user confirmation for writes',
+CREATE AGENT Finance."ExpenseApprovalAgent" (
+  UsageType: Chat,
+  Description: 'Review and approve expense reports with user confirmation for writes',
   SystemPrompt: 'You are a financial assistant that helps managers review and approve expense reports.
 
 You have access to tools that can:
@@ -1469,53 +1516,53 @@ IMPORTANT: Always show the expense details before recommending approval.
 Never approve expenses that exceed typical department limits without explicit user instruction.'
 )
 {
-  tool LookupExpenses {
-    microflow: Finance.Tool_LookupExpenses,
-    description: 'List pending expense reports for a department',
-    access: VisibleForUser
+  TOOL LookupExpenses {
+    Microflow: Finance.Tool_LookupExpenses,
+    Description: 'List pending expense reports for a department',
+    Access: VisibleForUser
   }
 
-  tool ApproveExpense {
-    microflow: Finance.Tool_ApproveExpense,
-    description: 'Approve a specific expense report by report number',
-    access: UserConfirmationRequired
+  TOOL ApproveExpense {
+    Microflow: Finance.Tool_ApproveExpense,
+    Description: 'Approve a specific expense report by report number',
+    Access: UserConfirmationRequired
   }
 };
 ```
 
 #### Step 3: Action Microflow — Unchanged
 
-Because tool approval is declared on the agent, the action microflow is identical to Example 1 — `call agent with History` handles tool-call round-trips and cooperates with ConversationalUI's approval widget automatically.
+Because tool approval is declared on the agent, the action microflow is identical to Example 1 — `Call Agent With History` handles tool-call round-trips and cooperates with ConversationalUI's approval widget automatically.
 
 ```sql
-create microflow Finance."Chat_ExpenseApproval" (
+CREATE MICROFLOW Finance."Chat_ExpenseApproval" (
   $ChatContext: ConversationalUI.ChatContext
 )
-returns boolean
-begin
-  $request = call microflow ConversationalUI.ChatContext_Preprocessing(
+RETURNS Boolean
+BEGIN
+  $Request = CALL MICROFLOW ConversationalUI.ChatContext_Preprocessing(
     ChatContext = $ChatContext
-  ) on error rollback;
+  ) ON ERROR ROLLBACK;
 
-  if $request = empty then return false; end if;
+  IF $Request = empty THEN RETURN false; END IF;
 
-  retrieve $agent from database AgentCommons.Agent
-    where _QualifiedName = 'Finance.ExpenseApprovalAgent' limit 1;
+  RETRIEVE $Agent FROM DATABASE AgentCommons.Agent
+    WHERE _QualifiedName = 'Finance.ExpenseApprovalAgent' LIMIT 1;
 
-  call agent with HISTORY $agent request $request into $response
-    on error rollback;
+  CALL AGENT WITH HISTORY $Agent REQUEST $Request INTO $Response
+    ON ERROR ROLLBACK;
 
-  if $response != empty and $response/GenAICommons.Response_Message != empty then
-    call microflow ConversationalUI.ChatContext_UpdateAssistantResponse(
+  IF $Response != empty AND $Response/GenAICommons.Response_Message != empty THEN
+    CALL MICROFLOW ConversationalUI.ChatContext_UpdateAssistantResponse(
       ChatContext = $ChatContext,
       MessageStatus = ConversationalUI.ENUM_MessageStatus.Success,
-      response = $response
-    ) on error rollback;
-    return true;
-  else
-    return false;
-  end if;
-end;
+      Response = $Response
+    ) ON ERROR ROLLBACK;
+    RETURN true;
+  ELSE
+    RETURN false;
+  END IF;
+END;
 /
 ```
 
@@ -1531,7 +1578,7 @@ A knowledge base is a separate model document that references a Mendix Cloud Gen
 
 ```sql
 -- Proposed (future extension): declare a knowledge base as a document
-create knowledge base HelpDesk."ProductDocsKB" (
+CREATE KNOWLEDGE BASE HelpDesk."ProductDocsKB" (
   DisplayName: 'Product Documentation',
   Architecture: 'MxCloud',
   KeyConstant: HelpDesk.ProductDocsKBKey     -- String constant with the KB resource key
@@ -1541,20 +1588,20 @@ create knowledge base HelpDesk."ProductDocsKB" (
 #### Step 2: Agent with Knowledge Base Attached
 
 ```sql
-create agent HelpDesk."ProductExpert" (
-  UsageType: Conversational,
-  description: 'Answers product questions from the documentation knowledge base',
+CREATE AGENT HelpDesk."ProductExpert" (
+  UsageType: Chat,
+  Description: 'Answers product questions from the documentation knowledge base',
   SystemPrompt: 'You are a product expert for our software platform.
 
 Answer questions using ONLY the information from the provided knowledge base context.
-if the knowledge base does not contain relevant information, say so clearly.
+If the knowledge base does not contain relevant information, say so clearly.
 Always include the source document reference in your answer.
 
 Do not make up information that is not in the context.'
 )
 {
-  knowledge base HelpDesk.ProductDocsKB {
-    collection: 'product-documentation',
+  KNOWLEDGE BASE HelpDesk.ProductDocsKB {
+    Collection: 'product-documentation',
     MaxResults: 5,
     MinSimilarity: 0.7
   }
@@ -1563,38 +1610,38 @@ Do not make up information that is not in the context.'
 
 #### Step 3: Action Microflow — Identical to the Simple Pattern
 
-Because the knowledge base is attached to the agent, RAG retrieval happens inside "Call Agent With History". Source references are automatically added to the `response/message`, and `ChatContext_UpdateAssistantResponse` already handles rendering them (it calls `Source_Create` internally).
+Because the knowledge base is attached to the agent, RAG retrieval happens inside "Call Agent With History". Source references are automatically added to the `Response/Message`, and `ChatContext_UpdateAssistantResponse` already handles rendering them (it calls `Source_Create` internally).
 
 ```sql
-create microflow HelpDesk."Chat_ProductExpert" (
+CREATE MICROFLOW HelpDesk."Chat_ProductExpert" (
   $ChatContext: ConversationalUI.ChatContext
 )
-returns boolean
-begin
-  $request = call microflow ConversationalUI.ChatContext_Preprocessing(
+RETURNS Boolean
+BEGIN
+  $Request = CALL MICROFLOW ConversationalUI.ChatContext_Preprocessing(
     ChatContext = $ChatContext
-  ) on error rollback;
+  ) ON ERROR ROLLBACK;
 
-  if $request = empty then return false; end if;
+  IF $Request = empty THEN RETURN false; END IF;
 
-  retrieve $agent from database AgentCommons.Agent
-    where _QualifiedName = 'HelpDesk.ProductExpert' limit 1;
+  RETRIEVE $Agent FROM DATABASE AgentCommons.Agent
+    WHERE _QualifiedName = 'HelpDesk.ProductExpert' LIMIT 1;
 
   -- RAG retrieval happens inside "Call Agent With History" automatically
-  call agent with HISTORY $agent request $request into $response
-    on error rollback;
+  CALL AGENT WITH HISTORY $Agent REQUEST $Request INTO $Response
+    ON ERROR ROLLBACK;
 
-  if $response != empty and $response/GenAICommons.Response_Message != empty then
-    call microflow ConversationalUI.ChatContext_UpdateAssistantResponse(
+  IF $Response != empty AND $Response/GenAICommons.Response_Message != empty THEN
+    CALL MICROFLOW ConversationalUI.ChatContext_UpdateAssistantResponse(
       ChatContext = $ChatContext,
       MessageStatus = ConversationalUI.ENUM_MessageStatus.Success,
-      response = $response
-    ) on error rollback;
-    return true;
-  else
-    return false;
-  end if;
-end;
+      Response = $Response
+    ) ON ERROR ROLLBACK;
+    RETURN true;
+  ELSE
+    RETURN false;
+  END IF;
+END;
 /
 ```
 
@@ -1604,71 +1651,71 @@ Notice that Examples 1, 2, 4, and 5 all have **the same shape** for the action m
 
 ### Example 6: Building an MCP Server in Mendix
 
-Mendix apps can also act as MCP servers, exposing their microflows as tools that external AI systems (Claude, ChatGPT, or another Mendix app) can call. This is done via the **MCPServer** marketplace module — not a custom Published REST Service. The module provides `create mcp Server` and `add tool` toolbox actions that handle the MCP protocol.
+Mendix apps can also act as MCP servers, exposing their microflows as tools that external AI systems (Claude, ChatGPT, or another Mendix app) can call. This is done via the **MCPServer** marketplace module — not a custom Published REST Service. The module provides `Create MCP Server` and `Add Tool` toolbox actions that handle the MCP protocol.
 
-Each tool microflow must accept **primitives or an `MCPServer.Tool` object** as input and return either `string` or `TextContent`. The Agent Editor / MCP Server infers the JSON schema from the signature.
+Each tool microflow must accept **primitives or an `MCPServer.Tool` object** as input and return either `String` or `TextContent`. The Agent Editor / MCP Server infers the JSON schema from the signature.
 
 ```sql
 -- Tool microflow: The MCP server will expose this as a tool named "lookup_customer"
-create microflow Support."MCP_LookupCustomer" (
-  $Email: string
+CREATE MICROFLOW Support."MCP_LookupCustomer" (
+  $Email: String
 )
-returns string
-begin
-  retrieve $Customer from database Support.Customer
-    where Email = $Email limit 1;
-  if $Customer = empty then
-    return 'No customer found';
-  end if;
-  return 'Customer: ' + $Customer/Name + ', Tier: ' + getKey($Customer/AccountTier);
-end;
+RETURNS String
+BEGIN
+  RETRIEVE $Customer FROM DATABASE Support.Customer
+    WHERE Email = $Email LIMIT 1;
+  IF $Customer = empty THEN
+    RETURN 'No customer found';
+  END IF;
+  RETURN 'Customer: ' + $Customer/Name + ', Tier: ' + getKey($Customer/AccountTier);
+END;
 /
 
-create microflow Support."MCP_GetOrderStatus" (
-  $OrderNumber: string
+CREATE MICROFLOW Support."MCP_GetOrderStatus" (
+  $OrderNumber: String
 )
-returns string
-begin
-  retrieve $Order from database Support.Order
-    where OrderNumber = $OrderNumber limit 1;
-  if $Order = empty then
-    return 'Order not found: ' + $OrderNumber;
-  end if;
-  return 'Order ' + $Order/OrderNumber + ' status: ' + getKey($Order/status);
-end;
+RETURNS String
+BEGIN
+  RETRIEVE $Order FROM DATABASE Support.Order
+    WHERE OrderNumber = $OrderNumber LIMIT 1;
+  IF $Order = empty THEN
+    RETURN 'Order not found: ' + $OrderNumber;
+  END IF;
+  RETURN 'Order ' + $Order/OrderNumber + ' status: ' + getKey($Order/Status);
+END;
 /
 
 /**
  * Set up the MCP server at startup and register the tools.
  * Register this as (part of) the after-startup microflow.
  */
-create microflow Support."ASU_SetupMCPServer" ()
-begin
+CREATE MICROFLOW Support."ASU_SetupMCPServer" ()
+BEGIN
   -- 1. Create the MCP server instance (Mendix runtime listens for MCP requests)
-  $Server = call java action MCPServer.CreateMCPServer(
+  $Server = CALL JAVA ACTION MCPServer.CreateMCPServer(
     Name = 'CustomerSupportMCP',
-    version = '1.0',
+    Version = '1.0',
     ProtocolVersion = MCPServer.ENUM_ProtocolVersion.v2025_03_26
-  ) on error rollback;
+  ) ON ERROR ROLLBACK;
 
   -- 2. Expose each tool microflow. The MCP Server module builds the JSON
   --    schema from each microflow's signature.
-  call java action MCPServer.AddTool(
+  CALL JAVA ACTION MCPServer.AddTool(
     Server = $Server,
     Name = 'lookup_customer',
-    description = 'Look up customer information by email address',
-    microflow = 'Support.MCP_LookupCustomer'
-  ) on error rollback;
+    Description = 'Look up customer information by email address',
+    Microflow = 'Support.MCP_LookupCustomer'
+  ) ON ERROR ROLLBACK;
 
-  call java action MCPServer.AddTool(
+  CALL JAVA ACTION MCPServer.AddTool(
     Server = $Server,
     Name = 'get_order_status',
-    description = 'Get the status of an order by order number',
-    microflow = 'Support.MCP_GetOrderStatus'
-  ) on error rollback;
+    Description = 'Get the status of an order by order number',
+    Microflow = 'Support.MCP_GetOrderStatus'
+  ) ON ERROR ROLLBACK;
 
-  log info node 'MCP' 'MCP server started with 2 tools';
-end;
+  LOG INFO NODE 'MCP' 'MCP server started with 2 tools';
+END;
 /
 ```
 
@@ -1688,36 +1735,36 @@ This script creates a complete AI-powered IT help desk application in a single M
 -- =============================================================
 
 -- 1. Module
-create module ITHelp;
+CREATE MODULE ITHelp;
 
 -- 2. Domain Model
-@position(100, 100)
-create persistent entity ITHelp."Ticket" (
-  "Subject": string(200) not null error 'Subject is required',
-  "description": string(unlimited),
-  "Category": enumeration(ITHelp.Category),
-  "status": enumeration(ITHelp.TicketStatus),
-  "AssignedTo": string(200),
-  "Resolution": string(unlimited)
+@Position(100, 100)
+CREATE PERSISTENT ENTITY ITHelp."Ticket" (
+  "Subject": String(200) NOT NULL ERROR 'Subject is required',
+  "Description": String(unlimited),
+  "Category": Enumeration(ITHelp.Category),
+  "Status": Enumeration(ITHelp.TicketStatus),
+  "AssignedTo": String(200),
+  "Resolution": String(unlimited)
 );
 
-@position(100, 300)
-create persistent entity ITHelp."KBArticle" (
-  "title": string(200),
-  "content": string(unlimited),
-  "Category": enumeration(ITHelp.Category),
-  "ViewCount": integer default 0
+@Position(100, 300)
+CREATE PERSISTENT ENTITY ITHelp."KBArticle" (
+  "Title": String(200),
+  "Content": String(unlimited),
+  "Category": Enumeration(ITHelp.Category),
+  "ViewCount": Integer DEFAULT 0
 );
 
-create enumeration ITHelp."Category" (
+CREATE ENUMERATION ITHelp."Category" (
   Network = 'Network',
   Hardware = 'Hardware',
   Software = 'Software',
-  access = 'Access & Permissions',
+  Access = 'Access & Permissions',
   Other = 'Other'
 );
 
-create enumeration ITHelp."TicketStatus" (
+CREATE ENUMERATION ITHelp."TicketStatus" (
   New = 'New',
   InProgress = 'In Progress',
   WaitingOnUser = 'Waiting on User',
@@ -1726,207 +1773,207 @@ create enumeration ITHelp."TicketStatus" (
 );
 
 -- 3. Model Key Constant (set via environment or Configuration_Overview page)
-create constant ITHelp."ModelKey" (
-  type: string,
+CREATE CONSTANT ITHelp."ModelKey" (
+  Type: String,
   DefaultValue: ''
 );
 
 -- 4. Tool microflows — signatures become the tool JSON schemas
-create microflow ITHelp."Tool_SearchKB" ($query: string)
-returns string
-begin
-  retrieve $Articles from database ITHelp.KBArticle
-    where contains(title, $query) or contains(content, $query);
+CREATE MICROFLOW ITHelp."Tool_SearchKB" ($Query: String)
+RETURNS String
+BEGIN
+  RETRIEVE $Articles FROM DATABASE ITHelp.KBArticle
+    WHERE contains(Title, $Query) OR contains(Content, $Query);
 
-  declare $Result string = '';
-  loop $Article in $Articles
-  begin
-    set $Result = $Result + '## ' + $Article/title + '\n'
-      + $Article/content + '\n\n';
-  end loop;
+  DECLARE $Result String = '';
+  LOOP $Article IN $Articles
+  BEGIN
+    SET $Result = $Result + '## ' + $Article/Title + '\n'
+      + $Article/Content + '\n\n';
+  END LOOP;
 
-  return if $Result = '' then 'No articles found for: ' + $query else $Result;
-end;
+  RETURN if $Result = '' then 'No articles found for: ' + $Query else $Result;
+END;
 /
 
-create microflow ITHelp."Tool_CreateTicket" (
-  $Subject: string,
-  $description: string,
-  $Category: enum ITHelp.Category
+CREATE MICROFLOW ITHelp."Tool_CreateTicket" (
+  $Subject: String,
+  $Description: String,
+  $Category: ENUM ITHelp.Category
 )
-returns string
-begin
-  $Ticket = create ITHelp.Ticket (
+RETURNS String
+BEGIN
+  $Ticket = CREATE ITHelp.Ticket (
     Subject = $Subject,
-    description = $description,
+    Description = $Description,
     Category = $Category,
-    status = ITHelp.TicketStatus.New
+    Status = ITHelp.TicketStatus.New
   );
-  commit $Ticket;
-  return 'Ticket ' + toString($Ticket/System.id) + ' created.';
-end;
+  COMMIT $Ticket;
+  RETURN 'Ticket ' + toString($Ticket/System.id) + ' created.';
+END;
 /
 
-create microflow ITHelp."Tool_GetTicketStatus" ($TicketId: string)
-returns string
-begin
-  retrieve $Ticket from database ITHelp.Ticket where System.id = $TicketId limit 1;
-  if $Ticket = empty then return 'Ticket not found'; end if;
-  return 'Status: ' + getKey($Ticket/status)
+CREATE MICROFLOW ITHelp."Tool_GetTicketStatus" ($TicketId: String)
+RETURNS String
+BEGIN
+  RETRIEVE $Ticket FROM DATABASE ITHelp.Ticket WHERE System.id = $TicketId LIMIT 1;
+  IF $Ticket = empty THEN RETURN 'Ticket not found'; END IF;
+  RETURN 'Status: ' + getKey($Ticket/Status)
     + ', Assigned to: ' + $Ticket/AssignedTo;
-end;
+END;
 /
 
 -- 5. Agent document — tools declared here, not at runtime
-create agent ITHelp."ITSupportAgent" (
-  UsageType: Conversational,
-  description: 'AI-powered first-line IT support',
+CREATE AGENT ITHelp."ITSupportAgent" (
+  UsageType: Chat,
+  Description: 'AI-powered first-line IT support',
   SystemPrompt: 'You are an IT support agent for a corporate help desk.
 
 Capabilities (use these tools):
-1. search the knowledge base for solutions to common problems
-2. create support tickets when issues need escalation
-3. check the status of existing tickets
+1. Search the knowledge base for solutions to common problems
+2. Create support tickets when issues need escalation
+3. Check the status of existing tickets
 
 Always try the knowledge base first before creating a ticket.
 Be patient and ask clarifying questions when the issue is unclear.
-for password resets and access requests, always create a ticket.'
+For password resets and access requests, always create a ticket.'
 )
 {
-  tool SearchKB {
-    microflow: ITHelp.Tool_SearchKB,
-    description: 'Search the knowledge base for articles matching a query',
-    access: VisibleForUser
+  TOOL SearchKB {
+    Microflow: ITHelp.Tool_SearchKB,
+    Description: 'Search the knowledge base for articles matching a query',
+    Access: VisibleForUser
   }
 
-  tool CreateTicket {
-    microflow: ITHelp.Tool_CreateTicket,
-    description: 'Create a new support ticket with subject, description, and category',
-    access: UserConfirmationRequired
+  TOOL CreateTicket {
+    Microflow: ITHelp.Tool_CreateTicket,
+    Description: 'Create a new support ticket with subject, description, and category',
+    Access: UserConfirmationRequired
   }
 
-  tool GetTicketStatus {
-    microflow: ITHelp.Tool_GetTicketStatus,
-    description: 'Get current status of an existing support ticket by ID',
-    access: VisibleForUser
+  TOOL GetTicketStatus {
+    Microflow: ITHelp.Tool_GetTicketStatus,
+    Description: 'Get current status of an existing support ticket by ID',
+    Access: VisibleForUser
   }
 };
 
 -- 6. Chat action microflow — uniform pattern with Call Agent
-create microflow ITHelp."Chat_ITSupport" (
+CREATE MICROFLOW ITHelp."Chat_ITSupport" (
   $ChatContext: ConversationalUI.ChatContext
 )
-returns boolean
-begin
-  $request = call microflow ConversationalUI.ChatContext_Preprocessing(
+RETURNS Boolean
+BEGIN
+  $Request = CALL MICROFLOW ConversationalUI.ChatContext_Preprocessing(
     ChatContext = $ChatContext
-  ) on error rollback;
+  ) ON ERROR ROLLBACK;
 
-  if $request = empty then return false; end if;
+  IF $Request = empty THEN RETURN false; END IF;
 
-  retrieve $agent from database AgentCommons.Agent
-    where _QualifiedName = 'ITHelp.ITSupportAgent' limit 1;
+  RETRIEVE $Agent FROM DATABASE AgentCommons.Agent
+    WHERE _QualifiedName = 'ITHelp.ITSupportAgent' LIMIT 1;
 
-  call agent with HISTORY $agent request $request into $response
-    on error rollback;
+  CALL AGENT WITH HISTORY $Agent REQUEST $Request INTO $Response
+    ON ERROR ROLLBACK;
 
-  if $response != empty and $response/GenAICommons.Response_Message != empty then
-    call microflow ConversationalUI.ChatContext_UpdateAssistantResponse(
+  IF $Response != empty AND $Response/GenAICommons.Response_Message != empty THEN
+    CALL MICROFLOW ConversationalUI.ChatContext_UpdateAssistantResponse(
       ChatContext = $ChatContext,
       MessageStatus = ConversationalUI.ENUM_MessageStatus.Success,
-      response = $response
-    ) on error rollback;
-    return true;
-  else
-    return false;
-  end if;
-end;
+      Response = $Response
+    ) ON ERROR ROLLBACK;
+    RETURN true;
+  ELSE
+    RETURN false;
+  END IF;
+END;
 /
 
 -- 7. Entry-point microflow uses "New Chat for Agent"
-create microflow ITHelp."ACT_StartHelpChat" ()
-begin
-  retrieve $agent from database AgentCommons.Agent
-    where _QualifiedName = 'ITHelp.ITSupportAgent' limit 1;
+CREATE MICROFLOW ITHelp."ACT_StartHelpChat" ()
+BEGIN
+  RETRIEVE $Agent FROM DATABASE AgentCommons.Agent
+    WHERE _QualifiedName = 'ITHelp.ITSupportAgent' LIMIT 1;
 
-  NEW CHAT for agent $agent
-    action microflow ITHelp.Chat_ITSupport
-    into $ChatContext
-    on error rollback;
+  NEW CHAT FOR AGENT $Agent
+    ACTION MICROFLOW ITHelp.Chat_ITSupport
+    INTO $ChatContext
+    ON ERROR ROLLBACK;
 
-  show page ITHelp.HelpDesk($ChatContext = $ChatContext);
-end;
+  SHOW PAGE ITHelp.HelpDesk($ChatContext = $ChatContext);
+END;
 /
 
 -- 8. Pages
-create page ITHelp."home" (
-  title: 'IT Help Desk',
-  layout: Atlas_Core.Atlas_Default
+CREATE PAGE ITHelp."Home" (
+  Title: 'IT Help Desk',
+  Layout: Atlas_Core.Atlas_Default
 ) {
-  header h1 { dynamictext t (caption: 'IT Help Desk') }
-  container c {
-    actionbutton startChat (
-      caption: 'Start Chat with IT Support',
-      action: microflow ITHelp.ACT_StartHelpChat()
+  HEADER h1 { DYNAMICTEXT t (Caption: 'IT Help Desk') }
+  CONTAINER c {
+    ACTIONBUTTON startChat (
+      Caption: 'Start Chat with IT Support',
+      Action: MICROFLOW ITHelp.ACT_StartHelpChat()
     )
   }
 };
 /
 
-create page ITHelp."HelpDesk" (
-  title: 'IT Support Chat',
-  layout: Atlas_Core.Atlas_Default
+CREATE PAGE ITHelp."HelpDesk" (
+  Title: 'IT Support Chat',
+  Layout: Atlas_Core.Atlas_Default
 ) {
-  header h1 { dynamictext t (caption: 'IT Support') }
-  dataview chatDv (datasource: context ConversationalUI.ChatContext) {
-    snippetcall chat (snippet: ConversationalUI.Snippet_Output_WithHistory)
+  HEADER h1 { DYNAMICTEXT t (Caption: 'IT Support') }
+  DATAVIEW chatDv (DataSource: CONTEXT ConversationalUI.ChatContext) {
+    SNIPPETCALL chat (Snippet: ConversationalUI.Snippet_Output_WithHistory)
   }
 };
 /
 
-create page ITHelp."TicketOverview" (
-  title: 'Support Tickets',
-  layout: Atlas_Core.Atlas_Default
+CREATE PAGE ITHelp."TicketOverview" (
+  Title: 'Support Tickets',
+  Layout: Atlas_Core.Atlas_Default
 ) {
-  header h1 { dynamictext t (caption: 'Support Tickets') }
-  datagrid ticketGrid (datasource: database ITHelp.Ticket) {
-    column col1 (attribute: Subject, caption: 'Subject')
-    column col2 (attribute: Category, caption: 'Category')
-    column col3 (attribute: status, caption: 'Status')
-    column col4 (attribute: AssignedTo, caption: 'Assigned To')
+  HEADER h1 { DYNAMICTEXT t (Caption: 'Support Tickets') }
+  DATAGRID ticketGrid (DataSource: DATABASE ITHelp.Ticket) {
+    COLUMN col1 (Attribute: Subject, Caption: 'Subject')
+    COLUMN col2 (Attribute: Category, Caption: 'Category')
+    COLUMN col3 (Attribute: Status, Caption: 'Status')
+    COLUMN col4 (Attribute: AssignedTo, Caption: 'Assigned To')
   }
 };
 /
 
 -- 9. Security
-create module role ITHelp."user";
-create module role ITHelp."Admin";
+CREATE MODULE ROLE ITHelp."User";
+CREATE MODULE ROLE ITHelp."Admin";
 
-grant ITHelp.User on ITHelp.Ticket (create, read *, write (ITHelp.Ticket.Description));
-grant ITHelp.User on ITHelp.KBArticle (read *);
-grant ITHelp.Admin on ITHelp.Ticket (create, delete, read *, write *);
-grant ITHelp.Admin on ITHelp.KBArticle (create, delete, read *, write *);
+GRANT ITHelp.User ON ITHelp.Ticket (CREATE, READ *, WRITE (ITHelp.Ticket.Description));
+GRANT ITHelp.User ON ITHelp.KBArticle (READ *);
+GRANT ITHelp.Admin ON ITHelp.Ticket (CREATE, DELETE, READ *, WRITE *);
+GRANT ITHelp.Admin ON ITHelp.KBArticle (CREATE, DELETE, READ *, WRITE *);
 
-grant execute on microflow ITHelp.ACT_StartHelpChat to ITHelp.User;
-grant execute on microflow ITHelp.Chat_ITSupport to ITHelp.User;
-grant execute on microflow ITHelp.Tool_SearchKB to ITHelp.User;
-grant execute on microflow ITHelp.Tool_CreateTicket to ITHelp.User;
-grant execute on microflow ITHelp.Tool_GetTicketStatus to ITHelp.User;
-grant view on page ITHelp.Home to ITHelp.User;
-grant view on page ITHelp.HelpDesk to ITHelp.User;
-grant view on page ITHelp.TicketOverview to ITHelp.User, ITHelp.Admin;
+GRANT EXECUTE ON MICROFLOW ITHelp.ACT_StartHelpChat TO ITHelp.User;
+GRANT EXECUTE ON MICROFLOW ITHelp.Chat_ITSupport TO ITHelp.User;
+GRANT EXECUTE ON MICROFLOW ITHelp.Tool_SearchKB TO ITHelp.User;
+GRANT EXECUTE ON MICROFLOW ITHelp.Tool_CreateTicket TO ITHelp.User;
+GRANT EXECUTE ON MICROFLOW ITHelp.Tool_GetTicketStatus TO ITHelp.User;
+GRANT VIEW ON PAGE ITHelp.Home TO ITHelp.User;
+GRANT VIEW ON PAGE ITHelp.HelpDesk TO ITHelp.User;
+GRANT VIEW ON PAGE ITHelp.TicketOverview TO ITHelp.User, ITHelp.Admin;
 
 -- 10. After-startup microflow registration
-alter settings model AfterStartupMicroflow = AgentEditorCommons.ASU_AgentEditor;
+ALTER SETTINGS MODEL AfterStartupMicroflow = AgentEditorCommons.ASU_AgentEditor;
 -- (Add custom setup to a composite microflow if needed.)
 
 -- 11. Navigation
-create or replace navigation Responsive_web
-  home page ITHelp.Home for ITHelp.User
-  menu (
-    item 'Help Desk' page ITHelp.Home,
-    item 'Tickets' page ITHelp.TicketOverview,
-    item 'Agent Admin' page AgentCommons.Agent_Overview
+CREATE OR REPLACE NAVIGATION Responsive_web
+  HOME PAGE ITHelp.Home FOR ITHelp.User
+  MENU (
+    ITEM 'Help Desk' PAGE ITHelp.Home,
+    ITEM 'Tickets' PAGE ITHelp.TicketOverview,
+    ITEM 'Agent Admin' PAGE AgentCommons.Agent_Overview
   );
 ```
 
@@ -1936,57 +1983,57 @@ create or replace navigation Responsive_web
 
 | Capability | Without MDL Agent Support | With MDL Agent Support |
 |------------|---------------------------|------------------------|
-| **Discover agents** | Open Studio Pro, navigate to Agent Editor | `show agents` in CLI or script |
-| **Inspect agent prompts** | Click through Agent Editor UI | `describe agent Module.Name` |
-| **Create agents** | Only via Studio Pro Agent Editor | `create agent` in MDL scripts |
+| **Discover agents** | Open Studio Pro, navigate to Agent Editor | `SHOW AGENTS` in CLI or script |
+| **Inspect agent prompts** | Click through Agent Editor UI | `DESCRIBE AGENT Module.Name` |
+| **Create agents** | Only via Studio Pro Agent Editor | `CREATE AGENT` in MDL scripts |
 | **Version control** | Binary CustomBlobDocument diffs | Human-readable MDL diffs |
 | **AI-assisted development** | AI cannot see or create agents | AI generates complete smart apps |
 | **Batch operations** | Manual, one agent at a time | Script creates multiple agents |
 | **Code review** | Cannot review agent changes in PR | MDL changes are reviewable text |
 | **Migration** | Manual recreation in new project | Copy/paste MDL scripts |
-| **Documentation** | Screenshots of Agent Editor | `describe agent` produces docs |
+| **Documentation** | Screenshots of Agent Editor | `DESCRIBE AGENT` produces docs |
 | **Testing** | Manual testing in Studio Pro | Scriptable test cases with mxcli |
 
-The combination of `create agent` (document definition), tool microflows (business logic), MCP connections (external tools), knowledge bases (RAG), and ConversationalUI (chat interface) means an AI coding agent can scaffold an entire smart app from a natural-language description — creating all layers from domain model to navigation in a single MDL session.
+The combination of `CREATE AGENT` (document definition), tool microflows (business logic), MCP connections (external tools), knowledge bases (RAG), and ConversationalUI (chat interface) means an AI coding agent can scaffold an entire smart app from a natural-language description — creating all layers from domain model to navigation in a single MDL session.
 
 ## Open Questions
 
 1. **CustomBlobDocument extensibility** *(answered)*: Mendix uses `CustomBlobDocument` as a general extension pattern. Four `CustomDocumentType` values observed so far: `agenteditor.agent`, `agenteditor.model`, `agenteditor.knowledgebase`, `agenteditor.consumedMCPService`. The parser dispatches by `CustomDocumentType` rather than hardcoding agent-specific logic. Future types (other extensions, other agent-editor documents) plug in naturally.
 
-2. **Contents JSON schema for tools/KB/MCP** *(answered for MCP tools and KB tools, still open for microflow tools)*: The `Agents.Agent007` document in the test3 project gave us the schema for MCP-type tools and knowledge base tools (see BSON Structure section). **Still open**: the JSON shape for a microflow-type tool — none observed yet. Expected: `toolType: "microflow"` plus a `microflow: { qualifiedName, microflowId }` reference, but the exact key names and nesting need a real sample. Implementation should capture one before finalizing the microflow-tool writer.
+2. **Contents JSON schema for tools/KB/MCP** *(answered)*: The microflow-tool shape is confirmed: `toolType: "Microflow"` with a `document: { qualifiedName, documentId }` reference pointing to the microflow (same `DocRef` shape as MCP tools). Tool microflows must return a `String` and accept only primitive types and `GenAICommons.Request`/`GenAICommons.Tool` as input parameters.
 
-3. **Separate document types for Model, Knowledge Base, and MCP Service** *(answered)*: Confirmed. Phase 4 of the implementation plan covers `create model`, `create knowledge base`, `create consumed mcp service` with schemas matching the observed BSON.
+3. **Separate document types for Model, Knowledge Base, and MCP Service** *(answered)*: Confirmed. Phase 4 of the implementation plan covers `CREATE MODEL`, `CREATE KNOWLEDGE BASE`, `CREATE CONSUMED MCP SERVICE` with schemas matching the observed BSON.
 
-4. **`call agent` activity BSON format**: The proposed `call agent with HISTORY` / `call agent without HISTORY` / `NEW CHAT for agent` MDL statements need to map to a Studio Pro microflow activity. Is this a dedicated activity type in BSON, or does Studio Pro render a generic `JavaActionCallAction` (pointing at `AgentCommons.Agent_Call_WithHistory`) as "Call Agent"? If it's the latter, MDL can emit a standard Java action call; if the former, we need to identify the new activity BSON `$type`. **Action:** inspect a Studio Pro microflow that uses "Call Agent" to resolve.
+4. **`CALL AGENT` activity BSON format**: The proposed `CALL AGENT WITH HISTORY` / `CALL AGENT WITHOUT HISTORY` / `NEW CHAT FOR AGENT` MDL statements need to map to a Studio Pro microflow activity. Is this a dedicated activity type in BSON, or does Studio Pro render a generic `JavaActionCallAction` (pointing at `AgentCommons.Agent_Call_WithHistory`) as "Call Agent"? If it's the latter, MDL can emit a standard Java action call; if the former, we need to identify the new activity BSON `$Type`. **Action:** inspect a Studio Pro microflow that uses "Call Agent" to resolve.
 
-5. **ASU_AgentEditor behavior**: `AgentEditorCommons.ASU_AgentEditor` is the after-startup microflow that syncs agent documents to runtime `AgentCommons.Agent` entities. Does `create agent` via MDL need to trigger this sync, or does it happen automatically on next app startup? What happens if MDL creates an agent and the app is already running?
+5. **ASU_AgentEditor behavior**: `AgentEditorCommons.ASU_AgentEditor` is the after-startup microflow that syncs agent documents to runtime `AgentCommons.Agent` entities. Does `CREATE AGENT` via MDL need to trigger this sync, or does it happen automatically on next app startup? What happens if MDL creates an agent and the app is already running?
 
-6. **Module placement** *(partially answered)*: The new documents in test3 live in a user-created `agents` module (not in `AgentEditorCommons`), confirming that users **can** place agent-editor documents in their own modules. The older 4 agents in `AgentEditorCommons` appear to be samples shipped with the marketplace module.
+6. **Module placement** *(partially answered)*: The new documents in test3 live in a user-created `Agents` module (not in `AgentEditorCommons`), confirming that users **can** place agent-editor documents in their own modules. The older 4 agents in `AgentEditorCommons` appear to be samples shipped with the marketplace module.
 
-7. **Cross-document UUID stability**: Agent documents reference model/KB/MCP documents by both `qualifiedName` AND `documentId` (UUID). When MDL creates a document, the generated UUID must be stable so that subsequent `create agent` statements can correctly fill the `documentId` field. If an `alter` or re-create changes the UUID, all referring agents break. The writer must either (a) preserve existing UUIDs on update or (b) allow the agent's `documentId` field to be left empty and resolved at app-startup time by qualified name.
+7. **Cross-document UUID stability**: Agent documents reference model/KB/MCP documents by both `qualifiedName` AND `documentId` (UUID). When MDL creates a document, the generated UUID must be stable so that subsequent `CREATE AGENT` statements can correctly fill the `documentId` field. If an `ALTER` or re-create changes the UUID, all referring agents break. The writer must either (a) preserve existing UUIDs on update or (b) allow the agent's `documentId` field to be left empty and resolved at app-startup time by qualified name.
 
-8. **Portal-populated fields on Model/KB**: Fields like `displayName`, `keyId`, `keyName`, `environment`, `resourceName`, `modelName`, `modelDisplayName` are populated by Studio Pro after the user clicks "Test Key". Should MDL `create model` write them as empty strings (letting Studio Pro fill them on next open), preserve them if provided by `describe` round-trip, or outright reject user-supplied values? Current proposal: accept-and-round-trip but document them as read-only.
+8. **Portal-populated fields on Model/KB**: Fields like `displayName`, `keyId`, `keyName`, `environment`, `resourceName`, `modelName`, `modelDisplayName` are populated by Studio Pro after the user clicks "Test Key". Should MDL `CREATE MODEL` write them as empty strings (letting Studio Pro fill them on next open), preserve them if provided by `DESCRIBE` round-trip, or outright reject user-supplied values? Current proposal: accept-and-round-trip but document them as read-only.
 
-7. **Non-Mendix-Cloud model providers (e.g., OpenRouter)**: The [Agent Editor docs](https://docs.mendix.com/appstore/modules/genai/genai-for-mx/agent-editor/) state that model documents require "a String constant that contains the key for a **Text Generation resource**... obtained in the **Mendix Cloud GenAI Portal**" — so the model document format is currently locked to Mendix Cloud GenAI. Meanwhile, `GenAICommons.DeployedModel` is provider-agnostic (it's just `DisplayName` + `Architecture` + a `microflow` pointer), and marketplace connectors exist for OpenAI, Amazon Bedrock, Google Gemini, and Mistral. This creates a split:
-   - Users who want OpenAI-compatible endpoints like **OpenRouter** (including its free models: `google/gemini-flash-1.5-8b:free`, `mistralai/mistral-7b-instruct:free`, etc.) cannot use the Agent Editor's model documents today. Workarounds: (a) reconfigure the OpenAI Connector's base URL to OpenRouter; (b) build a custom microflow-based `DeployedModel`; (c) skip the Agent Editor and create `AgentCommons.Agent` / `version` entities at runtime instead.
-   - Option (c) means losing the design-time benefits of agent documents (MDL support, version control in the project, LLM-friendly static configuration). `create agent` in MDL therefore won't help these users until Mendix opens the model document format to other providers.
-   - **Implications for this proposal**: The proposed `create model` document (Phase 4) should not hard-code `Architecture: 'MxCloud'`. If/when Mendix supports third-party architectures in model documents, the `create model` syntax must accept `Architecture: 'OpenAI' | 'OpenRouter' | 'Bedrock' | ...` and a connector-specific configuration block. The `create agent` body is already model-provider-agnostic (it references a model document by name, not by architecture), so no changes needed there.
-   - **Track this externally**: Monitor Mendix release notes for the Agent Editor opening to additional providers. If that happens, the MDL grammar already has room for it — we'd just add more valid `Architecture` values to `create model`.
+7. **Non-Mendix-Cloud model providers (e.g., OpenRouter)**: The [Agent Editor docs](https://docs.mendix.com/appstore/modules/genai/genai-for-mx/agent-editor/) state that model documents require "a String constant that contains the key for a **Text Generation resource**... obtained in the **Mendix Cloud GenAI Portal**" — so the model document format is currently locked to Mendix Cloud GenAI. Meanwhile, `GenAICommons.DeployedModel` is provider-agnostic (it's just `DisplayName` + `Architecture` + a `Microflow` pointer), and marketplace connectors exist for OpenAI, Amazon Bedrock, Google Gemini, and Mistral. This creates a split:
+   - Users who want OpenAI-compatible endpoints like **OpenRouter** (including its free models: `google/gemini-flash-1.5-8b:free`, `mistralai/mistral-7b-instruct:free`, etc.) cannot use the Agent Editor's model documents today. Workarounds: (a) reconfigure the OpenAI Connector's base URL to OpenRouter; (b) build a custom microflow-based `DeployedModel`; (c) skip the Agent Editor and create `AgentCommons.Agent` / `Version` entities at runtime instead.
+   - Option (c) means losing the design-time benefits of agent documents (MDL support, version control in the project, LLM-friendly static configuration). `CREATE AGENT` in MDL therefore won't help these users until Mendix opens the model document format to other providers.
+   - **Implications for this proposal**: The proposed `CREATE MODEL` document (Phase 4) should not hard-code `Architecture: 'MxCloud'`. If/when Mendix supports third-party architectures in model documents, the `CREATE MODEL` syntax must accept `Architecture: 'OpenAI' | 'OpenRouter' | 'Bedrock' | ...` and a connector-specific configuration block. The `CREATE AGENT` body is already model-provider-agnostic (it references a model document by name, not by architecture), so no changes needed there.
+   - **Track this externally**: Monitor Mendix release notes for the Agent Editor opening to additional providers. If that happens, the MDL grammar already has room for it — we'd just add more valid `Architecture` values to `CREATE MODEL`.
 
 ## Risk Assessment
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
-| Microflow-tool JSON shape in `Contents.tools[]` still unobserved | Medium | Medium | Observed MCP-tool and KB-tool shapes; capture a microflow-tool sample before finalizing that writer path |
-| `call agent` activity is a new BSON `$type` | Medium | Medium | Inspect a Studio Pro microflow that uses "Call Agent" before implementing |
-| Cross-document UUIDs become stale when documents are re-created | High | High | Preserve UUIDs on update; validate referring agents on `create`/`drop` of a referenced document |
+| Microflow-tool JSON shape in `Contents.tools[]` | Low | Resolved | Confirmed: `toolType: "Microflow"`, `document: { qualifiedName, documentId }` pointing to the microflow. Implementation can proceed. |
+| `CALL AGENT` activity is a new BSON `$Type` | Medium | Medium | Inspect a Studio Pro microflow that uses "Call Agent" before implementing |
+| Cross-document UUIDs become stale when documents are re-created | High | High | Preserve UUIDs on update; validate referring agents on `CREATE`/`DROP` of a referenced document |
 | Contents JSON schema changes in future Mendix versions | Medium | Medium | Parse tolerantly (ignore unknown fields), version-gate new fields |
 | CustomBlobDocument format changes | Low | High | Monitor Mendix release notes, BSON schema comparison |
 | Studio Pro fails to open MDL-created documents | Medium | High | Test with `mx check` and Studio Pro after creation; compare BSON byte-for-byte with editor-created documents (`Agents.MyFirstModel` etc.) |
-| Portal-populated fields overwritten by MDL round-trip | Medium | Medium | On `create model` / `create knowledge base`, preserve any existing Portal fields if the document already exists; write empty strings only on fresh creates |
-| Prerequisites (Encryption, ASU_AgentEditor) not set up before CREATE AGENT | Medium | Medium | MDL `create agent` should warn/pre-check that prerequisites are configured |
+| Portal-populated fields overwritten by MDL round-trip | Medium | Medium | On `CREATE MODEL` / `CREATE KNOWLEDGE BASE`, preserve any existing Portal fields if the document already exists; write empty strings only on fresh creates |
+| Prerequisites (Encryption, ASU_AgentEditor) not set up before CREATE AGENT | Medium | Medium | MDL `CREATE AGENT` should warn/pre-check that prerequisites are configured |
 | Agent document + matching Model/KB/MCP documents out of sync | Medium | Medium | `mxcli check` should validate cross-document references when `--references` is passed |
-| Users want third-party LLM providers (OpenRouter, custom OpenAI-compatible) but Agent Editor model documents are Mendix-Cloud-only | High | Low (out of scope) | Document the workarounds (reconfigure OpenAI connector, custom microflow DeployedModel, skip agent documents); keep `create model` syntax open to future `Provider` values |
+| Users want third-party LLM providers (OpenRouter, custom OpenAI-compatible) but Agent Editor model documents are Mendix-Cloud-only | High | Low (out of scope) | Document the workarounds (reconfigure OpenAI connector, custom microflow DeployedModel, skip agent documents); keep `CREATE MODEL` syntax open to future `Provider` values |
 
 ## References
 
