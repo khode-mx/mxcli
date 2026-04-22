@@ -1030,8 +1030,8 @@ Got: %s`, stmt.ServiceUrl)
 	// Normalize local file paths to absolute file:// URLs for Studio Pro compatibility
 	if newSvc.MetadataUrl != "" {
 		mprDir := ""
-		if e.mprPath != "" {
-			mprDir = filepath.Dir(e.mprPath)
+		if ctx.MprPath != "" {
+			mprDir = filepath.Dir(ctx.MprPath)
 		}
 
 		// Normalize MetadataUrl: convert relative paths to absolute file:// URLs
