@@ -319,13 +319,13 @@ func buildWidgetV3(ctx parser.IWidgetV3Context, b *Builder) *ast.WidgetV3 {
 
 	// Get widget type
 	if wCtx.PLUGGABLEWIDGET() != nil {
-		widget.Type = "PLUGGABLEWIDGET"
+		widget.Type = "pluggablewidget"
 		widget.Properties["WidgetType"] = unquoteString(wCtx.STRING_LITERAL().GetText())
 	} else if wCtx.CUSTOMWIDGET() != nil {
-		widget.Type = "CUSTOMWIDGET"
+		widget.Type = "customwidget"
 		widget.Properties["WidgetType"] = unquoteString(wCtx.STRING_LITERAL().GetText())
 	} else if typeCtx := wCtx.WidgetTypeV3(); typeCtx != nil {
-		widget.Type = strings.ToUpper(typeCtx.GetText())
+		widget.Type = strings.ToLower(typeCtx.GetText())
 	}
 
 	// Get required identifier
@@ -615,7 +615,14 @@ func buildDataSourceV3(ctx parser.IDataSourceExprV3Context) *ast.DataSourceV3 {
 	dsCtx := ctx.(*parser.DataSourceExprV3Context)
 	ds := &ast.DataSourceV3{}
 
-	if v := dsCtx.VARIABLE(); v != nil {
+	if v := dsCtx.VARIABLE(); v != nil && dsCtx.SLASH() != nil {
+		// $currentObject/Module.Assoc — ByAssociation data source (sugar for ASSOCIATION Path)
+		ds.Type = "association"
+		ds.ContextVariable = strings.TrimPrefix(v.GetText(), "$")
+		if pathCtx := dsCtx.AssociationPathV3(); pathCtx != nil {
+			ds.Reference = buildAssociationPathV3(pathCtx)
+		}
+	} else if v := dsCtx.VARIABLE(); v != nil {
 		// $ParamName
 		ds.Type = "parameter"
 		ds.Reference = v.GetText()
@@ -663,8 +670,8 @@ func buildDataSourceV3(ctx parser.IDataSourceExprV3Context) *ast.DataSourceV3 {
 	} else if dsCtx.ASSOCIATION() != nil {
 		// ASSOCIATION Path
 		ds.Type = "association"
-		if pathCtx := dsCtx.AttributePathV3(); pathCtx != nil {
-			ds.Reference = buildAttributePathV3(pathCtx)
+		if pathCtx := dsCtx.AssociationPathV3(); pathCtx != nil {
+			ds.Reference = buildAssociationPathV3(pathCtx)
 		}
 	} else if dsCtx.SELECTION() != nil {
 		// SELECTION widgetName
@@ -796,6 +803,20 @@ func buildAttributeListV3(ctx parser.IAttributeListV3Context) []string {
 	}
 
 	return attrs
+}
+
+// buildAssociationPathV3 builds an association path string from a parser context.
+// Format: "Module.Assoc" or "Module.Assoc/Module.Entity" — qualified names separated by /.
+func buildAssociationPathV3(ctx parser.IAssociationPathV3Context) string {
+	if ctx == nil {
+		return ""
+	}
+	apc := ctx.(*parser.AssociationPathV3Context)
+	var parts []string
+	for _, qn := range apc.AllQualifiedName() {
+		parts = append(parts, getQualifiedNameText(qn))
+	}
+	return strings.Join(parts, "/")
 }
 
 // buildAttributePathV3 builds an attribute path string.
@@ -1067,10 +1088,10 @@ func buildDesignPropertyEntryV3(ctx parser.IDesignPropertyEntryV3Context) *ast.D
 
 	// Value: second STRING_LITERAL, ON, or OFF
 	if entryCtx.ON() != nil {
-		return &ast.DesignPropertyEntryV3{Key: key, Value: "ON"}
+		return &ast.DesignPropertyEntryV3{Key: key, Value: "on"}
 	}
 	if entryCtx.OFF() != nil {
-		return &ast.DesignPropertyEntryV3{Key: key, Value: "OFF"}
+		return &ast.DesignPropertyEntryV3{Key: key, Value: "off"}
 	}
 	if len(allStrings) >= 2 {
 		return &ast.DesignPropertyEntryV3{Key: key, Value: unquoteString(allStrings[1].GetText())}

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
 	"github.com/mendixlabs/mxcli/sdk/domainmodel"
 )
 
@@ -59,14 +60,14 @@ type oqlPlanColumn struct {
 }
 
 // OqlQueryPlanELK generates a query plan visualization for a view entity's OQL query.
-func (e *Executor) OqlQueryPlanELK(qualifiedName string, entity *domainmodel.Entity) error {
+func OqlQueryPlanELK(ctx *ExecContext, qualifiedName string, entity *domainmodel.Entity) error {
 	plan := parseOqlPlan(qualifiedName, entity.OqlQuery)
 
 	out, err := json.MarshalIndent(plan, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal JSON: %w", err)
+		return mdlerrors.NewBackend("marshal json", err)
 	}
-	fmt.Fprint(e.output, string(out))
+	fmt.Fprint(ctx.Output, string(out))
 	return nil
 }
 
@@ -241,7 +242,7 @@ func attributeColumnsToTables(columns []oqlPlanColumn, tables []oqlPlanTable) {
 		// Check for aggregate function wrapping
 		isAggregate := false
 		upperExpr := strings.ToUpper(strings.TrimSpace(expr))
-		for _, fn := range []string{"COUNT", "SUM", "AVG", "MIN", "MAX"} {
+		for _, fn := range []string{"count", "sum", "avg", "min", "max"} {
 			if strings.HasPrefix(upperExpr, fn+"(") {
 				isAggregate = true
 				break
@@ -331,7 +332,7 @@ func splitOnTopLevelAnd(s string) []string {
 			current.WriteByte(ch)
 		default:
 			if depth == 0 && i+3 <= len(upper) {
-				if upper[i:i+3] == "AND" {
+				if upper[i:i+3] == "and" {
 					prevOk := i == 0 || !isIdentChar(s[i-1])
 					nextOk := i+3 >= len(s) || !isIdentChar(s[i+3])
 					if prevOk && nextOk {
@@ -473,3 +474,5 @@ func buildScalarSubqueryTable(sel ast.OQLSelectItem, selectIndex, tableOffset in
 
 	return t
 }
+
+// --- Executor method wrapper for backward compatibility ---

@@ -4,28 +4,30 @@ package executor
 
 import (
 	"fmt"
+
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
 )
 
-// showLanguages lists all languages found in the project's translatable strings.
+// listLanguages lists all languages found in the project's translatable strings.
 // Requires REFRESH CATALOG FULL to populate the strings table.
-func (e *Executor) showLanguages() error {
-	if e.catalog == nil {
-		return fmt.Errorf("no catalog available — run REFRESH CATALOG FULL first")
+func listLanguages(ctx *ExecContext) error {
+	if ctx.Catalog == nil {
+		return mdlerrors.NewValidation("no catalog available — run refresh catalog full first")
 	}
 
-	result, err := e.catalog.Query(`
-		SELECT Language, COUNT(*) as StringCount
-		FROM strings
-		WHERE Language != ''
-		GROUP BY Language
-		ORDER BY StringCount DESC
+	result, err := ctx.Catalog.Query(`
+		select Language, count(*) as StringCount
+		from strings
+		where Language != ''
+		GROUP by Language
+		ORDER by StringCount desc
 	`)
 	if err != nil {
-		return fmt.Errorf("failed to query languages: %w", err)
+		return mdlerrors.NewBackend("query languages", err)
 	}
 
-	if len(result.Rows) == 0 {
-		fmt.Fprintln(e.output, "No translatable strings found. Run REFRESH CATALOG FULL to populate the strings table.")
+	if len(result.Rows) == 0 && ctx.Format != FormatJSON {
+		fmt.Fprintln(ctx.Output, "No translatable strings found. Run refresh catalog full to populate the strings table.")
 		return nil
 	}
 
@@ -44,5 +46,7 @@ func (e *Executor) showLanguages() error {
 		}
 		tr.Rows = append(tr.Rows, []any{lang, count})
 	}
-	return e.writeResult(tr)
+	return writeResult(ctx, tr)
 }
+
+// --- Executor method wrapper for backward compatibility ---

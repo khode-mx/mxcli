@@ -10,29 +10,30 @@ import (
 	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
-	"github.com/mendixlabs/mxcli/sdk/mpr"
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
+	"github.com/mendixlabs/mxcli/mdl/types"
 )
 
 // execCreateImageCollection handles CREATE IMAGE COLLECTION statements.
-func (e *Executor) execCreateImageCollection(s *ast.CreateImageCollectionStmt) error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+func execCreateImageCollection(ctx *ExecContext, s *ast.CreateImageCollectionStmt) error {
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
 	// Find or auto-create module
-	module, err := e.findOrCreateModule(s.Name.Module)
+	module, err := findOrCreateModule(ctx, s.Name.Module)
 	if err != nil {
 		return err
 	}
 
 	// Check if image collection already exists
-	existing := e.findImageCollection(s.Name.Module, s.Name.Name)
+	existing := findImageCollection(ctx, s.Name.Module, s.Name.Name)
 	if existing != nil {
-		return fmt.Errorf("image collection already exists: %s.%s", s.Name.Module, s.Name.Name)
+		return mdlerrors.NewAlreadyExists("image collection", s.Name.Module+"."+s.Name.Name)
 	}
 
 	// Build ImageCollection
-	ic := &mpr.ImageCollection{
+	ic := &types.ImageCollection{
 		ContainerID:   module.ID,
 		Name:          s.Name.Name,
 		ExportLevel:   s.ExportLevel,
@@ -45,60 +46,60 @@ func (e *Executor) execCreateImageCollection(s *ast.CreateImageCollectionStmt) e
 		if !filepath.IsAbs(filePath) {
 			cwd, err := os.Getwd()
 			if err != nil {
-				return fmt.Errorf("failed to get working directory: %w", err)
+				return mdlerrors.NewBackend("get working directory", err)
 			}
 			filePath = filepath.Join(cwd, filePath)
 		}
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			return fmt.Errorf("failed to read image file %q: %w", item.FilePath, err)
+			return mdlerrors.NewBackend(fmt.Sprintf("read image file %q", item.FilePath), err)
 		}
 		format := extToImageFormat(filepath.Ext(filePath))
-		ic.Images = append(ic.Images, mpr.Image{
+		ic.Images = append(ic.Images, types.Image{
 			Name:   item.Name,
 			Data:   data,
 			Format: format,
 		})
 	}
 
-	if err := e.writer.CreateImageCollection(ic); err != nil {
-		return fmt.Errorf("failed to create image collection: %w", err)
+	if err := ctx.Backend.CreateImageCollection(ic); err != nil {
+		return mdlerrors.NewBackend("create image collection", err)
 	}
 
 	// Invalidate hierarchy cache so the new collection's container is visible
-	e.invalidateHierarchy()
+	invalidateHierarchy(ctx)
 
-	fmt.Fprintf(e.output, "Created image collection: %s\n", s.Name)
+	fmt.Fprintf(ctx.Output, "Created image collection: %s\n", s.Name)
 	return nil
 }
 
 // execDropImageCollection handles DROP IMAGE COLLECTION statements.
-func (e *Executor) execDropImageCollection(s *ast.DropImageCollectionStmt) error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+func execDropImageCollection(ctx *ExecContext, s *ast.DropImageCollectionStmt) error {
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
-	ic := e.findImageCollection(s.Name.Module, s.Name.Name)
+	ic := findImageCollection(ctx, s.Name.Module, s.Name.Name)
 	if ic == nil {
-		return fmt.Errorf("image collection not found: %s", s.Name)
+		return mdlerrors.NewNotFound("image collection", s.Name.String())
 	}
 
-	if err := e.writer.DeleteImageCollection(string(ic.ID)); err != nil {
-		return fmt.Errorf("failed to delete image collection: %w", err)
+	if err := ctx.Backend.DeleteImageCollection(string(ic.ID)); err != nil {
+		return mdlerrors.NewBackend("delete image collection", err)
 	}
 
-	fmt.Fprintf(e.output, "Dropped image collection: %s\n", s.Name)
+	fmt.Fprintf(ctx.Output, "Dropped image collection: %s\n", s.Name)
 	return nil
 }
 
 // describeImageCollection handles DESCRIBE IMAGE COLLECTION Module.Name.
-func (e *Executor) describeImageCollection(name ast.QualifiedName) error {
-	ic := e.findImageCollection(name.Module, name.Name)
+func describeImageCollection(ctx *ExecContext, name ast.QualifiedName) error {
+	ic := findImageCollection(ctx, name.Module, name.Name)
 	if ic == nil {
-		return fmt.Errorf("image collection not found: %s", name)
+		return mdlerrors.NewNotFound("image collection", name.String())
 	}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
 		return err
 	}
@@ -106,7 +107,7 @@ func (e *Executor) describeImageCollection(name ast.QualifiedName) error {
 	modName := h.GetModuleName(modID)
 
 	if ic.Documentation != "" {
-		fmt.Fprintf(e.output, "/**\n * %s\n */\n", ic.Documentation)
+		fmt.Fprintf(ctx.Output, "/**\n * %s\n */\n", ic.Documentation)
 	}
 
 	exportLevel := ic.ExportLevel
@@ -117,33 +118,33 @@ func (e *Executor) describeImageCollection(name ast.QualifiedName) error {
 	qualifiedName := fmt.Sprintf("%s.%s", modName, ic.Name)
 
 	if len(ic.Images) == 0 {
-		fmt.Fprintf(e.output, "CREATE OR REPLACE IMAGE COLLECTION %s", qualifiedName)
+		fmt.Fprintf(ctx.Output, "create or replace image collection %s", qualifiedName)
 		if exportLevel != "Hidden" {
-			fmt.Fprintf(e.output, " EXPORT LEVEL '%s'", exportLevel)
+			fmt.Fprintf(ctx.Output, " export level '%s'", exportLevel)
 		}
-		fmt.Fprintln(e.output, ";")
-		fmt.Fprintln(e.output, "/")
+		fmt.Fprintln(ctx.Output, ";")
+		fmt.Fprintln(ctx.Output, "/")
 		return nil
 	}
 
 	// Write image data to temp files and output CREATE statement with IMAGE lines
 	previewDir := filepath.Join("/tmp/mxcli-preview", qualifiedName)
 	if err := os.MkdirAll(previewDir, 0o755); err != nil {
-		return fmt.Errorf("failed to create preview directory: %w", err)
+		return mdlerrors.NewBackend("create preview directory", err)
 	}
 
-	fmt.Fprintf(e.output, "CREATE OR REPLACE IMAGE COLLECTION %s", qualifiedName)
+	fmt.Fprintf(ctx.Output, "create or replace image collection %s", qualifiedName)
 	if exportLevel != "Hidden" {
-		fmt.Fprintf(e.output, " EXPORT LEVEL '%s'", exportLevel)
+		fmt.Fprintf(ctx.Output, " export level '%s'", exportLevel)
 	}
-	fmt.Fprintln(e.output, " (")
+	fmt.Fprintln(ctx.Output, " (")
 
 	for i, img := range ic.Images {
 		ext := imageFormatToExt(img.Format)
 		filePath := filepath.Join(previewDir, img.Name+ext)
 		if len(img.Data) > 0 {
 			if err := os.WriteFile(filePath, img.Data, 0o644); err != nil {
-				return fmt.Errorf("failed to write image %s: %w", img.Name, err)
+				return mdlerrors.NewBackend(fmt.Sprintf("write image %s", img.Name), err)
 			}
 		}
 
@@ -151,11 +152,11 @@ func (e *Executor) describeImageCollection(name ast.QualifiedName) error {
 		if i == len(ic.Images)-1 {
 			comma = ""
 		}
-		fmt.Fprintf(e.output, "    IMAGE %s FROM FILE '%s'%s\n", img.Name, filePath, comma)
+		fmt.Fprintf(ctx.Output, "    image %s from file '%s'%s\n", img.Name, filePath, comma)
 	}
 
-	fmt.Fprintln(e.output, ");")
-	fmt.Fprintln(e.output, "/")
+	fmt.Fprintln(ctx.Output, ");")
+	fmt.Fprintln(ctx.Output, "/")
 	return nil
 }
 
@@ -195,14 +196,14 @@ func extToImageFormat(ext string) string {
 	}
 }
 
-// showImageCollections handles SHOW IMAGE COLLECTION [IN module].
-func (e *Executor) showImageCollections(moduleName string) error {
-	collections, err := e.reader.ListImageCollections()
+// listImageCollections handles SHOW IMAGE COLLECTION [IN module].
+func listImageCollections(ctx *ExecContext, moduleName string) error {
+	collections, err := ctx.Backend.ListImageCollections()
 	if err != nil {
-		return fmt.Errorf("failed to list image collections: %w", err)
+		return mdlerrors.NewBackend("list image collections", err)
 	}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
 		return err
 	}
@@ -227,17 +228,17 @@ func (e *Executor) showImageCollections(moduleName string) error {
 	}
 
 	result.Summary = fmt.Sprintf("(%d image collection(s))", len(result.Rows))
-	return e.writeResult(result)
+	return writeResult(ctx, result)
 }
 
 // findImageCollection finds an image collection by module and name.
-func (e *Executor) findImageCollection(moduleName, collectionName string) *mpr.ImageCollection {
-	collections, err := e.reader.ListImageCollections()
+func findImageCollection(ctx *ExecContext, moduleName, collectionName string) *types.ImageCollection {
+	collections, err := ctx.Backend.ListImageCollections()
 	if err != nil {
 		return nil
 	}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
 		return nil
 	}

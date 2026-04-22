@@ -9,14 +9,16 @@ import (
 	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
 	"github.com/mendixlabs/mxcli/mdl/linter"
 	"github.com/mendixlabs/mxcli/model"
 )
 
 // execCreateEnumeration handles CREATE ENUMERATION statements.
-func (e *Executor) execCreateEnumeration(s *ast.CreateEnumerationStmt) error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+func execCreateEnumeration(ctx *ExecContext, s *ast.CreateEnumerationStmt) error {
+
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
 	// Validate enumeration values for reserved words
@@ -25,20 +27,20 @@ func (e *Executor) execCreateEnumeration(s *ast.CreateEnumerationStmt) error {
 		for _, v := range violations {
 			msgs = append(msgs, v.Message)
 		}
-		return fmt.Errorf("invalid enumeration '%s':\n  - %s",
+		return mdlerrors.NewValidationf("invalid enumeration '%s':\n  - %s",
 			s.Name.String(), strings.Join(msgs, "\n  - "))
 	}
 
 	// Find or auto-create module
-	module, err := e.findOrCreateModule(s.Name.Module)
+	module, err := findOrCreateModule(ctx, s.Name.Module)
 	if err != nil {
 		return err
 	}
 
 	// Check if enumeration already exists
-	existingEnum := e.findEnumeration(s.Name.Module, s.Name.Name)
+	existingEnum := findEnumeration(ctx, s.Name.Module, s.Name.Name)
 	if existingEnum != nil && !s.CreateOrModify {
-		return fmt.Errorf("enumeration already exists: %s.%s (use CREATE OR MODIFY to update)", s.Name.Module, s.Name.Name)
+		return mdlerrors.NewAlreadyExistsMsg("enumeration", s.Name.Module+"."+s.Name.Name, fmt.Sprintf("enumeration already exists: %s.%s (use create or modify to update)", s.Name.Module, s.Name.Name))
 	}
 
 	// Create enumeration values
@@ -54,8 +56,8 @@ func (e *Executor) execCreateEnumeration(s *ast.CreateEnumerationStmt) error {
 
 	// If enumeration exists and CREATE OR MODIFY, delete it first
 	if existingEnum != nil && s.CreateOrModify {
-		if err := e.writer.DeleteEnumeration(existingEnum.ID); err != nil {
-			return fmt.Errorf("failed to delete existing enumeration: %w", err)
+		if err := ctx.Backend.DeleteEnumeration(existingEnum.ID); err != nil {
+			return mdlerrors.NewBackend("delete existing enumeration", err)
 		}
 	}
 
@@ -67,25 +69,26 @@ func (e *Executor) execCreateEnumeration(s *ast.CreateEnumerationStmt) error {
 		Values:        values,
 	}
 
-	if err := e.writer.CreateEnumeration(enum); err != nil {
-		return fmt.Errorf("failed to create enumeration: %w", err)
+	if err := ctx.Backend.CreateEnumeration(enum); err != nil {
+		return mdlerrors.NewBackend("create enumeration", err)
 	}
 
 	// Invalidate hierarchy cache so the new enumeration's container is visible
-	e.invalidateHierarchy()
+	invalidateHierarchy(ctx)
 
-	fmt.Fprintf(e.output, "Created enumeration: %s\n", s.Name)
+	fmt.Fprintf(ctx.Output, "Created enumeration: %s\n", s.Name)
 	return nil
 }
 
 // findEnumeration finds an enumeration by module and name.
-func (e *Executor) findEnumeration(moduleName, enumName string) *model.Enumeration {
-	enums, err := e.reader.ListEnumerations()
+func findEnumeration(ctx *ExecContext, moduleName, enumName string) *model.Enumeration {
+
+	enums, err := ctx.Backend.ListEnumerations()
 	if err != nil {
 		return nil
 	}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
 		return nil
 	}
@@ -101,51 +104,53 @@ func (e *Executor) findEnumeration(moduleName, enumName string) *model.Enumerati
 }
 
 // execAlterEnumeration handles ALTER ENUMERATION statements.
-func (e *Executor) execAlterEnumeration(s *ast.AlterEnumerationStmt) error {
+func execAlterEnumeration(ctx *ExecContext, s *ast.AlterEnumerationStmt) error {
 	// TODO: Implement ALTER ENUMERATION
-	return fmt.Errorf("ALTER ENUMERATION not yet implemented")
+	return mdlerrors.NewUnsupported("alter enumeration not yet implemented")
 }
 
 // execDropEnumeration handles DROP ENUMERATION statements.
-func (e *Executor) execDropEnumeration(s *ast.DropEnumerationStmt) error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+func execDropEnumeration(ctx *ExecContext, s *ast.DropEnumerationStmt) error {
+
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
 	// Find enumeration
-	enums, err := e.reader.ListEnumerations()
+	enums, err := ctx.Backend.ListEnumerations()
 	if err != nil {
-		return fmt.Errorf("failed to list enumerations: %w", err)
+		return mdlerrors.NewBackend("list enumerations", err)
 	}
 
 	for _, enum := range enums {
 		if enum.Name == s.Name.Name {
 			// Check module matches
-			module, err := e.findModuleByID(enum.ContainerID)
+			module, err := findModuleByID(ctx, enum.ContainerID)
 			if err == nil && (s.Name.Module == "" || module.Name == s.Name.Module) {
-				if err := e.writer.DeleteEnumeration(enum.ID); err != nil {
-					return fmt.Errorf("failed to delete enumeration: %w", err)
+				if err := ctx.Backend.DeleteEnumeration(enum.ID); err != nil {
+					return mdlerrors.NewBackend("delete enumeration", err)
 				}
-				fmt.Fprintf(e.output, "Dropped enumeration: %s\n", s.Name)
+				fmt.Fprintf(ctx.Output, "Dropped enumeration: %s\n", s.Name)
 				return nil
 			}
 		}
 	}
 
-	return fmt.Errorf("enumeration not found: %s", s.Name)
+	return mdlerrors.NewNotFound("enumeration", s.Name.String())
 }
 
-// showEnumerations handles SHOW ENUMERATIONS command.
-func (e *Executor) showEnumerations(moduleName string) error {
-	enums, err := e.reader.ListEnumerations()
+// listEnumerations handles SHOW ENUMERATIONS command.
+func listEnumerations(ctx *ExecContext, moduleName string) error {
+
+	enums, err := ctx.Backend.ListEnumerations()
 	if err != nil {
-		return fmt.Errorf("failed to list enumerations: %w", err)
+		return mdlerrors.NewBackend("list enumerations", err)
 	}
 
 	// Get hierarchy for module/folder resolution
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to build hierarchy: %w", err)
+		return mdlerrors.NewBackend("build hierarchy", err)
 	}
 
 	// Collect rows
@@ -182,19 +187,20 @@ func (e *Executor) showEnumerations(moduleName string) error {
 	for _, r := range rows {
 		result.Rows = append(result.Rows, []any{r.qualifiedName, r.module, r.name, r.folderPath, r.values})
 	}
-	return e.writeResult(result)
+	return writeResult(ctx, result)
 }
 
 // describeEnumeration handles DESCRIBE ENUMERATION command.
-func (e *Executor) describeEnumeration(name ast.QualifiedName) error {
-	enums, err := e.reader.ListEnumerations()
+func describeEnumeration(ctx *ExecContext, name ast.QualifiedName) error {
+
+	enums, err := ctx.Backend.ListEnumerations()
 	if err != nil {
-		return fmt.Errorf("failed to list enumerations: %w", err)
+		return mdlerrors.NewBackend("list enumerations", err)
 	}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to build hierarchy: %w", err)
+		return mdlerrors.NewBackend("build hierarchy", err)
 	}
 
 	for _, enum := range enums {
@@ -203,10 +209,10 @@ func (e *Executor) describeEnumeration(name ast.QualifiedName) error {
 		if enum.Name == name.Name && (name.Module == "" || modName == name.Module) {
 			// Output JavaDoc documentation if present
 			if enum.Documentation != "" {
-				fmt.Fprintf(e.output, "/**\n * %s\n */\n", enum.Documentation)
+				fmt.Fprintf(ctx.Output, "/**\n * %s\n */\n", enum.Documentation)
 			}
 
-			fmt.Fprintf(e.output, "CREATE OR MODIFY ENUMERATION %s.%s (\n", modName, enum.Name)
+			fmt.Fprintf(ctx.Output, "create or modify enumeration %s.%s (\n", modName, enum.Name)
 			for i, v := range enum.Values {
 				comma := ","
 				if i == len(enum.Values)-1 {
@@ -216,15 +222,15 @@ func (e *Executor) describeEnumeration(name ast.QualifiedName) error {
 				if v.Caption != nil {
 					caption = v.Caption.GetTranslation("en_US")
 				}
-				fmt.Fprintf(e.output, "  %s '%s'%s\n", v.Name, caption, comma)
+				fmt.Fprintf(ctx.Output, "  %s '%s'%s\n", v.Name, caption, comma)
 			}
-			fmt.Fprintln(e.output, ");")
-			fmt.Fprintln(e.output, "/")
+			fmt.Fprintln(ctx.Output, ");")
+			fmt.Fprintln(ctx.Output, "/")
 			return nil
 		}
 	}
 
-	return fmt.Errorf("enumeration not found: %s", name)
+	return mdlerrors.NewNotFound("enumeration", name.String())
 }
 
 // mendixReservedWords contains words that cannot be used as enumeration value names.

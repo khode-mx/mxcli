@@ -8,17 +8,17 @@ import (
 	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	"github.com/mendixlabs/mxcli/mdl/types"
 	"github.com/mendixlabs/mxcli/model"
 	"github.com/mendixlabs/mxcli/sdk/domainmodel"
 	"github.com/mendixlabs/mxcli/sdk/microflows"
-	"github.com/mendixlabs/mxcli/sdk/mpr"
 )
 
 // addCreateVariableAction creates a DECLARE statement as a CreateVariableAction.
 func (fb *flowBuilder) addCreateVariableAction(s *ast.DeclareStmt) model.ID {
 	// Resolve TypeEnumeration → TypeEntity ambiguity using the domain model
 	declType := s.Type
-	if declType.Kind == ast.TypeEnumeration && declType.EnumRef != nil && fb.reader != nil {
+	if declType.Kind == ast.TypeEnumeration && declType.EnumRef != nil && fb.backend != nil {
 		if fb.isEntity(declType.EnumRef.Module, declType.EnumRef.Name) {
 			declType = ast.DataType{Kind: ast.TypeEntity, EntityRef: declType.EnumRef}
 		}
@@ -29,7 +29,7 @@ func (fb *flowBuilder) addCreateVariableAction(s *ast.DeclareStmt) model.ID {
 	fb.declaredVars[s.Variable] = typeName
 
 	action := &microflows.CreateVariableAction{
-		BaseElement:  model.BaseElement{ID: model.ID(mpr.GenerateID())},
+		BaseElement:  model.BaseElement{ID: model.ID(types.GenerateID())},
 		VariableName: s.Variable,
 		DataType:     convertASTToMicroflowDataType(declType, nil),
 		InitialValue: fb.exprToString(s.InitialValue),
@@ -38,7 +38,7 @@ func (fb *flowBuilder) addCreateVariableAction(s *ast.DeclareStmt) model.ID {
 	activity := &microflows.ActionActivity{
 		BaseActivity: microflows.BaseActivity{
 			BaseMicroflowObject: microflows.BaseMicroflowObject{
-				BaseElement: model.BaseElement{ID: model.ID(mpr.GenerateID())},
+				BaseElement: model.BaseElement{ID: model.ID(types.GenerateID())},
 				Position:    model.Point{X: fb.posX, Y: fb.posY},
 				Size:        model.Size{Width: ActivityWidth, Height: ActivityHeight},
 			},
@@ -62,7 +62,7 @@ func (fb *flowBuilder) addChangeVariableAction(s *ast.MfSetStmt) model.ID {
 	}
 
 	action := &microflows.ChangeVariableAction{
-		BaseElement:  model.BaseElement{ID: model.ID(mpr.GenerateID())},
+		BaseElement:  model.BaseElement{ID: model.ID(types.GenerateID())},
 		VariableName: s.Target,
 		Value:        fb.exprToString(s.Value),
 	}
@@ -70,7 +70,7 @@ func (fb *flowBuilder) addChangeVariableAction(s *ast.MfSetStmt) model.ID {
 	activity := &microflows.ActionActivity{
 		BaseActivity: microflows.BaseActivity{
 			BaseMicroflowObject: microflows.BaseMicroflowObject{
-				BaseElement: model.BaseElement{ID: model.ID(mpr.GenerateID())},
+				BaseElement: model.BaseElement{ID: model.ID(types.GenerateID())},
 				Position:    model.Point{X: fb.posX, Y: fb.posY},
 				Size:        model.Size{Width: ActivityWidth, Height: ActivityHeight},
 			},
@@ -87,7 +87,7 @@ func (fb *flowBuilder) addChangeVariableAction(s *ast.MfSetStmt) model.ID {
 // addCreateObjectAction creates a CREATE OBJECT statement.
 func (fb *flowBuilder) addCreateObjectAction(s *ast.CreateObjectStmt) model.ID {
 	action := &microflows.CreateObjectAction{
-		BaseElement:    model.BaseElement{ID: model.ID(mpr.GenerateID())},
+		BaseElement:    model.BaseElement{ID: model.ID(types.GenerateID())},
 		OutputVariable: s.Variable,
 		Commit:         microflows.CommitTypeNo,
 	}
@@ -106,7 +106,7 @@ func (fb *flowBuilder) addCreateObjectAction(s *ast.CreateObjectStmt) model.ID {
 	// Build InitialMembers for each SET assignment
 	for _, change := range s.Changes {
 		memberChange := &microflows.MemberChange{
-			BaseElement: model.BaseElement{ID: model.ID(mpr.GenerateID())},
+			BaseElement: model.BaseElement{ID: model.ID(types.GenerateID())},
 			Type:        microflows.MemberChangeTypeSet,
 			Value:       fb.memberExpressionToString(change.Value, entityQN, change.Attribute),
 		}
@@ -118,7 +118,7 @@ func (fb *flowBuilder) addCreateObjectAction(s *ast.CreateObjectStmt) model.ID {
 	activity := &microflows.ActionActivity{
 		BaseActivity: microflows.BaseActivity{
 			BaseMicroflowObject: microflows.BaseMicroflowObject{
-				BaseElement: model.BaseElement{ID: model.ID(mpr.GenerateID())},
+				BaseElement: model.BaseElement{ID: model.ID(types.GenerateID())},
 				Position:    model.Point{X: fb.posX, Y: fb.posY},
 				Size:        model.Size{Width: ActivityWidth, Height: ActivityHeight},
 			},
@@ -144,7 +144,7 @@ func (fb *flowBuilder) addCreateObjectAction(s *ast.CreateObjectStmt) model.ID {
 // addCommitAction creates a COMMIT statement.
 func (fb *flowBuilder) addCommitAction(s *ast.MfCommitStmt) model.ID {
 	action := &microflows.CommitObjectsAction{
-		BaseElement:       model.BaseElement{ID: model.ID(mpr.GenerateID())},
+		BaseElement:       model.BaseElement{ID: model.ID(types.GenerateID())},
 		ErrorHandlingType: convertErrorHandlingType(s.ErrorHandling),
 		CommitVariable:    s.Variable,
 		WithEvents:        s.WithEvents,
@@ -155,7 +155,7 @@ func (fb *flowBuilder) addCommitAction(s *ast.MfCommitStmt) model.ID {
 	activity := &microflows.ActionActivity{
 		BaseActivity: microflows.BaseActivity{
 			BaseMicroflowObject: microflows.BaseMicroflowObject{
-				BaseElement: model.BaseElement{ID: model.ID(mpr.GenerateID())},
+				BaseElement: model.BaseElement{ID: model.ID(types.GenerateID())},
 				Position:    model.Point{X: fb.posX, Y: fb.posY},
 				Size:        model.Size{Width: ActivityWidth, Height: ActivityHeight},
 			},
@@ -180,7 +180,7 @@ func (fb *flowBuilder) addCommitAction(s *ast.MfCommitStmt) model.ID {
 // addDeleteAction creates a DELETE statement.
 func (fb *flowBuilder) addDeleteAction(s *ast.DeleteObjectStmt) model.ID {
 	action := &microflows.DeleteObjectAction{
-		BaseElement:    model.BaseElement{ID: model.ID(mpr.GenerateID())},
+		BaseElement:    model.BaseElement{ID: model.ID(types.GenerateID())},
 		DeleteVariable: s.Variable,
 	}
 
@@ -188,7 +188,7 @@ func (fb *flowBuilder) addDeleteAction(s *ast.DeleteObjectStmt) model.ID {
 	activity := &microflows.ActionActivity{
 		BaseActivity: microflows.BaseActivity{
 			BaseMicroflowObject: microflows.BaseMicroflowObject{
-				BaseElement: model.BaseElement{ID: model.ID(mpr.GenerateID())},
+				BaseElement: model.BaseElement{ID: model.ID(types.GenerateID())},
 				Position:    model.Point{X: fb.posX, Y: fb.posY},
 				Size:        model.Size{Width: ActivityWidth, Height: ActivityHeight},
 			},
@@ -214,7 +214,7 @@ func (fb *flowBuilder) addDeleteAction(s *ast.DeleteObjectStmt) model.ID {
 // addRollbackAction creates a ROLLBACK statement.
 func (fb *flowBuilder) addRollbackAction(s *ast.RollbackStmt) model.ID {
 	action := &microflows.RollbackObjectAction{
-		BaseElement:      model.BaseElement{ID: model.ID(mpr.GenerateID())},
+		BaseElement:      model.BaseElement{ID: model.ID(types.GenerateID())},
 		RollbackVariable: s.Variable,
 		RefreshInClient:  s.RefreshInClient,
 	}
@@ -222,7 +222,7 @@ func (fb *flowBuilder) addRollbackAction(s *ast.RollbackStmt) model.ID {
 	activity := &microflows.ActionActivity{
 		BaseActivity: microflows.BaseActivity{
 			BaseMicroflowObject: microflows.BaseMicroflowObject{
-				BaseElement: model.BaseElement{ID: model.ID(mpr.GenerateID())},
+				BaseElement: model.BaseElement{ID: model.ID(types.GenerateID())},
 				Position:    model.Point{X: fb.posX, Y: fb.posY},
 				Size:        model.Size{Width: ActivityWidth, Height: ActivityHeight},
 			},
@@ -240,7 +240,7 @@ func (fb *flowBuilder) addRollbackAction(s *ast.RollbackStmt) model.ID {
 // addChangeObjectAction creates a CHANGE statement.
 func (fb *flowBuilder) addChangeObjectAction(s *ast.ChangeObjectStmt) model.ID {
 	action := &microflows.ChangeObjectAction{
-		BaseElement:     model.BaseElement{ID: model.ID(mpr.GenerateID())},
+		BaseElement:     model.BaseElement{ID: model.ID(types.GenerateID())},
 		ChangeVariable:  s.Variable,
 		Commit:          microflows.CommitTypeNo,
 		RefreshInClient: false,
@@ -255,7 +255,7 @@ func (fb *flowBuilder) addChangeObjectAction(s *ast.ChangeObjectStmt) model.ID {
 	// Build MemberChange items for each SET assignment
 	for _, change := range s.Changes {
 		memberChange := &microflows.MemberChange{
-			BaseElement: model.BaseElement{ID: model.ID(mpr.GenerateID())},
+			BaseElement: model.BaseElement{ID: model.ID(types.GenerateID())},
 			Type:        microflows.MemberChangeTypeSet,
 			Value:       fb.memberExpressionToString(change.Value, entityQN, change.Attribute),
 		}
@@ -266,7 +266,7 @@ func (fb *flowBuilder) addChangeObjectAction(s *ast.ChangeObjectStmt) model.ID {
 	activity := &microflows.ActionActivity{
 		BaseActivity: microflows.BaseActivity{
 			BaseMicroflowObject: microflows.BaseMicroflowObject{
-				BaseElement: model.BaseElement{ID: model.ID(mpr.GenerateID())},
+				BaseElement: model.BaseElement{ID: model.ID(types.GenerateID())},
 				Position:    model.Point{X: fb.posX, Y: fb.posY},
 				Size:        model.Size{Width: ActivityWidth, Height: ActivityHeight},
 			},
@@ -304,7 +304,7 @@ func (fb *flowBuilder) addRetrieveAction(s *ast.RetrieveStmt) model.ID {
 			// Reverse traversal on Reference: child → parent (one-to-many)
 			// Use DatabaseRetrieveSource with XPath to get a list of parent entities
 			dbSource := &microflows.DatabaseRetrieveSource{
-				BaseElement:         model.BaseElement{ID: model.ID(mpr.GenerateID())},
+				BaseElement:         model.BaseElement{ID: model.ID(types.GenerateID())},
 				EntityQualifiedName: assocInfo.parentEntityQN,
 				XPathConstraint:     "[" + assocQN + " = $" + s.StartVariable + "]",
 			}
@@ -315,7 +315,7 @@ func (fb *flowBuilder) addRetrieveAction(s *ast.RetrieveStmt) model.ID {
 		} else {
 			// Forward traversal or ReferenceSet: use AssociationRetrieveSource
 			source = &microflows.AssociationRetrieveSource{
-				BaseElement:              model.BaseElement{ID: model.ID(mpr.GenerateID())},
+				BaseElement:              model.BaseElement{ID: model.ID(types.GenerateID())},
 				StartVariable:            s.StartVariable,
 				AssociationQualifiedName: assocQN,
 			}
@@ -337,7 +337,7 @@ func (fb *flowBuilder) addRetrieveAction(s *ast.RetrieveStmt) model.ID {
 		// Database retrieve: RETRIEVE $List FROM Module.Entity WHERE ...
 		entityQN := s.Source.Module + "." + s.Source.Name
 		dbSource := &microflows.DatabaseRetrieveSource{
-			BaseElement:         model.BaseElement{ID: model.ID(mpr.GenerateID())},
+			BaseElement:         model.BaseElement{ID: model.ID(types.GenerateID())},
 			EntityQualifiedName: entityQN,
 		}
 
@@ -349,7 +349,7 @@ func (fb *flowBuilder) addRetrieveAction(s *ast.RetrieveStmt) model.ID {
 				rangeType = microflows.RangeTypeFirst
 			}
 			dbSource.Range = &microflows.Range{
-				BaseElement: model.BaseElement{ID: model.ID(mpr.GenerateID())},
+				BaseElement: model.BaseElement{ID: model.ID(types.GenerateID())},
 				RangeType:   rangeType,
 				Limit:       s.Limit,
 				Offset:      s.Offset,
@@ -377,19 +377,19 @@ func (fb *flowBuilder) addRetrieveAction(s *ast.RetrieveStmt) model.ID {
 						// Extract entity from attribute path (first two parts)
 						attrEntityQN := parts[0] + "." + parts[1]
 						if attrEntityQN != entityQN {
-							fb.addError("SORT BY attribute '%s' does not belong to entity '%s'", col.Attribute, entityQN)
+							fb.addError("sort by attribute '%s' does not belong to entity '%s'", col.Attribute, entityQN)
 							continue // Skip this sort column but continue processing others
 						}
 					}
 				}
 
 				direction := microflows.SortDirectionAscending
-				if col.Order == "DESC" {
+				if col.Order == "desc" {
 					direction = microflows.SortDirectionDescending
 				}
 
 				dbSource.Sorting = append(dbSource.Sorting, &microflows.SortItem{
-					BaseElement:            model.BaseElement{ID: model.ID(mpr.GenerateID())},
+					BaseElement:            model.BaseElement{ID: model.ID(types.GenerateID())},
 					AttributeQualifiedName: attrPath,
 					Direction:              direction,
 				})
@@ -412,7 +412,7 @@ func (fb *flowBuilder) addRetrieveAction(s *ast.RetrieveStmt) model.ID {
 	}
 
 	action := &microflows.RetrieveAction{
-		BaseElement:    model.BaseElement{ID: model.ID(mpr.GenerateID())},
+		BaseElement:    model.BaseElement{ID: model.ID(types.GenerateID())},
 		OutputVariable: s.Variable,
 		Source:         source,
 	}
@@ -421,7 +421,7 @@ func (fb *flowBuilder) addRetrieveAction(s *ast.RetrieveStmt) model.ID {
 	activity := &microflows.ActionActivity{
 		BaseActivity: microflows.BaseActivity{
 			BaseMicroflowObject: microflows.BaseMicroflowObject{
-				BaseElement: model.BaseElement{ID: model.ID(mpr.GenerateID())},
+				BaseElement: model.BaseElement{ID: model.ID(types.GenerateID())},
 				Position:    model.Point{X: fb.posX, Y: fb.posY},
 				Size:        model.Size{Width: ActivityWidth, Height: ActivityHeight},
 			},
@@ -451,23 +451,23 @@ func (fb *flowBuilder) addListOperationAction(s *ast.ListOperationStmt) model.ID
 	switch s.Operation {
 	case ast.ListOpHead:
 		operation = &microflows.HeadOperation{
-			BaseElement:  model.BaseElement{ID: model.ID(mpr.GenerateID())},
+			BaseElement:  model.BaseElement{ID: model.ID(types.GenerateID())},
 			ListVariable: s.InputVariable,
 		}
 	case ast.ListOpTail:
 		operation = &microflows.TailOperation{
-			BaseElement:  model.BaseElement{ID: model.ID(mpr.GenerateID())},
+			BaseElement:  model.BaseElement{ID: model.ID(types.GenerateID())},
 			ListVariable: s.InputVariable,
 		}
 	case ast.ListOpFind:
 		operation = &microflows.FindOperation{
-			BaseElement:  model.BaseElement{ID: model.ID(mpr.GenerateID())},
+			BaseElement:  model.BaseElement{ID: model.ID(types.GenerateID())},
 			ListVariable: s.InputVariable,
 			Expression:   fb.exprToString(s.Condition),
 		}
 	case ast.ListOpFilter:
 		operation = &microflows.FilterOperation{
-			BaseElement:  model.BaseElement{ID: model.ID(mpr.GenerateID())},
+			BaseElement:  model.BaseElement{ID: model.ID(types.GenerateID())},
 			ListVariable: s.InputVariable,
 			Expression:   fb.exprToString(s.Condition),
 		}
@@ -494,52 +494,64 @@ func (fb *flowBuilder) addListOperationAction(s *ast.ListOperationStmt) model.ID
 				attrQN = entityType + "." + spec.Attribute
 			}
 			sortItems = append(sortItems, &microflows.SortItem{
-				BaseElement:            model.BaseElement{ID: model.ID(mpr.GenerateID())},
+				BaseElement:            model.BaseElement{ID: model.ID(types.GenerateID())},
 				AttributeQualifiedName: attrQN,
 				Direction:              direction,
 			})
 		}
 		operation = &microflows.SortOperation{
-			BaseElement:  model.BaseElement{ID: model.ID(mpr.GenerateID())},
+			BaseElement:  model.BaseElement{ID: model.ID(types.GenerateID())},
 			ListVariable: s.InputVariable,
 			Sorting:      sortItems,
 		}
 	case ast.ListOpUnion:
 		operation = &microflows.UnionOperation{
-			BaseElement:   model.BaseElement{ID: model.ID(mpr.GenerateID())},
+			BaseElement:   model.BaseElement{ID: model.ID(types.GenerateID())},
 			ListVariable1: s.InputVariable,
 			ListVariable2: s.SecondVariable,
 		}
 	case ast.ListOpIntersect:
 		operation = &microflows.IntersectOperation{
-			BaseElement:   model.BaseElement{ID: model.ID(mpr.GenerateID())},
+			BaseElement:   model.BaseElement{ID: model.ID(types.GenerateID())},
 			ListVariable1: s.InputVariable,
 			ListVariable2: s.SecondVariable,
 		}
 	case ast.ListOpSubtract:
 		operation = &microflows.SubtractOperation{
-			BaseElement:   model.BaseElement{ID: model.ID(mpr.GenerateID())},
+			BaseElement:   model.BaseElement{ID: model.ID(types.GenerateID())},
 			ListVariable1: s.InputVariable,
 			ListVariable2: s.SecondVariable,
 		}
 	case ast.ListOpContains:
 		operation = &microflows.ContainsOperation{
-			BaseElement:    model.BaseElement{ID: model.ID(mpr.GenerateID())},
+			BaseElement:    model.BaseElement{ID: model.ID(types.GenerateID())},
 			ListVariable:   s.InputVariable,
 			ObjectVariable: s.SecondVariable, // The item to check
 		}
 	case ast.ListOpEquals:
 		operation = &microflows.EqualsOperation{
-			BaseElement:   model.BaseElement{ID: model.ID(mpr.GenerateID())},
+			BaseElement:   model.BaseElement{ID: model.ID(types.GenerateID())},
 			ListVariable1: s.InputVariable,
 			ListVariable2: s.SecondVariable,
 		}
+	case ast.ListOpRange:
+		rangeOp := &microflows.ListRangeOperation{
+			BaseElement:  model.BaseElement{ID: model.ID(types.GenerateID())},
+			ListVariable: s.InputVariable,
+		}
+		if s.OffsetExpr != nil {
+			rangeOp.OffsetExpression = fb.exprToString(s.OffsetExpr)
+		}
+		if s.LimitExpr != nil {
+			rangeOp.LimitExpression = fb.exprToString(s.LimitExpr)
+		}
+		operation = rangeOp
 	default:
 		return ""
 	}
 
 	action := &microflows.ListOperationAction{
-		BaseElement:    model.BaseElement{ID: model.ID(mpr.GenerateID())},
+		BaseElement:    model.BaseElement{ID: model.ID(types.GenerateID())},
 		Operation:      operation,
 		OutputVariable: s.OutputVariable,
 	}
@@ -548,7 +560,7 @@ func (fb *flowBuilder) addListOperationAction(s *ast.ListOperationStmt) model.ID
 	if fb.varTypes != nil && s.OutputVariable != "" && s.InputVariable != "" {
 		inputType := fb.varTypes[s.InputVariable]
 		switch s.Operation {
-		case ast.ListOpFilter, ast.ListOpSort, ast.ListOpTail, ast.ListOpUnion, ast.ListOpIntersect, ast.ListOpSubtract:
+		case ast.ListOpFilter, ast.ListOpSort, ast.ListOpTail, ast.ListOpUnion, ast.ListOpIntersect, ast.ListOpSubtract, ast.ListOpRange:
 			// These operations preserve the list type
 			if inputType != "" {
 				fb.varTypes[s.OutputVariable] = inputType
@@ -565,7 +577,7 @@ func (fb *flowBuilder) addListOperationAction(s *ast.ListOperationStmt) model.ID
 	activity := &microflows.ActionActivity{
 		BaseActivity: microflows.BaseActivity{
 			BaseMicroflowObject: microflows.BaseMicroflowObject{
-				BaseElement: model.BaseElement{ID: model.ID(mpr.GenerateID())},
+				BaseElement: model.BaseElement{ID: model.ID(types.GenerateID())},
 				Position:    model.Point{X: fb.posX, Y: fb.posY},
 				Size:        model.Size{Width: ActivityWidth, Height: ActivityHeight},
 			},
@@ -598,7 +610,7 @@ func (fb *flowBuilder) addAggregateListAction(s *ast.AggregateListStmt) model.ID
 	}
 
 	action := &microflows.AggregateListAction{
-		BaseElement:    model.BaseElement{ID: model.ID(mpr.GenerateID())},
+		BaseElement:    model.BaseElement{ID: model.ID(types.GenerateID())},
 		InputVariable:  s.InputVariable,
 		OutputVariable: s.OutputVariable,
 		Function:       function,
@@ -619,7 +631,7 @@ func (fb *flowBuilder) addAggregateListAction(s *ast.AggregateListStmt) model.ID
 	activity := &microflows.ActionActivity{
 		BaseActivity: microflows.BaseActivity{
 			BaseMicroflowObject: microflows.BaseMicroflowObject{
-				BaseElement: model.BaseElement{ID: model.ID(mpr.GenerateID())},
+				BaseElement: model.BaseElement{ID: model.ID(types.GenerateID())},
 				Position:    model.Point{X: fb.posX, Y: fb.posY},
 				Size:        model.Size{Width: ActivityWidth, Height: ActivityHeight},
 			},
@@ -641,7 +653,7 @@ func (fb *flowBuilder) addCreateListAction(s *ast.CreateListStmt) model.ID {
 	}
 
 	action := &microflows.CreateListAction{
-		BaseElement:         model.BaseElement{ID: model.ID(mpr.GenerateID())},
+		BaseElement:         model.BaseElement{ID: model.ID(types.GenerateID())},
 		OutputVariable:      s.Variable,
 		EntityQualifiedName: entityQN,
 	}
@@ -654,7 +666,7 @@ func (fb *flowBuilder) addCreateListAction(s *ast.CreateListStmt) model.ID {
 	activity := &microflows.ActionActivity{
 		BaseActivity: microflows.BaseActivity{
 			BaseMicroflowObject: microflows.BaseMicroflowObject{
-				BaseElement: model.BaseElement{ID: model.ID(mpr.GenerateID())},
+				BaseElement: model.BaseElement{ID: model.ID(types.GenerateID())},
 				Position:    model.Point{X: fb.posX, Y: fb.posY},
 				Size:        model.Size{Width: ActivityWidth, Height: ActivityHeight},
 			},
@@ -671,7 +683,7 @@ func (fb *flowBuilder) addCreateListAction(s *ast.CreateListStmt) model.ID {
 // addAddToListAction creates an ADD TO list statement.
 func (fb *flowBuilder) addAddToListAction(s *ast.AddToListStmt) model.ID {
 	action := &microflows.ChangeListAction{
-		BaseElement:    model.BaseElement{ID: model.ID(mpr.GenerateID())},
+		BaseElement:    model.BaseElement{ID: model.ID(types.GenerateID())},
 		Type:           microflows.ChangeListTypeAdd,
 		ChangeVariable: s.List,
 		Value:          "$" + s.Item,
@@ -680,7 +692,7 @@ func (fb *flowBuilder) addAddToListAction(s *ast.AddToListStmt) model.ID {
 	activity := &microflows.ActionActivity{
 		BaseActivity: microflows.BaseActivity{
 			BaseMicroflowObject: microflows.BaseMicroflowObject{
-				BaseElement: model.BaseElement{ID: model.ID(mpr.GenerateID())},
+				BaseElement: model.BaseElement{ID: model.ID(types.GenerateID())},
 				Position:    model.Point{X: fb.posX, Y: fb.posY},
 				Size:        model.Size{Width: ActivityWidth, Height: ActivityHeight},
 			},
@@ -697,7 +709,7 @@ func (fb *flowBuilder) addAddToListAction(s *ast.AddToListStmt) model.ID {
 // addRemoveFromListAction creates a REMOVE FROM list statement.
 func (fb *flowBuilder) addRemoveFromListAction(s *ast.RemoveFromListStmt) model.ID {
 	action := &microflows.ChangeListAction{
-		BaseElement:    model.BaseElement{ID: model.ID(mpr.GenerateID())},
+		BaseElement:    model.BaseElement{ID: model.ID(types.GenerateID())},
 		Type:           microflows.ChangeListTypeRemove,
 		ChangeVariable: s.List,
 		Value:          "$" + s.Item,
@@ -706,7 +718,7 @@ func (fb *flowBuilder) addRemoveFromListAction(s *ast.RemoveFromListStmt) model.
 	activity := &microflows.ActionActivity{
 		BaseActivity: microflows.BaseActivity{
 			BaseMicroflowObject: microflows.BaseMicroflowObject{
-				BaseElement: model.BaseElement{ID: model.ID(mpr.GenerateID())},
+				BaseElement: model.BaseElement{ID: model.ID(types.GenerateID())},
 				Position:    model.Point{X: fb.posX, Y: fb.posY},
 				Size:        model.Size{Width: ActivityWidth, Height: ActivityHeight},
 			},
@@ -722,14 +734,14 @@ func (fb *flowBuilder) addRemoveFromListAction(s *ast.RemoveFromListStmt) model.
 
 // isEntity checks whether a qualified name refers to an entity in the domain model.
 func (fb *flowBuilder) isEntity(moduleName, entityName string) bool {
-	if fb.reader == nil {
+	if fb.backend == nil {
 		return false
 	}
-	mod, err := fb.reader.GetModuleByName(moduleName)
+	mod, err := fb.backend.GetModuleByName(moduleName)
 	if err != nil || mod == nil {
 		return false
 	}
-	dm, err := fb.reader.GetDomainModel(mod.ID)
+	dm, err := fb.backend.GetDomainModel(mod.ID)
 	if err != nil || dm == nil {
 		return false
 	}
@@ -743,7 +755,7 @@ func (fb *flowBuilder) isEntity(moduleName, entityName string) bool {
 
 // resolveMemberChange determines whether a member name is an association or attribute
 // and sets the appropriate field on the MemberChange. It queries the domain model
-// to check if the name matches an association on the entity; if no reader is available,
+// to check if the name matches an association on the entity; if no backend is available,
 // it falls back to the dot-contains heuristic.
 //
 // memberName can be either bare ("Order_Customer") or qualified ("MfTest.Order_Customer").
@@ -772,9 +784,9 @@ func (fb *flowBuilder) resolveMemberChange(mc *microflows.MemberChange, memberNa
 	}
 
 	// Query domain model to check if this member is an association
-	if fb.reader != nil {
-		if mod, err := fb.reader.GetModuleByName(moduleName); err == nil && mod != nil {
-			if dm, err := fb.reader.GetDomainModel(mod.ID); err == nil && dm != nil {
+	if fb.backend != nil {
+		if mod, err := fb.backend.GetModuleByName(moduleName); err == nil && mod != nil {
+			if dm, err := fb.backend.GetDomainModel(mod.ID); err == nil && dm != nil {
 				for _, a := range dm.Associations {
 					if a.Name == bareName {
 						mc.AssociationQualifiedName = qualifiedName
@@ -816,16 +828,16 @@ type assocLookupResult struct {
 
 // lookupAssociation finds an association by module and name, returning its type
 // and the qualified names of its parent and child entities. Returns nil if the
-// association cannot be found (e.g., reader is nil or module doesn't exist).
+// association cannot be found (e.g., backend is nil or module doesn't exist).
 func (fb *flowBuilder) lookupAssociation(moduleName, assocName string) *assocLookupResult {
-	if fb.reader == nil {
+	if fb.backend == nil {
 		return nil
 	}
-	mod, err := fb.reader.GetModuleByName(moduleName)
+	mod, err := fb.backend.GetModuleByName(moduleName)
 	if err != nil || mod == nil {
 		return nil
 	}
-	dm, err := fb.reader.GetDomainModel(mod.ID)
+	dm, err := fb.backend.GetDomainModel(mod.ID)
 	if err != nil || dm == nil {
 		return nil
 	}

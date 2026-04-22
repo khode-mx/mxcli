@@ -4,26 +4,29 @@ package executor
 
 import (
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	"github.com/mendixlabs/mxcli/mdl/backend"
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
+	"github.com/mendixlabs/mxcli/mdl/types"
 	"github.com/mendixlabs/mxcli/model"
-	"github.com/mendixlabs/mxcli/sdk/mpr"
 )
 
-// showImportMappings prints a table of all import mapping documents.
-func (e *Executor) showImportMappings(inModule string) error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+// listImportMappings prints a table of all import mapping documents.
+func listImportMappings(ctx *ExecContext, inModule string) error {
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
-	all, err := e.reader.ListImportMappings()
+	all, err := ctx.Backend.ListImportMappings()
 	if err != nil {
-		return fmt.Errorf("failed to list import mappings: %w", err)
+		return mdlerrors.NewBackend("list import mappings", err)
 	}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
 		return err
 	}
@@ -56,9 +59,9 @@ func (e *Executor) showImportMappings(inModule string) error {
 
 	if len(rows) == 0 {
 		if inModule != "" {
-			fmt.Fprintf(e.output, "No import mappings found in module %s\n", inModule)
+			fmt.Fprintf(ctx.Output, "No import mappings found in module %s\n", inModule)
 		} else {
-			fmt.Fprintln(e.output, "No import mappings found")
+			fmt.Fprintln(ctx.Output, "No import mappings found")
 		}
 		return nil
 	}
@@ -72,46 +75,49 @@ func (e *Executor) showImportMappings(inModule string) error {
 	for _, r := range rows {
 		result.Rows = append(result.Rows, []any{r.qualifiedName, r.name, r.schemaSource, r.elementCount})
 	}
-	return e.writeResult(result)
+	return writeResult(ctx, result)
 }
 
 // describeImportMapping prints the MDL representation of an import mapping.
-func (e *Executor) describeImportMapping(name ast.QualifiedName) error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+func describeImportMapping(ctx *ExecContext, name ast.QualifiedName) error {
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
-	im, err := e.reader.GetImportMappingByQualifiedName(name.Module, name.Name)
+	im, err := ctx.Backend.GetImportMappingByQualifiedName(name.Module, name.Name)
 	if err != nil {
-		return fmt.Errorf("import mapping %s not found", name)
+		if strings.Contains(err.Error(), "not found") {
+			return mdlerrors.NewNotFound("import mapping", name.String())
+		}
+		return mdlerrors.NewBackend("get import mapping", err)
 	}
 
 	if im.Documentation != "" {
-		fmt.Fprintf(e.output, "/**\n * %s\n */\n", strings.ReplaceAll(im.Documentation, "\n", "\n * "))
+		fmt.Fprintf(ctx.Output, "/**\n * %s\n */\n", strings.ReplaceAll(im.Documentation, "\n", "\n * "))
 	}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
 		return err
 	}
 	modID := h.FindModuleID(im.ContainerID)
 	moduleName := h.GetModuleName(modID)
 
-	fmt.Fprintf(e.output, "CREATE IMPORT MAPPING %s.%s\n", moduleName, im.Name)
+	fmt.Fprintf(ctx.Output, "create import mapping %s.%s\n", moduleName, im.Name)
 
 	if im.JsonStructure != "" {
-		fmt.Fprintf(e.output, "  WITH JSON STRUCTURE %s\n", im.JsonStructure)
+		fmt.Fprintf(ctx.Output, "  with json structure %s\n", im.JsonStructure)
 	} else if im.XmlSchema != "" {
-		fmt.Fprintf(e.output, "  WITH XML SCHEMA %s\n", im.XmlSchema)
+		fmt.Fprintf(ctx.Output, "  with xml schema %s\n", im.XmlSchema)
 	}
 
 	if len(im.Elements) > 0 {
-		fmt.Fprintln(e.output, "{")
+		fmt.Fprintln(ctx.Output, "{")
 		for _, elem := range im.Elements {
-			printImportMappingElement(e, elem, 1, true)
-			fmt.Fprintln(e.output)
+			printImportMappingElement(ctx.Output, elem, 1, true)
+			fmt.Fprintln(ctx.Output)
 		}
-		fmt.Fprintln(e.output, "};")
+		fmt.Fprintln(ctx.Output, "};")
 	}
 	return nil
 }
@@ -120,15 +126,15 @@ func (e *Executor) describeImportMapping(name ast.QualifiedName) error {
 func handlingKeyword(handling string) string {
 	switch handling {
 	case "Find":
-		return "FIND"
+		return "find"
 	case "FindOrCreate":
-		return "FIND OR CREATE"
+		return "find or create"
 	default:
-		return "CREATE"
+		return "create"
 	}
 }
 
-func printImportMappingElement(e *Executor, elem *model.ImportMappingElement, depth int, isRoot bool) {
+func printImportMappingElement(w io.Writer, elem *model.ImportMappingElement, depth int, isRoot bool) {
 	indent := strings.Repeat("  ", depth)
 	if elem.Kind == "Object" {
 		handling := handlingKeyword(elem.ObjectHandling)
@@ -138,7 +144,7 @@ func printImportMappingElement(e *Executor, elem *model.ImportMappingElement, de
 			if entity == "" {
 				entity = "."
 			}
-			fmt.Fprintf(e.output, "%s%s %s {\n", indent, handling, entity)
+			fmt.Fprintf(w, "%s%s %s {\n", indent, handling, entity)
 		} else {
 			// Nested object element:
 			//   CREATE Assoc/Entity = jsonKey   — normal association path
@@ -147,26 +153,26 @@ func printImportMappingElement(e *Executor, elem *model.ImportMappingElement, de
 			assoc := elem.Association
 			entity := elem.Entity
 			if assoc == "" && entity == "" {
-				fmt.Fprintf(e.output, "%s%s . = %s", indent, handling, elem.ExposedName)
+				fmt.Fprintf(w, "%s%s . = %s", indent, handling, elem.ExposedName)
 			} else if assoc == "" {
-				fmt.Fprintf(e.output, "%s%s ./%s = %s", indent, handling, entity, elem.ExposedName)
+				fmt.Fprintf(w, "%s%s ./%s = %s", indent, handling, entity, elem.ExposedName)
 			} else {
-				fmt.Fprintf(e.output, "%s%s %s/%s = %s", indent, handling, assoc, entity, elem.ExposedName)
+				fmt.Fprintf(w, "%s%s %s/%s = %s", indent, handling, assoc, entity, elem.ExposedName)
 			}
 			if len(elem.Children) > 0 {
-				fmt.Fprintln(e.output, " {")
+				fmt.Fprintln(w, " {")
 			}
 		}
 		if len(elem.Children) > 0 {
 			for i, child := range elem.Children {
-				printImportMappingElement(e, child, depth+1, false)
+				printImportMappingElement(w, child, depth+1, false)
 				if i < len(elem.Children)-1 {
-					fmt.Fprintln(e.output, ",")
+					fmt.Fprintln(w, ",")
 				} else {
-					fmt.Fprintln(e.output)
+					fmt.Fprintln(w)
 				}
 			}
-			fmt.Fprintf(e.output, "%s}", indent)
+			fmt.Fprintf(w, "%s}", indent)
 		}
 	} else {
 		// Value mapping: Attr = jsonField KEY
@@ -177,21 +183,21 @@ func printImportMappingElement(e *Executor, elem *model.ImportMappingElement, de
 		}
 		keyStr := ""
 		if elem.IsKey {
-			keyStr = " KEY"
+			keyStr = " key"
 		}
-		fmt.Fprintf(e.output, "%s%s = %s%s", indent, attrName, elem.ExposedName, keyStr)
+		fmt.Fprintf(w, "%s%s = %s%s", indent, attrName, elem.ExposedName, keyStr)
 	}
 }
 
 // execCreateImportMapping creates a new import mapping.
-func (e *Executor) execCreateImportMapping(s *ast.CreateImportMappingStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project in write mode")
+func execCreateImportMapping(ctx *ExecContext, s *ast.CreateImportMappingStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	module, err := e.findModule(s.Name.Module)
+	module, err := findModule(ctx, s.Name.Module)
 	if err != nil {
-		return fmt.Errorf("module %s not found", s.Name.Module)
+		return mdlerrors.NewNotFound("module", s.Name.Module)
 	}
 	containerID := module.ID
 
@@ -210,25 +216,25 @@ func (e *Executor) execCreateImportMapping(s *ast.CreateImportMappingStmt) error
 	}
 
 	// Build path→JsonElement map from JSON structure — mapping elements clone from this
-	jsElementsByPath := map[string]*mpr.JsonElement{}
+	jsElementsByPath := map[string]*types.JsonElement{}
 	if s.SchemaKind == "JSON_STRUCTURE" && s.SchemaRef.Module != "" {
-		if js, err2 := e.reader.GetJsonStructureByQualifiedName(s.SchemaRef.Module, s.SchemaRef.Name); err2 == nil {
+		if js, err2 := ctx.Backend.GetJsonStructureByQualifiedName(s.SchemaRef.Module, s.SchemaRef.Name); err2 == nil {
 			buildJsonElementPathMap(js.Elements, jsElementsByPath)
 		}
 	}
 
 	// Build element tree from the AST definition, cloning JSON structure properties
 	if s.RootElement != nil {
-		root := buildImportMappingElementModel(s.Name.Module, s.RootElement, "", "(Object)", e.reader, jsElementsByPath, true)
+		root := buildImportMappingElementModel(s.Name.Module, s.RootElement, "", "(Object)", ctx.Backend, jsElementsByPath, true)
 		im.Elements = append(im.Elements, root)
 	}
 
-	if err := e.writer.CreateImportMapping(im); err != nil {
-		return fmt.Errorf("failed to create import mapping: %w", err)
+	if err := ctx.Backend.CreateImportMapping(im); err != nil {
+		return mdlerrors.NewBackend("create import mapping", err)
 	}
 
-	if !e.quiet {
-		fmt.Fprintf(e.output, "Created import mapping %s.%s\n", s.Name.Module, s.Name.Name)
+	if !ctx.Quiet {
+		fmt.Fprintf(ctx.Output, "Created import mapping %s.%s\n", s.Name.Module, s.Name.Name)
 	}
 	return nil
 }
@@ -237,10 +243,10 @@ func (e *Executor) execCreateImportMapping(s *ast.CreateImportMappingStmt) error
 // It clones properties from the matching JSON structure element (ExposedName, JsonPath,
 // MaxOccurs, ElementType, etc.) and adds mapping-specific bindings (Entity, Attribute,
 // Association, ObjectHandling).
-func buildImportMappingElementModel(moduleName string, def *ast.ImportMappingElementDef, parentEntity, parentPath string, reader *mpr.Reader, jsElems map[string]*mpr.JsonElement, isRoot bool) *model.ImportMappingElement {
+func buildImportMappingElementModel(moduleName string, def *ast.ImportMappingElementDef, parentEntity, parentPath string, b backend.FullBackend, jsElems map[string]*types.JsonElement, isRoot bool) *model.ImportMappingElement {
 	elem := &model.ImportMappingElement{
 		BaseElement: model.BaseElement{
-			ID: model.ID(mpr.GenerateID()),
+			ID: model.ID(types.GenerateID()),
 		},
 	}
 
@@ -311,13 +317,13 @@ func buildImportMappingElementModel(moduleName string, def *ast.ImportMappingEle
 		}
 
 		for _, child := range def.Children {
-			elem.Children = append(elem.Children, buildImportMappingElementModel(moduleName, child, entity, childPath, reader, jsElems, false))
+			elem.Children = append(elem.Children, buildImportMappingElementModel(moduleName, child, entity, childPath, b, jsElems, false))
 		}
 	} else {
 		// Value mapping — bind to attribute
 		elem.Kind = "Value"
 		elem.TypeName = "ImportMappings$ValueMappingElement"
-		elem.DataType = resolveAttributeType(parentEntity, def.Attribute, reader)
+		elem.DataType = resolveAttributeType(parentEntity, def.Attribute, b)
 		elem.IsKey = def.IsKey
 		attr := def.Attribute
 		if parentEntity != "" && !strings.Contains(attr, ".") {
@@ -330,7 +336,7 @@ func buildImportMappingElementModel(moduleName string, def *ast.ImportMappingEle
 }
 
 // buildJsonElementPathMap recursively builds a map from JSON path → JsonElement.
-func buildJsonElementPathMap(elems []*mpr.JsonElement, m map[string]*mpr.JsonElement) {
+func buildJsonElementPathMap(elems []*types.JsonElement, m map[string]*types.JsonElement) {
 	for _, e := range elems {
 		if e == nil {
 			continue
@@ -342,15 +348,15 @@ func buildJsonElementPathMap(elems []*mpr.JsonElement, m map[string]*mpr.JsonEle
 
 // resolveAttributeType looks up the data type of an entity attribute from the project.
 // Returns "String" as default if the attribute cannot be found.
-func resolveAttributeType(entityQN, attrName string, reader *mpr.Reader) string {
-	if reader == nil || entityQN == "" {
+func resolveAttributeType(entityQN, attrName string, b backend.DomainModelBackend) string {
+	if b == nil || entityQN == "" {
 		return "String"
 	}
 	parts := strings.SplitN(entityQN, ".", 2)
 	if len(parts) != 2 {
 		return "String"
 	}
-	dms, err := reader.ListDomainModels()
+	dms, err := b.ListDomainModels()
 	if err != nil {
 		return "String"
 	}
@@ -369,22 +375,25 @@ func resolveAttributeType(entityQN, attrName string, reader *mpr.Reader) string 
 }
 
 // execDropImportMapping deletes an import mapping.
-func (e *Executor) execDropImportMapping(s *ast.DropImportMappingStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project in write mode")
+func execDropImportMapping(ctx *ExecContext, s *ast.DropImportMappingStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	im, err := e.reader.GetImportMappingByQualifiedName(s.Name.Module, s.Name.Name)
+	im, err := ctx.Backend.GetImportMappingByQualifiedName(s.Name.Module, s.Name.Name)
 	if err != nil {
-		return fmt.Errorf("import mapping %s not found", s.Name)
+		if strings.Contains(err.Error(), "not found") {
+			return mdlerrors.NewNotFound("import mapping", s.Name.String())
+		}
+		return mdlerrors.NewBackend("get import mapping", err)
 	}
 
-	if err := e.writer.DeleteImportMapping(im.ID); err != nil {
-		return fmt.Errorf("failed to drop import mapping: %w", err)
+	if err := ctx.Backend.DeleteImportMapping(im.ID); err != nil {
+		return mdlerrors.NewBackend("drop import mapping", err)
 	}
 
-	if !e.quiet {
-		fmt.Fprintf(e.output, "Dropped import mapping %s.%s\n", s.Name.Module, s.Name.Name)
+	if !ctx.Quiet {
+		fmt.Fprintf(ctx.Output, "Dropped import mapping %s.%s\n", s.Name.Module, s.Name.Name)
 	}
 	return nil
 }

@@ -9,25 +9,26 @@ import (
 	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
 	"github.com/mendixlabs/mxcli/model"
 	"github.com/mendixlabs/mxcli/sdk/domainmodel"
 )
 
 // execCreateModule handles CREATE MODULE statements.
-func (e *Executor) execCreateModule(s *ast.CreateModuleStmt) error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+func execCreateModule(ctx *ExecContext, s *ast.CreateModuleStmt) error {
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
 	// Check if module already exists
-	modules, err := e.reader.ListModules()
+	modules, err := ctx.Backend.ListModules()
 	if err != nil {
-		return fmt.Errorf("failed to list modules: %w", err)
+		return mdlerrors.NewBackend("list modules", err)
 	}
 
 	for _, m := range modules {
 		if m.Name == s.Name {
-			fmt.Fprintf(e.output, "Module '%s' already exists\n", s.Name)
+			fmt.Fprintf(ctx.Output, "Module '%s' already exists\n", s.Name)
 			return nil
 		}
 	}
@@ -37,14 +38,14 @@ func (e *Executor) execCreateModule(s *ast.CreateModuleStmt) error {
 		Name: s.Name,
 	}
 
-	if err := e.writer.CreateModule(module); err != nil {
-		return fmt.Errorf("failed to create module: %w", err)
+	if err := ctx.Backend.CreateModule(module); err != nil {
+		return mdlerrors.NewBackend("create module", err)
 	}
 
 	// Invalidate cache so new module is visible
-	e.invalidateModuleCache()
+	invalidateModuleCache(ctx)
 
-	fmt.Fprintf(e.output, "Created module: %s\n", s.Name)
+	fmt.Fprintf(ctx.Output, "Created module: %s\n", s.Name)
 	return nil
 }
 
@@ -57,15 +58,15 @@ func (e *Executor) execCreateModule(s *ast.CreateModuleStmt) error {
 // - Pages
 // - Snippets
 // - Constants
-func (e *Executor) execDropModule(s *ast.DropModuleStmt) error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+func execDropModule(ctx *ExecContext, s *ast.DropModuleStmt) error {
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
 	// Find the module
-	modules, err := e.reader.ListModules()
+	modules, err := ctx.Backend.ListModules()
 	if err != nil {
-		return fmt.Errorf("failed to list modules: %w", err)
+		return mdlerrors.NewBackend("list modules", err)
 	}
 
 	var targetModule *model.Module
@@ -77,21 +78,21 @@ func (e *Executor) execDropModule(s *ast.DropModuleStmt) error {
 	}
 
 	if targetModule == nil {
-		return fmt.Errorf("module not found: %s", s.Name)
+		return mdlerrors.NewNotFound("module", s.Name)
 	}
 
 	// Build set of all container IDs belonging to this module (including nested folders)
-	moduleContainers := e.getModuleContainers(targetModule.ID)
+	moduleContainers := getModuleContainers(ctx, targetModule.ID)
 
 	// Counters for summary
 	var nEnums, nEntities, nAssocs, nMicroflows, nNanoflows, nPages, nSnippets, nLayouts, nConstants, nJavaActions, nServices, nBizEvents, nDbConns int
 
 	// Delete enumerations in this module
-	if enums, err := e.reader.ListEnumerations(); err == nil {
+	if enums, err := ctx.Backend.ListEnumerations(); err == nil {
 		for _, enum := range enums {
 			if moduleContainers[enum.ContainerID] {
-				if err := e.writer.DeleteEnumeration(enum.ID); err != nil {
-					fmt.Fprintf(e.output, "Warning: failed to delete enumeration %s: %v\n", enum.Name, err)
+				if err := ctx.Backend.DeleteEnumeration(enum.ID); err != nil {
+					fmt.Fprintf(ctx.Output, "Warning: failed to delete enumeration %s: %v\n", enum.Name, err)
 				} else {
 					nEnums++
 				}
@@ -100,21 +101,21 @@ func (e *Executor) execDropModule(s *ast.DropModuleStmt) error {
 	}
 
 	// Delete entities in domain models belonging to this module
-	if dms, err := e.reader.ListDomainModels(); err == nil {
+	if dms, err := ctx.Backend.ListDomainModels(); err == nil {
 		for _, dm := range dms {
 			if moduleContainers[dm.ContainerID] {
 				// Delete all associations in this domain model first (they reference entities)
 				for _, assoc := range dm.Associations {
-					if err := e.writer.DeleteAssociation(dm.ID, assoc.ID); err != nil {
-						fmt.Fprintf(e.output, "Warning: failed to delete association %s: %v\n", assoc.Name, err)
+					if err := ctx.Backend.DeleteAssociation(dm.ID, assoc.ID); err != nil {
+						fmt.Fprintf(ctx.Output, "Warning: failed to delete association %s: %v\n", assoc.Name, err)
 					} else {
 						nAssocs++
 					}
 				}
 				// Delete all entities in this domain model
 				for _, entity := range dm.Entities {
-					if err := e.writer.DeleteEntity(dm.ID, entity.ID); err != nil {
-						fmt.Fprintf(e.output, "Warning: failed to delete entity %s: %v\n", entity.Name, err)
+					if err := ctx.Backend.DeleteEntity(dm.ID, entity.ID); err != nil {
+						fmt.Fprintf(ctx.Output, "Warning: failed to delete entity %s: %v\n", entity.Name, err)
 					} else {
 						nEntities++
 					}
@@ -124,11 +125,11 @@ func (e *Executor) execDropModule(s *ast.DropModuleStmt) error {
 	}
 
 	// Delete microflows in this module
-	if mfs, err := e.reader.ListMicroflows(); err == nil {
+	if mfs, err := ctx.Backend.ListMicroflows(); err == nil {
 		for _, mf := range mfs {
 			if moduleContainers[mf.ContainerID] {
-				if err := e.writer.DeleteMicroflow(mf.ID); err != nil {
-					fmt.Fprintf(e.output, "Warning: failed to delete microflow %s: %v\n", mf.Name, err)
+				if err := ctx.Backend.DeleteMicroflow(mf.ID); err != nil {
+					fmt.Fprintf(ctx.Output, "Warning: failed to delete microflow %s: %v\n", mf.Name, err)
 				} else {
 					nMicroflows++
 				}
@@ -137,11 +138,11 @@ func (e *Executor) execDropModule(s *ast.DropModuleStmt) error {
 	}
 
 	// Delete nanoflows in this module
-	if nfs, err := e.reader.ListNanoflows(); err == nil {
+	if nfs, err := ctx.Backend.ListNanoflows(); err == nil {
 		for _, nf := range nfs {
 			if moduleContainers[nf.ContainerID] {
-				if err := e.writer.DeleteNanoflow(nf.ID); err != nil {
-					fmt.Fprintf(e.output, "Warning: failed to delete nanoflow %s: %v\n", nf.Name, err)
+				if err := ctx.Backend.DeleteNanoflow(nf.ID); err != nil {
+					fmt.Fprintf(ctx.Output, "Warning: failed to delete nanoflow %s: %v\n", nf.Name, err)
 				} else {
 					nNanoflows++
 				}
@@ -150,11 +151,11 @@ func (e *Executor) execDropModule(s *ast.DropModuleStmt) error {
 	}
 
 	// Delete pages in this module
-	if pages, err := e.reader.ListPages(); err == nil {
+	if pages, err := ctx.Backend.ListPages(); err == nil {
 		for _, page := range pages {
 			if moduleContainers[page.ContainerID] {
-				if err := e.writer.DeletePage(page.ID); err != nil {
-					fmt.Fprintf(e.output, "Warning: failed to delete page %s: %v\n", page.Name, err)
+				if err := ctx.Backend.DeletePage(page.ID); err != nil {
+					fmt.Fprintf(ctx.Output, "Warning: failed to delete page %s: %v\n", page.Name, err)
 				} else {
 					nPages++
 				}
@@ -163,11 +164,11 @@ func (e *Executor) execDropModule(s *ast.DropModuleStmt) error {
 	}
 
 	// Delete snippets in this module
-	if snippets, err := e.reader.ListSnippets(); err == nil {
+	if snippets, err := ctx.Backend.ListSnippets(); err == nil {
 		for _, snippet := range snippets {
 			if moduleContainers[snippet.ContainerID] {
-				if err := e.writer.DeleteSnippet(snippet.ID); err != nil {
-					fmt.Fprintf(e.output, "Warning: failed to delete snippet %s: %v\n", snippet.Name, err)
+				if err := ctx.Backend.DeleteSnippet(snippet.ID); err != nil {
+					fmt.Fprintf(ctx.Output, "Warning: failed to delete snippet %s: %v\n", snippet.Name, err)
 				} else {
 					nSnippets++
 				}
@@ -176,11 +177,11 @@ func (e *Executor) execDropModule(s *ast.DropModuleStmt) error {
 	}
 
 	// Delete constants in this module
-	if constants, err := e.reader.ListConstants(); err == nil {
+	if constants, err := ctx.Backend.ListConstants(); err == nil {
 		for _, c := range constants {
 			if moduleContainers[c.ContainerID] {
-				if err := e.writer.DeleteConstant(c.ID); err != nil {
-					fmt.Fprintf(e.output, "Warning: failed to delete constant %s: %v\n", c.Name, err)
+				if err := ctx.Backend.DeleteConstant(c.ID); err != nil {
+					fmt.Fprintf(ctx.Output, "Warning: failed to delete constant %s: %v\n", c.Name, err)
 				} else {
 					nConstants++
 				}
@@ -189,11 +190,11 @@ func (e *Executor) execDropModule(s *ast.DropModuleStmt) error {
 	}
 
 	// Delete layouts in this module
-	if layouts, err := e.reader.ListLayouts(); err == nil {
+	if layouts, err := ctx.Backend.ListLayouts(); err == nil {
 		for _, l := range layouts {
 			if moduleContainers[l.ContainerID] {
-				if err := e.writer.DeleteLayout(l.ID); err != nil {
-					fmt.Fprintf(e.output, "Warning: failed to delete layout %s: %v\n", l.Name, err)
+				if err := ctx.Backend.DeleteLayout(l.ID); err != nil {
+					fmt.Fprintf(ctx.Output, "Warning: failed to delete layout %s: %v\n", l.Name, err)
 				} else {
 					nLayouts++
 				}
@@ -202,11 +203,11 @@ func (e *Executor) execDropModule(s *ast.DropModuleStmt) error {
 	}
 
 	// Delete Java actions in this module
-	if jas, err := e.reader.ListJavaActions(); err == nil {
+	if jas, err := ctx.Backend.ListJavaActions(); err == nil {
 		for _, ja := range jas {
 			if moduleContainers[ja.ContainerID] {
-				if err := e.writer.DeleteJavaAction(ja.ID); err != nil {
-					fmt.Fprintf(e.output, "Warning: failed to delete Java action %s: %v\n", ja.Name, err)
+				if err := ctx.Backend.DeleteJavaAction(ja.ID); err != nil {
+					fmt.Fprintf(ctx.Output, "Warning: failed to delete Java action %s: %v\n", ja.Name, err)
 				} else {
 					nJavaActions++
 				}
@@ -215,11 +216,11 @@ func (e *Executor) execDropModule(s *ast.DropModuleStmt) error {
 	}
 
 	// Delete business event services in this module
-	if services, err := e.reader.ListBusinessEventServices(); err == nil {
+	if services, err := ctx.Backend.ListBusinessEventServices(); err == nil {
 		for _, svc := range services {
 			if moduleContainers[svc.ContainerID] {
-				if err := e.writer.DeleteBusinessEventService(svc.ID); err != nil {
-					fmt.Fprintf(e.output, "Warning: failed to delete business event service %s: %v\n", svc.Name, err)
+				if err := ctx.Backend.DeleteBusinessEventService(svc.ID); err != nil {
+					fmt.Fprintf(ctx.Output, "Warning: failed to delete business event service %s: %v\n", svc.Name, err)
 				} else {
 					nBizEvents++
 				}
@@ -228,11 +229,11 @@ func (e *Executor) execDropModule(s *ast.DropModuleStmt) error {
 	}
 
 	// Delete database connections in this module
-	if conns, err := e.reader.ListDatabaseConnections(); err == nil {
+	if conns, err := ctx.Backend.ListDatabaseConnections(); err == nil {
 		for _, conn := range conns {
 			if moduleContainers[conn.ContainerID] {
-				if err := e.writer.DeleteDatabaseConnection(conn.ID); err != nil {
-					fmt.Fprintf(e.output, "Warning: failed to delete database connection %s: %v\n", conn.Name, err)
+				if err := ctx.Backend.DeleteDatabaseConnection(conn.ID); err != nil {
+					fmt.Fprintf(ctx.Output, "Warning: failed to delete database connection %s: %v\n", conn.Name, err)
 				} else {
 					nDbConns++
 				}
@@ -241,11 +242,11 @@ func (e *Executor) execDropModule(s *ast.DropModuleStmt) error {
 	}
 
 	// Delete consumed OData services (clients) in this module
-	if services, err := e.reader.ListConsumedODataServices(); err == nil {
+	if services, err := ctx.Backend.ListConsumedODataServices(); err == nil {
 		for _, svc := range services {
 			if moduleContainers[svc.ContainerID] {
-				if err := e.writer.DeleteConsumedODataService(svc.ID); err != nil {
-					fmt.Fprintf(e.output, "Warning: failed to delete OData client %s: %v\n", svc.Name, err)
+				if err := ctx.Backend.DeleteConsumedODataService(svc.ID); err != nil {
+					fmt.Fprintf(ctx.Output, "Warning: failed to delete OData client %s: %v\n", svc.Name, err)
 				} else {
 					nServices++
 				}
@@ -254,11 +255,11 @@ func (e *Executor) execDropModule(s *ast.DropModuleStmt) error {
 	}
 
 	// Delete published OData services in this module
-	if services, err := e.reader.ListPublishedODataServices(); err == nil {
+	if services, err := ctx.Backend.ListPublishedODataServices(); err == nil {
 		for _, svc := range services {
 			if moduleContainers[svc.ContainerID] {
-				if err := e.writer.DeletePublishedODataService(svc.ID); err != nil {
-					fmt.Fprintf(e.output, "Warning: failed to delete OData service %s: %v\n", svc.Name, err)
+				if err := ctx.Backend.DeletePublishedODataService(svc.ID); err != nil {
+					fmt.Fprintf(ctx.Output, "Warning: failed to delete OData service %s: %v\n", svc.Name, err)
 				} else {
 					nServices++
 				}
@@ -267,20 +268,20 @@ func (e *Executor) execDropModule(s *ast.DropModuleStmt) error {
 	}
 
 	// Remove module roles from user roles in ProjectSecurity
-	if ms, err := e.reader.GetModuleSecurity(targetModule.ID); err == nil {
-		if ps, err := e.reader.GetProjectSecurity(); err == nil {
+	if ms, err := ctx.Backend.GetModuleSecurity(targetModule.ID); err == nil {
+		if ps, err := ctx.Backend.GetProjectSecurity(); err == nil {
 			for _, mr := range ms.ModuleRoles {
 				qualifiedRole := s.Name + "." + mr.Name
-				if n, err := e.writer.RemoveModuleRoleFromAllUserRoles(ps.ID, qualifiedRole); err == nil && n > 0 {
-					fmt.Fprintf(e.output, "Removed %s from %d user role(s)\n", qualifiedRole, n)
+				if n, err := ctx.Backend.RemoveModuleRoleFromAllUserRoles(ps.ID, qualifiedRole); err == nil && n > 0 {
+					fmt.Fprintf(ctx.Output, "Removed %s from %d user role(s)\n", qualifiedRole, n)
 				}
 			}
 		}
 	}
 
 	// Delete the module itself (and clean up themesource directory)
-	if err := e.writer.DeleteModuleWithCleanup(targetModule.ID, s.Name); err != nil {
-		return fmt.Errorf("failed to delete module: %w", err)
+	if err := ctx.Backend.DeleteModuleWithCleanup(targetModule.ID, s.Name); err != nil {
+		return mdlerrors.NewBackend("delete module", err)
 	}
 
 	// Build summary of what was removed
@@ -326,21 +327,23 @@ func (e *Executor) execDropModule(s *ast.DropModuleStmt) error {
 	}
 
 	if len(parts) > 0 {
-		fmt.Fprintf(e.output, "Dropped module: %s (%s)\n", s.Name, strings.Join(parts, ", "))
+		fmt.Fprintf(ctx.Output, "Dropped module: %s (%s)\n", s.Name, strings.Join(parts, ", "))
 	} else {
-		fmt.Fprintf(e.output, "Dropped module: %s (empty)\n", s.Name)
+		fmt.Fprintf(ctx.Output, "Dropped module: %s (empty)\n", s.Name)
 	}
 	return nil
 }
 
+// Executor method wrapper — kept during migration for callers not yet
+
 // getModuleContainers returns a set of all container IDs that belong to a module
 // (including nested folders).
-func (e *Executor) getModuleContainers(moduleID model.ID) map[model.ID]bool {
+func getModuleContainers(ctx *ExecContext, moduleID model.ID) map[model.ID]bool {
 	containers := make(map[model.ID]bool)
 	containers[moduleID] = true
 
 	// Build parent -> children map from units
-	units, err := e.reader.ListUnits()
+	units, err := ctx.Backend.ListUnits()
 	if err != nil {
 		return containers
 	}
@@ -351,7 +354,7 @@ func (e *Executor) getModuleContainers(moduleID model.ID) map[model.ID]bool {
 	}
 
 	// Also include folders
-	folders, _ := e.reader.ListFolders()
+	folders, _ := ctx.Backend.ListFolders()
 	for _, f := range folders {
 		childrenOf[f.ContainerID] = append(childrenOf[f.ContainerID], f.ID)
 	}
@@ -372,29 +375,29 @@ func (e *Executor) getModuleContainers(moduleID model.ID) map[model.ID]bool {
 	return containers
 }
 
-// showModules handles SHOW MODULES command.
-func (e *Executor) showModules() error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+// listModules handles SHOW MODULES command.
+func listModules(ctx *ExecContext) error {
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
 	// Always get fresh module list and update cache
-	e.invalidateModuleCache()
-	modules, err := e.getModulesFromCache()
+	invalidateModuleCache(ctx)
+	modules, err := getModulesFromCache(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to list modules: %w", err)
+		return mdlerrors.NewBackend("list modules", err)
 	}
 
 	// Get hierarchy for module resolution
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to build hierarchy: %w", err)
+		return mdlerrors.NewBackend("build hierarchy", err)
 	}
 
 	// Get units for type-based counting
-	units, err := e.reader.ListUnits()
+	units, err := ctx.Backend.ListUnits()
 	if err != nil {
-		return fmt.Errorf("failed to list units: %w", err)
+		return mdlerrors.NewBackend("list units", err)
 	}
 
 	// Count elements per module using unit types
@@ -433,7 +436,7 @@ func (e *Executor) showModules() error {
 	}
 
 	// Count entities from domain models
-	if dms, err := e.reader.ListDomainModels(); err == nil {
+	if dms, err := ctx.Backend.ListDomainModels(); err == nil {
 		for _, dm := range dms {
 			modID := h.FindModuleID(dm.ContainerID)
 			entityCounts[modID] += len(dm.Entities)
@@ -441,7 +444,7 @@ func (e *Executor) showModules() error {
 	}
 
 	// Count enumerations
-	if enums, err := e.reader.ListEnumerations(); err == nil {
+	if enums, err := ctx.Backend.ListEnumerations(); err == nil {
 		for _, enum := range enums {
 			modID := h.FindModuleID(enum.ContainerID)
 			enumCounts[modID]++
@@ -449,7 +452,7 @@ func (e *Executor) showModules() error {
 	}
 
 	// Count pages
-	if pages, err := e.reader.ListPages(); err == nil {
+	if pages, err := ctx.Backend.ListPages(); err == nil {
 		for _, p := range pages {
 			modID := h.FindModuleID(p.ContainerID)
 			pageCounts[modID]++
@@ -457,7 +460,7 @@ func (e *Executor) showModules() error {
 	}
 
 	// Count snippets
-	if snippets, err := e.reader.ListSnippets(); err == nil {
+	if snippets, err := ctx.Backend.ListSnippets(); err == nil {
 		for _, s := range snippets {
 			modID := h.FindModuleID(s.ContainerID)
 			snippetCounts[modID]++
@@ -465,7 +468,7 @@ func (e *Executor) showModules() error {
 	}
 
 	// Count microflows
-	if mfs, err := e.reader.ListMicroflows(); err == nil {
+	if mfs, err := ctx.Backend.ListMicroflows(); err == nil {
 		for _, mf := range mfs {
 			modID := h.FindModuleID(mf.ContainerID)
 			microflowCounts[modID]++
@@ -473,7 +476,7 @@ func (e *Executor) showModules() error {
 	}
 
 	// Count nanoflows
-	if nfs, err := e.reader.ListNanoflows(); err == nil {
+	if nfs, err := ctx.Backend.ListNanoflows(); err == nil {
 		for _, nf := range nfs {
 			modID := h.FindModuleID(nf.ContainerID)
 			nanoflowCounts[modID]++
@@ -481,7 +484,7 @@ func (e *Executor) showModules() error {
 	}
 
 	// Count constants
-	if constants, err := e.reader.ListConstants(); err == nil {
+	if constants, err := ctx.Backend.ListConstants(); err == nil {
 		for _, c := range constants {
 			modID := h.FindModuleID(c.ContainerID)
 			constantCounts[modID]++
@@ -489,7 +492,7 @@ func (e *Executor) showModules() error {
 	}
 
 	// Count Java actions
-	if jas, err := e.reader.ListJavaActions(); err == nil {
+	if jas, err := ctx.Backend.ListJavaActions(); err == nil {
 		for _, ja := range jas {
 			modID := h.FindModuleID(ja.ContainerID)
 			javaActionCounts[modID]++
@@ -562,19 +565,19 @@ func (e *Executor) showModules() error {
 	for _, r := range rows {
 		result.Rows = append(result.Rows, []any{r.name, r.source, r.entities, r.enums, r.pages, r.snippets, r.microflows, r.nanoflows, r.workflows, r.constants, r.javaActions, r.pubRest, r.pubOData, r.conOData, r.bizEvents, r.extDb})
 	}
-	return e.writeResult(result)
+	return writeResult(ctx, result)
 }
 
 // describeModule handles DESCRIBE MODULE [WITH ALL] command.
-func (e *Executor) describeModule(moduleName string, withAll bool) error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+func describeModule(ctx *ExecContext, moduleName string, withAll bool) error {
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
 	// Find the module
-	modules, err := e.reader.ListModules()
+	modules, err := ctx.Backend.ListModules()
 	if err != nil {
-		return fmt.Errorf("failed to list modules: %w", err)
+		return mdlerrors.NewBackend("list modules", err)
 	}
 
 	var targetModule *model.Module
@@ -586,40 +589,40 @@ func (e *Executor) describeModule(moduleName string, withAll bool) error {
 	}
 
 	if targetModule == nil {
-		return fmt.Errorf("module not found: %s", moduleName)
+		return mdlerrors.NewNotFound("module", moduleName)
 	}
 
 	// Output basic CREATE MODULE statement
-	fmt.Fprintf(e.output, "CREATE MODULE %s;\n", targetModule.Name)
+	fmt.Fprintf(ctx.Output, "create module %s;\n", targetModule.Name)
 
 	if !withAll {
-		fmt.Fprintln(e.output, "/")
+		fmt.Fprintln(ctx.Output, "/")
 		return nil
 	}
 
 	// Get all containers belonging to this module (including nested folders)
-	moduleContainers := e.getModuleContainers(targetModule.ID)
+	moduleContainers := getModuleContainers(ctx, targetModule.ID)
 
 	// Output separator
-	fmt.Fprintln(e.output)
+	fmt.Fprintln(ctx.Output)
 
 	// Output enumerations in this module (no dependencies between enums)
-	if enums, err := e.reader.ListEnumerations(); err == nil {
+	if enums, err := ctx.Backend.ListEnumerations(); err == nil {
 		for _, enum := range enums {
 			if moduleContainers[enum.ContainerID] {
-				if err := e.describeEnumeration(ast.QualifiedName{Module: moduleName, Name: enum.Name}); err == nil {
-					fmt.Fprintln(e.output)
+				if err := describeEnumeration(ctx, ast.QualifiedName{Module: moduleName, Name: enum.Name}); err == nil {
+					fmt.Fprintln(ctx.Output)
 				}
 			}
 		}
 	}
 
 	// Output constants (may reference enumerations)
-	if constants, err := e.reader.ListConstants(); err == nil {
+	if constants, err := ctx.Backend.ListConstants(); err == nil {
 		for _, c := range constants {
 			if moduleContainers[c.ContainerID] {
-				if err := e.outputConstantMDL(c, moduleName); err == nil {
-					fmt.Fprintln(e.output)
+				if err := outputConstantMDL(ctx, c, moduleName); err == nil {
+					fmt.Fprintln(ctx.Output)
 				}
 			}
 		}
@@ -627,142 +630,183 @@ func (e *Executor) describeModule(moduleName string, withAll bool) error {
 
 	// Output entities in dependency order (base entities before derived entities)
 	// and associations after all entities
-	if dm, err := e.reader.GetDomainModel(targetModule.ID); err == nil {
+	if dm, err := ctx.Backend.GetDomainModel(targetModule.ID); err == nil {
 		// Topologically sort entities by generalization (inheritance)
-		sortedEntities := e.sortEntitiesByGeneralization(dm.Entities, moduleName)
+		sortedEntities := sortEntitiesByGeneralization(dm.Entities, moduleName)
 
 		// Output entities in sorted order
 		for _, entity := range sortedEntities {
-			if err := e.describeEntity(ast.QualifiedName{Module: moduleName, Name: entity.Name}); err == nil {
-				fmt.Fprintln(e.output)
+			if err := describeEntity(ctx, ast.QualifiedName{Module: moduleName, Name: entity.Name}); err == nil {
+				fmt.Fprintln(ctx.Output)
 			}
 		}
 
 		// Output associations (after all entities are defined)
 		for _, assoc := range dm.Associations {
-			if err := e.describeAssociation(ast.QualifiedName{Module: moduleName, Name: assoc.Name}); err == nil {
-				fmt.Fprintln(e.output)
+			if err := describeAssociation(ctx, ast.QualifiedName{Module: moduleName, Name: assoc.Name}); err == nil {
+				fmt.Fprintln(ctx.Output)
 			}
 		}
 	}
 
 	// Output microflows
-	if mfs, err := e.reader.ListMicroflows(); err == nil {
+	if mfs, err := ctx.Backend.ListMicroflows(); err == nil {
 		for _, mf := range mfs {
 			if moduleContainers[mf.ContainerID] {
-				if err := e.describeMicroflow(ast.QualifiedName{Module: moduleName, Name: mf.Name}); err == nil {
-					fmt.Fprintln(e.output)
+				if err := describeMicroflow(ctx, ast.QualifiedName{Module: moduleName, Name: mf.Name}); err == nil {
+					fmt.Fprintln(ctx.Output)
 				}
 			}
 		}
 	}
 
 	// Output java actions
-	if jaList, err := e.reader.ListJavaActions(); err == nil {
+	if jaList, err := ctx.Backend.ListJavaActions(); err == nil {
 		for _, ja := range jaList {
 			if moduleContainers[ja.ContainerID] {
-				if err := e.describeJavaAction(ast.QualifiedName{Module: moduleName, Name: ja.Name}); err == nil {
-					fmt.Fprintln(e.output)
+				if err := describeJavaAction(ctx, ast.QualifiedName{Module: moduleName, Name: ja.Name}); err == nil {
+					fmt.Fprintln(ctx.Output)
 				}
 			}
 		}
 	}
 
 	// Output pages
-	if pageList, err := e.reader.ListPages(); err == nil {
+	if pageList, err := ctx.Backend.ListPages(); err == nil {
 		for _, p := range pageList {
 			if moduleContainers[p.ContainerID] {
-				if err := e.describePage(ast.QualifiedName{Module: moduleName, Name: p.Name}); err == nil {
-					fmt.Fprintln(e.output)
+				if err := describePage(ctx, ast.QualifiedName{Module: moduleName, Name: p.Name}); err == nil {
+					fmt.Fprintln(ctx.Output)
 				}
 			}
 		}
 	}
 
 	// Output snippets
-	if snippets, err := e.reader.ListSnippets(); err == nil {
+	if snippets, err := ctx.Backend.ListSnippets(); err == nil {
 		for _, s := range snippets {
 			if moduleContainers[s.ContainerID] {
-				if err := e.describeSnippet(ast.QualifiedName{Module: moduleName, Name: s.Name}); err == nil {
-					fmt.Fprintln(e.output)
+				if err := describeSnippet(ctx, ast.QualifiedName{Module: moduleName, Name: s.Name}); err == nil {
+					fmt.Fprintln(ctx.Output)
 				}
 			}
 		}
 	}
 
 	// Output layouts
-	if layouts, err := e.reader.ListLayouts(); err == nil {
+	if layouts, err := ctx.Backend.ListLayouts(); err == nil {
 		for _, l := range layouts {
 			if moduleContainers[l.ContainerID] {
-				if err := e.describeLayout(ast.QualifiedName{Module: moduleName, Name: l.Name}); err == nil {
-					fmt.Fprintln(e.output)
+				if err := describeLayout(ctx, ast.QualifiedName{Module: moduleName, Name: l.Name}); err == nil {
+					fmt.Fprintln(ctx.Output)
 				}
 			}
 		}
 	}
 
 	// Output database connections
-	if conns, err := e.reader.ListDatabaseConnections(); err == nil {
+	if conns, err := ctx.Backend.ListDatabaseConnections(); err == nil {
 		for _, conn := range conns {
 			if moduleContainers[conn.ContainerID] {
-				if err := e.outputDatabaseConnectionMDL(conn, moduleName); err == nil {
-					fmt.Fprintln(e.output)
+				if err := outputDatabaseConnectionMDL(ctx, conn, moduleName); err == nil {
+					fmt.Fprintln(ctx.Output)
 				}
 			}
 		}
 	}
 
 	// Output business event services
-	if services, err := e.reader.ListBusinessEventServices(); err == nil {
+	if services, err := ctx.Backend.ListBusinessEventServices(); err == nil {
 		for _, svc := range services {
 			if moduleContainers[svc.ContainerID] {
-				if err := e.describeBusinessEventService(ast.QualifiedName{Module: moduleName, Name: svc.Name}); err == nil {
-					fmt.Fprintln(e.output)
+				if err := describeBusinessEventService(ctx, ast.QualifiedName{Module: moduleName, Name: svc.Name}); err == nil {
+					fmt.Fprintln(ctx.Output)
 				}
 			}
 		}
 	}
 
 	// Get hierarchy for folder path resolution (used by OData sections below)
-	h, _ := e.getHierarchy()
+	h, _ := getHierarchy(ctx)
 
 	// Output consumed OData services (clients)
-	if services, err := e.reader.ListConsumedODataServices(); err == nil {
+	if services, err := ctx.Backend.ListConsumedODataServices(); err == nil {
 		for _, svc := range services {
 			if moduleContainers[svc.ContainerID] {
 				folderPath := ""
 				if h != nil {
 					folderPath = h.BuildFolderPath(svc.ContainerID)
 				}
-				if err := e.outputConsumedODataServiceMDL(svc, moduleName, folderPath); err == nil {
-					fmt.Fprintln(e.output)
+				if err := outputConsumedODataServiceMDL(ctx, svc, moduleName, folderPath); err == nil {
+					fmt.Fprintln(ctx.Output)
 				}
 			}
 		}
 	}
 
 	// Output published OData services
-	if services, err := e.reader.ListPublishedODataServices(); err == nil {
+	if services, err := ctx.Backend.ListPublishedODataServices(); err == nil {
 		for _, svc := range services {
 			if moduleContainers[svc.ContainerID] {
 				folderPath := ""
 				if h != nil {
 					folderPath = h.BuildFolderPath(svc.ContainerID)
 				}
-				if err := e.outputPublishedODataServiceMDL(svc, moduleName, folderPath); err == nil {
-					fmt.Fprintln(e.output)
+				if err := outputPublishedODataServiceMDL(ctx, svc, moduleName, folderPath); err == nil {
+					fmt.Fprintln(ctx.Output)
 				}
 			}
 		}
 	}
 
-	fmt.Fprintln(e.output, "/")
+	// Output agent-editor documents. Order matches referential dependencies:
+	// Model / KnowledgeBase / ConsumedMCPService first (leaves), Agent last
+	// (may reference the others via its TOOL / KNOWLEDGE BASE / MCP SERVICE
+	// blocks).
+	if models, err := ctx.Backend.ListAgentEditorModels(); err == nil {
+		for _, m := range models {
+			if moduleContainers[m.ContainerID] {
+				if err := describeAgentEditorModel(ctx, ast.QualifiedName{Module: moduleName, Name: m.Name}); err == nil {
+					fmt.Fprintln(ctx.Output)
+				}
+			}
+		}
+	}
+	if kbs, err := ctx.Backend.ListAgentEditorKnowledgeBases(); err == nil {
+		for _, kb := range kbs {
+			if moduleContainers[kb.ContainerID] {
+				if err := describeAgentEditorKnowledgeBase(ctx, ast.QualifiedName{Module: moduleName, Name: kb.Name}); err == nil {
+					fmt.Fprintln(ctx.Output)
+				}
+			}
+		}
+	}
+	if svcs, err := ctx.Backend.ListAgentEditorConsumedMCPServices(); err == nil {
+		for _, svc := range svcs {
+			if moduleContainers[svc.ContainerID] {
+				if err := describeAgentEditorConsumedMCPService(ctx, ast.QualifiedName{Module: moduleName, Name: svc.Name}); err == nil {
+					fmt.Fprintln(ctx.Output)
+				}
+			}
+		}
+	}
+	if agents, err := ctx.Backend.ListAgentEditorAgents(); err == nil {
+		for _, a := range agents {
+			if moduleContainers[a.ContainerID] {
+				if err := describeAgentEditorAgent(ctx, ast.QualifiedName{Module: moduleName, Name: a.Name}); err == nil {
+					fmt.Fprintln(ctx.Output)
+				}
+			}
+		}
+	}
+
+	fmt.Fprintln(ctx.Output, "/")
 	return nil
 }
 
 // sortEntitiesByGeneralization returns entities sorted so base entities come before derived entities.
 // Uses topological sort based on GeneralizationRef (parent entity reference).
-func (e *Executor) sortEntitiesByGeneralization(entities []*domainmodel.Entity, moduleName string) []*domainmodel.Entity {
+func sortEntitiesByGeneralization(entities []*domainmodel.Entity, moduleName string) []*domainmodel.Entity {
 	if len(entities) <= 1 {
 		return entities
 	}
@@ -854,3 +898,5 @@ func (e *Executor) sortEntitiesByGeneralization(entities []*domainmodel.Entity, 
 
 	return sorted
 }
+
+// Executor method wrappers for callers in unmigrated files.

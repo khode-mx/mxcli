@@ -11,23 +11,24 @@ import (
 	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
+	"github.com/mendixlabs/mxcli/mdl/types"
 	"github.com/mendixlabs/mxcli/model"
 	"github.com/mendixlabs/mxcli/sdk/javaactions"
-	"github.com/mendixlabs/mxcli/sdk/mpr"
 )
 
-// showJavaActions handles SHOW JAVA ACTIONS command.
-func (e *Executor) showJavaActions(moduleName string) error {
+// listJavaActions handles SHOW JAVA ACTIONS command.
+func listJavaActions(ctx *ExecContext, moduleName string) error {
 	// Get hierarchy for module/folder resolution
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to build hierarchy: %w", err)
+		return mdlerrors.NewBackend("build hierarchy", err)
 	}
 
 	// Get all Java actions
-	javaActions, err := e.reader.ListJavaActions()
+	javaActions, err := ctx.Backend.ListJavaActions()
 	if err != nil {
-		return fmt.Errorf("failed to list java actions: %w", err)
+		return mdlerrors.NewBackend("list java actions", err)
 	}
 
 	// Collect rows
@@ -61,15 +62,15 @@ func (e *Executor) showJavaActions(moduleName string) error {
 	for _, r := range rows {
 		result.Rows = append(result.Rows, []any{r.qualifiedName, r.module, r.name, r.folderPath})
 	}
-	return e.writeResult(result)
+	return writeResult(ctx, result)
 }
 
 // describeJavaAction handles DESCRIBE JAVA ACTION command - outputs MDL-style representation.
-func (e *Executor) describeJavaAction(name ast.QualifiedName) error {
+func describeJavaAction(ctx *ExecContext, name ast.QualifiedName) error {
 	qualifiedName := name.Module + "." + name.Name
-	ja, err := e.reader.ReadJavaActionByName(qualifiedName)
+	ja, err := ctx.Backend.ReadJavaActionByName(qualifiedName)
 	if err != nil {
-		return fmt.Errorf("java action not found: %s", qualifiedName)
+		return mdlerrors.NewNotFound("java action", qualifiedName)
 	}
 
 	// Generate MDL-style output for CREATE JAVA ACTION format
@@ -89,7 +90,7 @@ func (e *Executor) describeJavaAction(name ast.QualifiedName) error {
 	}
 
 	// Build CREATE JAVA ACTION statement
-	sb.WriteString("CREATE JAVA ACTION ")
+	sb.WriteString("create java action ")
 	sb.WriteString(qualifiedName)
 	sb.WriteString("(")
 
@@ -117,7 +118,7 @@ func (e *Executor) describeJavaAction(name ast.QualifiedName) error {
 			sb.WriteString("Object")
 		}
 		if param.IsRequired {
-			sb.WriteString(" NOT NULL")
+			sb.WriteString(" not null")
 		}
 		if param.Description != "" {
 			paramDoc := strings.ReplaceAll(param.Description, "\r\n", "\n")
@@ -134,34 +135,34 @@ func (e *Executor) describeJavaAction(name ast.QualifiedName) error {
 
 	// Return type
 	if ja.ReturnType != nil {
-		sb.WriteString(" RETURNS ")
+		sb.WriteString(" returns ")
 		sb.WriteString(formatJavaActionReturnType(ja.ReturnType))
 	}
 
 	// RETURN NAME metadata
 	if ja.ActionDefaultReturnName != "" {
-		sb.WriteString("\n-- RETURN NAME: '")
+		sb.WriteString("\n-- return NAME: '")
 		sb.WriteString(ja.ActionDefaultReturnName)
 		sb.WriteString("'")
 	}
 
 	// EXPOSED AS clause
 	if ja.MicroflowActionInfo != nil && ja.MicroflowActionInfo.Caption != "" {
-		sb.WriteString("\nEXPOSED AS '")
+		sb.WriteString("\nexposed as '")
 		sb.WriteString(ja.MicroflowActionInfo.Caption)
-		sb.WriteString("' IN '")
+		sb.WriteString("' in '")
 		sb.WriteString(ja.MicroflowActionInfo.Category)
 		sb.WriteString("'")
 		if ja.MicroflowActionInfo.Icon != "" {
-			sb.WriteString("\n-- ICON: ")
+			sb.WriteString("\n-- icon: ")
 			sb.WriteString(ja.MicroflowActionInfo.Icon)
 		}
 	}
 
 	// Try to read and include Java source code
-	javaCode := e.readJavaActionUserCode(name.Module, name.Name)
+	javaCode := readJavaActionUserCode(ctx.MprPath, name.Module, name.Name)
 	if javaCode != "" {
-		sb.WriteString("\nAS $$\n")
+		sb.WriteString("\nas $$\n")
 		sb.WriteString(javaCode)
 		sb.WriteString("\n$$")
 	}
@@ -169,27 +170,27 @@ func (e *Executor) describeJavaAction(name ast.QualifiedName) error {
 	sb.WriteString(";")
 
 	// Output the complete statement
-	fmt.Fprintln(e.output, sb.String())
+	fmt.Fprintln(ctx.Output, sb.String())
 
 	// Additional info as comments
 	if ja.ExportLevel != "" && ja.ExportLevel != "Hidden" {
-		fmt.Fprintf(e.output, "-- EXPORT LEVEL: %s\n", ja.ExportLevel)
+		fmt.Fprintf(ctx.Output, "-- export level: %s\n", ja.ExportLevel)
 	}
 	if ja.Excluded {
-		fmt.Fprintln(e.output, "-- EXCLUDED: true")
+		fmt.Fprintln(ctx.Output, "-- EXCLUDED: true")
 	}
 
 	return nil
 }
 
 // readJavaActionUserCode reads the Java source file and extracts the user code section.
-func (e *Executor) readJavaActionUserCode(moduleName, actionName string) string {
-	if e.mprPath == "" {
+func readJavaActionUserCode(mprPath, moduleName, actionName string) string {
+	if mprPath == "" {
 		return ""
 	}
 
 	// Build path to Java source file
-	projectRoot := filepath.Dir(e.mprPath)
+	projectRoot := filepath.Dir(mprPath)
 	moduleNameLower := strings.ToLower(moduleName)
 	javaPath := filepath.Join(projectRoot, "javasource", moduleNameLower, "actions", actionName+".java")
 
@@ -201,8 +202,8 @@ func (e *Executor) readJavaActionUserCode(moduleName, actionName string) string 
 
 	// Extract user code between BEGIN USER CODE and END USER CODE markers
 	source := string(content)
-	beginMarker := "// BEGIN USER CODE"
-	endMarker := "// END USER CODE"
+	beginMarker := "// begin user CODE"
+	endMarker := "// end user CODE"
 
 	beginIdx := strings.Index(source, beginMarker)
 	endIdx := strings.Index(source, endMarker)
@@ -229,9 +230,9 @@ func formatJavaActionType(t javaactions.CodeActionParameterType) string {
 	// EntityTypeParameterType → ENTITY <name> syntax
 	if etp, ok := t.(*javaactions.EntityTypeParameterType); ok {
 		if etp.TypeParameterName != "" {
-			return "ENTITY <" + etp.TypeParameterName + ">"
+			return "entity <" + etp.TypeParameterName + ">"
 		}
-		return "ENTITY <>"
+		return "entity <>"
 	}
 	return t.TypeString()
 }
@@ -245,54 +246,54 @@ func formatJavaActionReturnType(t javaactions.CodeActionReturnType) string {
 }
 
 // execDropJavaAction handles DROP JAVA ACTION statements.
-func (e *Executor) execDropJavaAction(s *ast.DropJavaActionStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project")
+func execDropJavaAction(ctx *ExecContext, s *ast.DropJavaActionStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
 	// Get hierarchy for module/folder resolution
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to build hierarchy: %w", err)
+		return mdlerrors.NewBackend("build hierarchy", err)
 	}
 
 	// Find and delete the Java action
-	jas, err := e.reader.ListJavaActions()
+	jas, err := ctx.Backend.ListJavaActions()
 	if err != nil {
-		return fmt.Errorf("failed to list java actions: %w", err)
+		return mdlerrors.NewBackend("list java actions", err)
 	}
 
 	for _, ja := range jas {
 		modID := h.FindModuleID(ja.ContainerID)
 		modName := h.GetModuleName(modID)
 		if modName == s.Name.Module && ja.Name == s.Name.Name {
-			if err := e.writer.DeleteJavaAction(ja.ID); err != nil {
-				return fmt.Errorf("failed to delete java action: %w", err)
+			if err := ctx.Backend.DeleteJavaAction(ja.ID); err != nil {
+				return mdlerrors.NewBackend("delete java action", err)
 			}
-			fmt.Fprintf(e.output, "Dropped java action: %s.%s\n", s.Name.Module, s.Name.Name)
+			fmt.Fprintf(ctx.Output, "Dropped java action: %s.%s\n", s.Name.Module, s.Name.Name)
 			return nil
 		}
 	}
 
-	return fmt.Errorf("java action not found: %s.%s", s.Name.Module, s.Name.Name)
+	return mdlerrors.NewNotFound("java action", s.Name.Module+"."+s.Name.Name)
 }
 
 // execCreateJavaAction handles CREATE JAVA ACTION statements.
-func (e *Executor) execCreateJavaAction(s *ast.CreateJavaActionStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project")
+func execCreateJavaAction(ctx *ExecContext, s *ast.CreateJavaActionStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
 	// Get hierarchy for module/folder resolution
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to build hierarchy: %w", err)
+		return mdlerrors.NewBackend("build hierarchy", err)
 	}
 
 	// Find the module
-	modules, err := e.reader.ListModules()
+	modules, err := ctx.Backend.ListModules()
 	if err != nil {
-		return fmt.Errorf("failed to get modules: %w", err)
+		return mdlerrors.NewBackend("get modules", err)
 	}
 
 	var containerID model.ID
@@ -305,26 +306,26 @@ func (e *Executor) execCreateJavaAction(s *ast.CreateJavaActionStmt) error {
 		}
 	}
 	if containerID == "" {
-		return fmt.Errorf("module not found: %s", s.Name.Module)
+		return mdlerrors.NewNotFound("module", s.Name.Module)
 	}
 
 	// Check if Java action already exists
-	jas, err := e.reader.ListJavaActions()
+	jas, err := ctx.Backend.ListJavaActions()
 	if err != nil {
-		return fmt.Errorf("failed to list java actions: %w", err)
+		return mdlerrors.NewBackend("list java actions", err)
 	}
 	for _, existing := range jas {
 		existingModID := h.FindModuleID(existing.ContainerID)
 		existingModName := h.GetModuleName(existingModID)
 		if existingModName == s.Name.Module && existing.Name == s.Name.Name {
-			return fmt.Errorf("java action already exists: %s.%s", s.Name.Module, s.Name.Name)
+			return mdlerrors.NewAlreadyExists("java action", s.Name.Module+"."+s.Name.Name)
 		}
 	}
 
 	// Create the Java action
 	ja := &javaactions.JavaAction{
 		BaseElement: model.BaseElement{
-			ID:       model.ID(mpr.GenerateID()),
+			ID:       model.ID(types.GenerateID()),
 			TypeName: "JavaActions$JavaAction",
 		},
 		ContainerID:   containerID,
@@ -338,7 +339,7 @@ func (e *Executor) execCreateJavaAction(s *ast.CreateJavaActionStmt) error {
 	for _, tpName := range s.TypeParameters {
 		tpDef := &javaactions.TypeParameterDef{
 			BaseElement: model.BaseElement{
-				ID: model.ID(mpr.GenerateID()),
+				ID: model.ID(types.GenerateID()),
 			},
 			Name: tpName,
 		}
@@ -359,7 +360,7 @@ func (e *Executor) execCreateJavaAction(s *ast.CreateJavaActionStmt) error {
 	for _, param := range s.Parameters {
 		jaParam := &javaactions.JavaActionParameter{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "JavaActions$JavaActionParameter",
 			},
 			Name:       param.Name,
@@ -369,7 +370,7 @@ func (e *Executor) execCreateJavaAction(s *ast.CreateJavaActionStmt) error {
 			// Explicit ENTITY <pEntity> → EntityTypeParameterType (entity type selector)
 			tpName := param.Type.TypeParamName
 			jaParam.ParameterType = &javaactions.EntityTypeParameterType{
-				BaseElement:       model.BaseElement{ID: model.ID(mpr.GenerateID())},
+				BaseElement:       model.BaseElement{ID: model.ID(types.GenerateID())},
 				TypeParameterID:   typeParamNameToID[tpName],
 				TypeParameterName: tpName,
 			}
@@ -377,7 +378,7 @@ func (e *Executor) execCreateJavaAction(s *ast.CreateJavaActionStmt) error {
 			// Bare name matching a type parameter → TypeParameter (ParameterizedEntityType)
 			tpName := getTypeParamRefName(param.Type)
 			jaParam.ParameterType = &javaactions.TypeParameter{
-				BaseElement:     model.BaseElement{ID: model.ID(mpr.GenerateID())},
+				BaseElement:     model.BaseElement{ID: model.ID(types.GenerateID())},
 				TypeParameterID: typeParamNameToID[tpName],
 				TypeParameter:   tpName,
 			}
@@ -391,7 +392,7 @@ func (e *Executor) execCreateJavaAction(s *ast.CreateJavaActionStmt) error {
 	if isTypeParamRef(s.ReturnType, typeParamNames) {
 		tpName := getTypeParamRefName(s.ReturnType)
 		ja.ReturnType = &javaactions.TypeParameter{
-			BaseElement:     model.BaseElement{ID: model.ID(mpr.GenerateID())},
+			BaseElement:     model.BaseElement{ID: model.ID(types.GenerateID())},
 			TypeParameterID: typeParamNameToID[tpName],
 			TypeParameter:   tpName,
 		}
@@ -402,28 +403,28 @@ func (e *Executor) execCreateJavaAction(s *ast.CreateJavaActionStmt) error {
 	// Build MicroflowActionInfo if EXPOSED AS clause is present
 	if s.ExposedCaption != "" {
 		ja.MicroflowActionInfo = &javaactions.MicroflowActionInfo{
-			BaseElement: model.BaseElement{ID: model.ID(mpr.GenerateID())},
+			BaseElement: model.BaseElement{ID: model.ID(types.GenerateID())},
 			Caption:     s.ExposedCaption,
 			Category:    s.ExposedCategory,
 		}
 	}
 
 	// Create in MPR
-	if err := e.writer.CreateJavaAction(ja); err != nil {
-		return fmt.Errorf("failed to create java action: %w", err)
+	if err := ctx.Backend.CreateJavaAction(ja); err != nil {
+		return mdlerrors.NewBackend("create java action", err)
 	}
 
 	// Write Java source file if code is provided
 	if s.JavaCode != "" {
-		if err := e.writer.WriteJavaSourceFile(moduleName, s.Name.Name, s.JavaCode, ja.Parameters, ja.ReturnType); err != nil {
-			return fmt.Errorf("failed to write java source file: %w", err)
+		if err := ctx.Backend.WriteJavaSourceFile(moduleName, s.Name.Name, s.JavaCode, ja.Parameters, ja.ReturnType); err != nil {
+			return mdlerrors.NewBackend("write java source file", err)
 		}
 	}
 
 	// Clear cache
-	e.cache = nil
+	ctx.InvalidateCache()
 
-	fmt.Fprintf(e.output, "Created java action: %s.%s\n", s.Name.Module, s.Name.Name)
+	fmt.Fprintf(ctx.Output, "Created java action: %s.%s\n", s.Name.Module, s.Name.Name)
 	return nil
 }
 
@@ -433,42 +434,42 @@ func astDataTypeToJavaActionParamType(dt ast.DataType) javaactions.CodeActionPar
 	case ast.TypeBoolean:
 		return &javaactions.BooleanType{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "CodeActions$BooleanType",
 			},
 		}
 	case ast.TypeInteger:
 		return &javaactions.IntegerType{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "CodeActions$IntegerType",
 			},
 		}
 	case ast.TypeLong:
 		return &javaactions.LongType{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "CodeActions$LongType",
 			},
 		}
 	case ast.TypeDecimal:
 		return &javaactions.DecimalType{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "CodeActions$DecimalType",
 			},
 		}
 	case ast.TypeString:
 		return &javaactions.StringType{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "CodeActions$StringType",
 			},
 		}
 	case ast.TypeDateTime, ast.TypeDate:
 		return &javaactions.DateTimeType{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "CodeActions$DateTimeType",
 			},
 		}
@@ -484,7 +485,7 @@ func astDataTypeToJavaActionParamType(dt ast.DataType) javaactions.CodeActionPar
 		}
 		return &javaactions.EntityType{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "CodeActions$EntityType",
 			},
 			Entity: entityName,
@@ -496,7 +497,7 @@ func astDataTypeToJavaActionParamType(dt ast.DataType) javaactions.CodeActionPar
 		}
 		return &javaactions.ListType{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "CodeActions$ListType",
 			},
 			Entity: entityName,
@@ -505,7 +506,7 @@ func astDataTypeToJavaActionParamType(dt ast.DataType) javaactions.CodeActionPar
 		// Default to String type for unknown kinds
 		return &javaactions.StringType{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "CodeActions$StringType",
 			},
 		}
@@ -518,49 +519,49 @@ func astDataTypeToJavaActionReturnType(dt ast.DataType) javaactions.CodeActionRe
 	case ast.TypeVoid:
 		return &javaactions.VoidType{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "CodeActions$VoidType",
 			},
 		}
 	case ast.TypeBoolean:
 		return &javaactions.BooleanType{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "CodeActions$BooleanType",
 			},
 		}
 	case ast.TypeInteger:
 		return &javaactions.IntegerType{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "CodeActions$IntegerType",
 			},
 		}
 	case ast.TypeLong:
 		return &javaactions.LongType{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "CodeActions$LongType",
 			},
 		}
 	case ast.TypeDecimal:
 		return &javaactions.DecimalType{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "CodeActions$DecimalType",
 			},
 		}
 	case ast.TypeString:
 		return &javaactions.StringType{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "CodeActions$StringType",
 			},
 		}
 	case ast.TypeDateTime, ast.TypeDate:
 		return &javaactions.DateTimeType{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "CodeActions$DateTimeType",
 			},
 		}
@@ -575,7 +576,7 @@ func astDataTypeToJavaActionReturnType(dt ast.DataType) javaactions.CodeActionRe
 		}
 		return &javaactions.EntityType{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "CodeActions$EntityType",
 			},
 			Entity: entityName,
@@ -587,7 +588,7 @@ func astDataTypeToJavaActionReturnType(dt ast.DataType) javaactions.CodeActionRe
 		}
 		return &javaactions.ListType{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "CodeActions$ListType",
 			},
 			Entity: entityName,
@@ -596,7 +597,7 @@ func astDataTypeToJavaActionReturnType(dt ast.DataType) javaactions.CodeActionRe
 		// Default to Boolean type (most common for Java actions)
 		return &javaactions.BooleanType{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "CodeActions$BooleanType",
 			},
 		}

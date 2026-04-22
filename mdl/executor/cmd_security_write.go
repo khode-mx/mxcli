@@ -8,58 +8,60 @@ import (
 	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	"github.com/mendixlabs/mxcli/mdl/backend"
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
+	"github.com/mendixlabs/mxcli/mdl/types"
 	"github.com/mendixlabs/mxcli/model"
-	"github.com/mendixlabs/mxcli/sdk/mpr"
 	"github.com/mendixlabs/mxcli/sdk/security"
 )
 
 // execCreateModuleRole handles CREATE MODULE ROLE Module.RoleName [DESCRIPTION '...'].
-func (e *Executor) execCreateModuleRole(s *ast.CreateModuleRoleStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project in write mode")
+func execCreateModuleRole(ctx *ExecContext, s *ast.CreateModuleRoleStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	module, err := e.findModule(s.Name.Module)
+	module, err := findModule(ctx, s.Name.Module)
 	if err != nil {
 		return err
 	}
 
-	ms, err := e.reader.GetModuleSecurity(module.ID)
+	ms, err := ctx.Backend.GetModuleSecurity(module.ID)
 	if err != nil {
-		return fmt.Errorf("failed to read module security for %s: %w", s.Name.Module, err)
+		return mdlerrors.NewBackend(fmt.Sprintf("read module security for %s", s.Name.Module), err)
 	}
 
 	// Check if role already exists
 	for _, mr := range ms.ModuleRoles {
 		if mr.Name == s.Name.Name {
-			return fmt.Errorf("module role already exists: %s.%s", s.Name.Module, s.Name.Name)
+			return mdlerrors.NewAlreadyExists("module role", s.Name.Module+"."+s.Name.Name)
 		}
 	}
 
-	if err := e.writer.AddModuleRole(ms.ID, s.Name.Name, s.Description); err != nil {
-		return fmt.Errorf("failed to create module role: %w", err)
+	if err := ctx.Backend.AddModuleRole(ms.ID, s.Name.Name, s.Description); err != nil {
+		return mdlerrors.NewBackend("create module role", err)
 	}
 
-	fmt.Fprintf(e.output, "Created module role: %s.%s\n", s.Name.Module, s.Name.Name)
+	fmt.Fprintf(ctx.Output, "Created module role: %s.%s\n", s.Name.Module, s.Name.Name)
 	return nil
 }
 
 // execDropModuleRole handles DROP MODULE ROLE Module.RoleName.
 // Cascade-removes the role from all entity access rules, microflow/nanoflow/page
 // allowed roles, and OData service allowed roles before deleting the role itself.
-func (e *Executor) execDropModuleRole(s *ast.DropModuleRoleStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project in write mode")
+func execDropModuleRole(ctx *ExecContext, s *ast.DropModuleRoleStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	module, err := e.findModule(s.Name.Module)
+	module, err := findModule(ctx, s.Name.Module)
 	if err != nil {
 		return err
 	}
 
-	ms, err := e.reader.GetModuleSecurity(module.ID)
+	ms, err := ctx.Backend.GetModuleSecurity(module.ID)
 	if err != nil {
-		return fmt.Errorf("failed to read module security for %s: %w", s.Name.Module, err)
+		return mdlerrors.NewBackend(fmt.Sprintf("read module security for %s", s.Name.Module), err)
 	}
 
 	// Check role exists
@@ -71,102 +73,102 @@ func (e *Executor) execDropModuleRole(s *ast.DropModuleRoleStmt) error {
 		}
 	}
 	if !found {
-		return fmt.Errorf("module role not found: %s.%s", s.Name.Module, s.Name.Name)
+		return mdlerrors.NewNotFound("module role", s.Name.Module+"."+s.Name.Name)
 	}
 
 	qualifiedRole := s.Name.Module + "." + s.Name.Name
 
 	// Cascade: remove role from entity access rules
-	dm, err := e.reader.GetDomainModel(module.ID)
+	dm, err := ctx.Backend.GetDomainModel(module.ID)
 	if err == nil {
-		if n, err := e.writer.RemoveRoleFromAllEntities(dm.ID, qualifiedRole); err != nil {
-			return fmt.Errorf("failed to cascade-remove entity access rules: %w", err)
+		if n, err := ctx.Backend.RemoveRoleFromAllEntities(dm.ID, qualifiedRole); err != nil {
+			return mdlerrors.NewBackend("cascade-remove entity access rules", err)
 		} else if n > 0 {
-			fmt.Fprintf(e.output, "Removed %s from %d entity access rule(s)\n", qualifiedRole, n)
+			fmt.Fprintf(ctx.Output, "Removed %s from %d entity access rule(s)\n", qualifiedRole, n)
 		}
 	}
 
 	// Cascade: remove role from microflow/nanoflow/page allowed roles
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err == nil {
 		// Microflows
-		if mfs, err := e.reader.ListMicroflows(); err == nil {
+		if mfs, err := ctx.Backend.ListMicroflows(); err == nil {
 			for _, mf := range mfs {
 				modID := h.FindModuleID(mf.ContainerID)
 				if modID != module.ID {
 					continue
 				}
-				if removed, err := e.writer.RemoveFromAllowedRoles(mf.ID, qualifiedRole); err == nil && removed {
-					fmt.Fprintf(e.output, "Removed %s from microflow %s allowed roles\n", qualifiedRole, mf.Name)
+				if removed, err := ctx.Backend.RemoveFromAllowedRoles(mf.ID, qualifiedRole); err == nil && removed {
+					fmt.Fprintf(ctx.Output, "Removed %s from microflow %s allowed roles\n", qualifiedRole, mf.Name)
 				}
 			}
 		}
 
 		// Nanoflows
-		if nfs, err := e.reader.ListNanoflows(); err == nil {
+		if nfs, err := ctx.Backend.ListNanoflows(); err == nil {
 			for _, nf := range nfs {
 				modID := h.FindModuleID(nf.ContainerID)
 				if modID != module.ID {
 					continue
 				}
-				if removed, err := e.writer.RemoveFromAllowedRoles(nf.ID, qualifiedRole); err == nil && removed {
-					fmt.Fprintf(e.output, "Removed %s from nanoflow %s allowed roles\n", qualifiedRole, nf.Name)
+				if removed, err := ctx.Backend.RemoveFromAllowedRoles(nf.ID, qualifiedRole); err == nil && removed {
+					fmt.Fprintf(ctx.Output, "Removed %s from nanoflow %s allowed roles\n", qualifiedRole, nf.Name)
 				}
 			}
 		}
 
 		// Pages
-		if pgs, err := e.reader.ListPages(); err == nil {
+		if pgs, err := ctx.Backend.ListPages(); err == nil {
 			for _, pg := range pgs {
 				modID := h.FindModuleID(pg.ContainerID)
 				if modID != module.ID {
 					continue
 				}
-				if removed, err := e.writer.RemoveFromAllowedRoles(pg.ID, qualifiedRole); err == nil && removed {
-					fmt.Fprintf(e.output, "Removed %s from page %s allowed roles\n", qualifiedRole, pg.Name)
+				if removed, err := ctx.Backend.RemoveFromAllowedRoles(pg.ID, qualifiedRole); err == nil && removed {
+					fmt.Fprintf(ctx.Output, "Removed %s from page %s allowed roles\n", qualifiedRole, pg.Name)
 				}
 			}
 		}
 
 		// OData services
-		if svcs, err := e.reader.ListPublishedODataServices(); err == nil {
+		if svcs, err := ctx.Backend.ListPublishedODataServices(); err == nil {
 			for _, svc := range svcs {
 				modID := h.FindModuleID(svc.ContainerID)
 				if modID != module.ID {
 					continue
 				}
-				if removed, err := e.writer.RemoveFromAllowedRoles(svc.ID, qualifiedRole); err == nil && removed {
-					fmt.Fprintf(e.output, "Removed %s from OData service %s allowed roles\n", qualifiedRole, svc.Name)
+				if removed, err := ctx.Backend.RemoveFromAllowedRoles(svc.ID, qualifiedRole); err == nil && removed {
+					fmt.Fprintf(ctx.Output, "Removed %s from OData service %s allowed roles\n", qualifiedRole, svc.Name)
 				}
 			}
 		}
 	}
 
 	// Cascade: remove role from user roles in ProjectSecurity
-	if ps, err := e.reader.GetProjectSecurity(); err == nil {
-		if n, err := e.writer.RemoveModuleRoleFromAllUserRoles(ps.ID, qualifiedRole); err == nil && n > 0 {
-			fmt.Fprintf(e.output, "Removed %s from %d user role(s)\n", qualifiedRole, n)
+	if ps, err := ctx.Backend.GetProjectSecurity(); err == nil {
+		if n, err := ctx.Backend.RemoveModuleRoleFromAllUserRoles(ps.ID, qualifiedRole); err == nil && n > 0 {
+			fmt.Fprintf(ctx.Output, "Removed %s from %d user role(s)\n", qualifiedRole, n)
 		}
 	}
 
 	// Finally, remove the role itself
-	if err := e.writer.RemoveModuleRole(ms.ID, s.Name.Name); err != nil {
-		return fmt.Errorf("failed to drop module role: %w", err)
+	if err := ctx.Backend.RemoveModuleRole(ms.ID, s.Name.Name); err != nil {
+		return mdlerrors.NewBackend("drop module role", err)
 	}
 
-	fmt.Fprintf(e.output, "Dropped module role: %s.%s\n", s.Name.Module, s.Name.Name)
+	fmt.Fprintf(ctx.Output, "Dropped module role: %s.%s\n", s.Name.Module, s.Name.Name)
 	return nil
 }
 
 // execCreateUserRole handles CREATE [OR MODIFY] USER ROLE Name (ModuleRoles) [MANAGE ALL ROLES].
-func (e *Executor) execCreateUserRole(s *ast.CreateUserRoleStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project in write mode")
+func execCreateUserRole(ctx *ExecContext, s *ast.CreateUserRoleStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	ps, err := e.reader.GetProjectSecurity()
+	ps, err := ctx.Backend.GetProjectSecurity()
 	if err != nil {
-		return fmt.Errorf("failed to read project security: %w", err)
+		return mdlerrors.NewBackend("read project security", err)
 	}
 
 	// Build qualified module role names
@@ -180,34 +182,34 @@ func (e *Executor) execCreateUserRole(s *ast.CreateUserRoleStmt) error {
 	for _, ur := range ps.UserRoles {
 		if ur.Name == s.Name {
 			if !s.CreateOrModify {
-				return fmt.Errorf("user role already exists: %s", s.Name)
+				return mdlerrors.NewAlreadyExists("user role", s.Name)
 			}
 			// Additive: ensure specified module roles are present
-			if err := e.writer.AlterUserRoleModuleRoles(ps.ID, s.Name, true, moduleRoleNames); err != nil {
-				return fmt.Errorf("failed to update user role: %w", err)
+			if err := ctx.Backend.AlterUserRoleModuleRoles(ps.ID, s.Name, true, moduleRoleNames); err != nil {
+				return mdlerrors.NewBackend("update user role", err)
 			}
-			fmt.Fprintf(e.output, "Modified user role: %s\n", s.Name)
+			fmt.Fprintf(ctx.Output, "Modified user role: %s\n", s.Name)
 			return nil
 		}
 	}
 
-	if err := e.writer.AddUserRole(ps.ID, s.Name, moduleRoleNames, s.ManageAllRoles); err != nil {
-		return fmt.Errorf("failed to create user role: %w", err)
+	if err := ctx.Backend.AddUserRole(ps.ID, s.Name, moduleRoleNames, s.ManageAllRoles); err != nil {
+		return mdlerrors.NewBackend("create user role", err)
 	}
 
-	fmt.Fprintf(e.output, "Created user role: %s\n", s.Name)
+	fmt.Fprintf(ctx.Output, "Created user role: %s\n", s.Name)
 	return nil
 }
 
 // execAlterUserRole handles ALTER USER ROLE Name ADD/REMOVE MODULE ROLES (...).
-func (e *Executor) execAlterUserRole(s *ast.AlterUserRoleStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project in write mode")
+func execAlterUserRole(ctx *ExecContext, s *ast.AlterUserRoleStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	ps, err := e.reader.GetProjectSecurity()
+	ps, err := ctx.Backend.GetProjectSecurity()
 	if err != nil {
-		return fmt.Errorf("failed to read project security: %w", err)
+		return mdlerrors.NewBackend("read project security", err)
 	}
 
 	// Check user role exists
@@ -219,7 +221,7 @@ func (e *Executor) execAlterUserRole(s *ast.AlterUserRoleStmt) error {
 		}
 	}
 	if !found {
-		return fmt.Errorf("user role not found: %s", s.Name)
+		return mdlerrors.NewNotFound("user role", s.Name)
 	}
 
 	// Build qualified module role names
@@ -228,8 +230,8 @@ func (e *Executor) execAlterUserRole(s *ast.AlterUserRoleStmt) error {
 		moduleRoleNames = append(moduleRoleNames, mr.Module+"."+mr.Name)
 	}
 
-	if err := e.writer.AlterUserRoleModuleRoles(ps.ID, s.Name, s.Add, moduleRoleNames); err != nil {
-		return fmt.Errorf("failed to alter user role: %w", err)
+	if err := ctx.Backend.AlterUserRoleModuleRoles(ps.ID, s.Name, s.Add, moduleRoleNames); err != nil {
+		return mdlerrors.NewBackend("alter user role", err)
 	}
 
 	action := "Added"
@@ -238,19 +240,19 @@ func (e *Executor) execAlterUserRole(s *ast.AlterUserRoleStmt) error {
 		action = "Removed"
 		prep = "from"
 	}
-	fmt.Fprintf(e.output, "%s module roles %s %s user role %s\n", action, strings.Join(moduleRoleNames, ", "), prep, s.Name)
+	fmt.Fprintf(ctx.Output, "%s module roles %s %s user role %s\n", action, strings.Join(moduleRoleNames, ", "), prep, s.Name)
 	return nil
 }
 
 // execDropUserRole handles DROP USER ROLE Name.
-func (e *Executor) execDropUserRole(s *ast.DropUserRoleStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project in write mode")
+func execDropUserRole(ctx *ExecContext, s *ast.DropUserRoleStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	ps, err := e.reader.GetProjectSecurity()
+	ps, err := ctx.Backend.GetProjectSecurity()
 	if err != nil {
-		return fmt.Errorf("failed to read project security: %w", err)
+		return mdlerrors.NewBackend("read project security", err)
 	}
 
 	// Check user role exists
@@ -262,37 +264,38 @@ func (e *Executor) execDropUserRole(s *ast.DropUserRoleStmt) error {
 		}
 	}
 	if !found {
-		return fmt.Errorf("user role not found: %s", s.Name)
+		return mdlerrors.NewNotFound("user role", s.Name)
 	}
 
-	if err := e.writer.RemoveUserRole(ps.ID, s.Name); err != nil {
-		return fmt.Errorf("failed to drop user role: %w", err)
+	if err := ctx.Backend.RemoveUserRole(ps.ID, s.Name); err != nil {
+		return mdlerrors.NewBackend("drop user role", err)
 	}
 
-	fmt.Fprintf(e.output, "Dropped user role: %s\n", s.Name)
+	fmt.Fprintf(ctx.Output, "Dropped user role: %s\n", s.Name)
 	return nil
 }
 
 // execGrantEntityAccess handles GRANT roles ON Module.Entity (rights) [WHERE '...'].
-func (e *Executor) execGrantEntityAccess(s *ast.GrantEntityAccessStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project in write mode")
+func execGrantEntityAccess(ctx *ExecContext, s *ast.GrantEntityAccessStmt) error {
+	e := ctx.executor
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	module, err := e.findModule(s.Entity.Module)
+	module, err := findModule(ctx, s.Entity.Module)
 	if err != nil {
 		return err
 	}
 
-	dm, err := e.reader.GetDomainModel(module.ID)
+	dm, err := ctx.Backend.GetDomainModel(module.ID)
 	if err != nil {
-		return fmt.Errorf("failed to get domain model: %w", err)
+		return mdlerrors.NewBackend("get domain model", err)
 	}
 
 	// Verify entity exists
 	entity := dm.FindEntityByName(s.Entity.Name)
 	if entity == nil {
-		return fmt.Errorf("entity not found: %s.%s", s.Entity.Module, s.Entity.Name)
+		return mdlerrors.NewNotFound("entity", s.Entity.Module+"."+s.Entity.Name)
 	}
 
 	// Build role name list
@@ -329,7 +332,7 @@ func (e *Executor) execGrantEntityAccess(s *ast.GrantEntityAccessStmt) error {
 	// Build MemberAccess entries for all entity attributes and associations.
 	// Mendix requires explicit MemberAccess entries for every member — an empty
 	// MemberAccesses array triggers CE0066 "Entity access is out of date".
-	var memberAccesses []mpr.EntityMemberAccess
+	var memberAccesses []types.EntityMemberAccess
 
 	// Build sets for specific member overrides (when READ (Name, Email) syntax is used)
 	writeMemberSet := make(map[string]bool)
@@ -354,7 +357,7 @@ func (e *Executor) execGrantEntityAccess(s *ast.GrantEntityAccessStmt) error {
 		if isCalculated && (rights == "ReadWrite" || rights == "WriteOnly") {
 			rights = "ReadOnly"
 		}
-		memberAccesses = append(memberAccesses, mpr.EntityMemberAccess{
+		memberAccesses = append(memberAccesses, types.EntityMemberAccess{
 			AttributeRef: module.Name + "." + s.Entity.Name + "." + attr.Name,
 			AccessRights: rights,
 		})
@@ -371,7 +374,7 @@ func (e *Executor) execGrantEntityAccess(s *ast.GrantEntityAccessStmt) error {
 			} else if readMemberSet[assoc.Name] {
 				rights = "ReadOnly"
 			}
-			memberAccesses = append(memberAccesses, mpr.EntityMemberAccess{
+			memberAccesses = append(memberAccesses, types.EntityMemberAccess{
 				AssociationRef: module.Name + "." + assoc.Name,
 				AccessRights:   rights,
 			})
@@ -385,7 +388,7 @@ func (e *Executor) execGrantEntityAccess(s *ast.GrantEntityAccessStmt) error {
 			} else if readMemberSet[ca.Name] {
 				rights = "ReadOnly"
 			}
-			memberAccesses = append(memberAccesses, mpr.EntityMemberAccess{
+			memberAccesses = append(memberAccesses, types.EntityMemberAccess{
 				AssociationRef: module.Name + "." + ca.Name,
 				AccessRights:   rights,
 			})
@@ -396,59 +399,67 @@ func (e *Executor) execGrantEntityAccess(s *ast.GrantEntityAccessStmt) error {
 	// When an entity has HasOwner/HasChangedBy, Mendix implicitly adds
 	// System.owner/System.changedBy associations that require MemberAccess.
 	if entity.HasOwner {
-		memberAccesses = append(memberAccesses, mpr.EntityMemberAccess{
+		memberAccesses = append(memberAccesses, types.EntityMemberAccess{
 			AssociationRef: "System.owner",
 			AccessRights:   defaultMemberAccess,
 		})
 	}
 	if entity.HasChangedBy {
-		memberAccesses = append(memberAccesses, mpr.EntityMemberAccess{
+		memberAccesses = append(memberAccesses, types.EntityMemberAccess{
 			AssociationRef: "System.changedBy",
 			AccessRights:   defaultMemberAccess,
 		})
 	}
 
-	if err := e.writer.AddEntityAccessRule(dm.ID, s.Entity.Name, roleNames,
-		allowCreate, allowDelete,
-		defaultMemberAccess, s.XPathConstraint, memberAccesses); err != nil {
-		return fmt.Errorf("failed to grant entity access: %w", err)
+	if err := ctx.Backend.AddEntityAccessRule(backend.EntityAccessRuleParams{
+		UnitID:              dm.ID,
+		EntityName:          s.Entity.Name,
+		RoleNames:           roleNames,
+		AllowCreate:         allowCreate,
+		AllowDelete:         allowDelete,
+		DefaultMemberAccess: defaultMemberAccess,
+		XPathConstraint:     s.XPathConstraint,
+		MemberAccesses:      memberAccesses,
+	}); err != nil {
+		return mdlerrors.NewBackend("grant entity access", err)
 	}
 
 	// Reconcile MemberAccesses on pre-existing rules for this entity's domain model
-	if count, err := e.writer.ReconcileMemberAccesses(dm.ID, module.Name); err != nil {
-		return fmt.Errorf("failed to reconcile member accesses: %w", err)
-	} else if count > 0 && !e.quiet {
-		fmt.Fprintf(e.output, "Reconciled %d access rule(s) in module %s\n", count, module.Name)
+	if count, err := ctx.Backend.ReconcileMemberAccesses(dm.ID, module.Name); err != nil {
+		return mdlerrors.NewBackend("reconcile member accesses", err)
+	} else if count > 0 && !ctx.Quiet {
+		fmt.Fprintf(ctx.Output, "Reconciled %d access rule(s) in module %s\n", count, module.Name)
 	}
 
 	e.trackModifiedDomainModel(module.ID, module.Name)
-	fmt.Fprintf(e.output, "Granted access on %s.%s to %s\n", s.Entity.Module, s.Entity.Name, strings.Join(roleNames, ", "))
-	if !e.quiet {
-		fmt.Fprint(e.output, e.formatAccessRuleResult(s.Entity.Module, s.Entity.Name, roleNames))
+	fmt.Fprintf(ctx.Output, "Granted access on %s.%s to %s\n", s.Entity.Module, s.Entity.Name, strings.Join(roleNames, ", "))
+	if !ctx.Quiet {
+		fmt.Fprint(ctx.Output, formatAccessRuleResult(ctx, s.Entity.Module, s.Entity.Name, roleNames))
 	}
 	return nil
 }
 
 // execRevokeEntityAccess handles REVOKE roles ON Module.Entity [(rights...)].
-func (e *Executor) execRevokeEntityAccess(s *ast.RevokeEntityAccessStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project in write mode")
+func execRevokeEntityAccess(ctx *ExecContext, s *ast.RevokeEntityAccessStmt) error {
+	e := ctx.executor
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	module, err := e.findModule(s.Entity.Module)
+	module, err := findModule(ctx, s.Entity.Module)
 	if err != nil {
 		return err
 	}
 
-	dm, err := e.reader.GetDomainModel(module.ID)
+	dm, err := ctx.Backend.GetDomainModel(module.ID)
 	if err != nil {
-		return fmt.Errorf("failed to get domain model: %w", err)
+		return mdlerrors.NewBackend("get domain model", err)
 	}
 
 	// Verify entity exists
 	entity := dm.FindEntityByName(s.Entity.Name)
 	if entity == nil {
-		return fmt.Errorf("entity not found: %s.%s", s.Entity.Module, s.Entity.Name)
+		return mdlerrors.NewNotFound("entity", s.Entity.Module+"."+s.Entity.Name)
 	}
 
 	// Build role name list
@@ -459,7 +470,7 @@ func (e *Executor) execRevokeEntityAccess(s *ast.RevokeEntityAccessStmt) error {
 
 	if len(s.Rights) > 0 {
 		// Partial revoke — downgrade specific rights
-		revocation := mpr.EntityAccessRevocation{}
+		revocation := types.EntityAccessRevocation{}
 		for _, right := range s.Rights {
 			switch right.Type {
 			case ast.EntityAccessCreate:
@@ -483,32 +494,32 @@ func (e *Executor) execRevokeEntityAccess(s *ast.RevokeEntityAccessStmt) error {
 			}
 		}
 
-		modified, err := e.writer.RevokeEntityMemberAccess(dm.ID, s.Entity.Name, roleNames, revocation)
+		modified, err := ctx.Backend.RevokeEntityMemberAccess(dm.ID, s.Entity.Name, roleNames, revocation)
 		if err != nil {
-			return fmt.Errorf("failed to revoke entity access: %w", err)
+			return mdlerrors.NewBackend("revoke entity access", err)
 		}
 
 		if modified == 0 {
-			fmt.Fprintf(e.output, "No access rules found matching %s on %s.%s\n", strings.Join(roleNames, ", "), s.Entity.Module, s.Entity.Name)
+			fmt.Fprintf(ctx.Output, "No access rules found matching %s on %s.%s\n", strings.Join(roleNames, ", "), s.Entity.Module, s.Entity.Name)
 		} else {
-			fmt.Fprintf(e.output, "Revoked partial access on %s.%s from %s\n", s.Entity.Module, s.Entity.Name, strings.Join(roleNames, ", "))
-			if !e.quiet {
-				fmt.Fprint(e.output, e.formatAccessRuleResult(s.Entity.Module, s.Entity.Name, roleNames))
+			fmt.Fprintf(ctx.Output, "Revoked partial access on %s.%s from %s\n", s.Entity.Module, s.Entity.Name, strings.Join(roleNames, ", "))
+			if !ctx.Quiet {
+				fmt.Fprint(ctx.Output, formatAccessRuleResult(ctx, s.Entity.Module, s.Entity.Name, roleNames))
 			}
 		}
 	} else {
 		// Full revoke — remove entire access rule
-		modified, err := e.writer.RemoveEntityAccessRule(dm.ID, s.Entity.Name, roleNames)
+		modified, err := ctx.Backend.RemoveEntityAccessRule(dm.ID, s.Entity.Name, roleNames)
 		if err != nil {
-			return fmt.Errorf("failed to revoke entity access: %w", err)
+			return mdlerrors.NewBackend("revoke entity access", err)
 		}
 
 		if modified == 0 {
-			fmt.Fprintf(e.output, "No access rules found matching %s on %s.%s\n", strings.Join(roleNames, ", "), s.Entity.Module, s.Entity.Name)
+			fmt.Fprintf(ctx.Output, "No access rules found matching %s on %s.%s\n", strings.Join(roleNames, ", "), s.Entity.Module, s.Entity.Name)
 		} else {
-			fmt.Fprintf(e.output, "Revoked access on %s.%s from %s\n", s.Entity.Module, s.Entity.Name, strings.Join(roleNames, ", "))
-			if !e.quiet {
-				fmt.Fprint(e.output, "  Result: (no access)\n")
+			fmt.Fprintf(ctx.Output, "Revoked access on %s.%s from %s\n", s.Entity.Module, s.Entity.Name, strings.Join(roleNames, ", "))
+			if !ctx.Quiet {
+				fmt.Fprint(ctx.Output, "  Result: (no access)\n")
 			}
 		}
 	}
@@ -517,20 +528,20 @@ func (e *Executor) execRevokeEntityAccess(s *ast.RevokeEntityAccessStmt) error {
 }
 
 // execGrantMicroflowAccess handles GRANT EXECUTE ON MICROFLOW Module.MF TO roles.
-func (e *Executor) execGrantMicroflowAccess(s *ast.GrantMicroflowAccessStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project in write mode")
+func execGrantMicroflowAccess(ctx *ExecContext, s *ast.GrantMicroflowAccessStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to build hierarchy: %w", err)
+		return mdlerrors.NewBackend("build hierarchy", err)
 	}
 
 	// Find the microflow
-	mfs, err := e.reader.ListMicroflows()
+	mfs, err := ctx.Backend.ListMicroflows()
 	if err != nil {
-		return fmt.Errorf("failed to list microflows: %w", err)
+		return mdlerrors.NewBackend("list microflows", err)
 	}
 
 	for _, mf := range mfs {
@@ -542,7 +553,7 @@ func (e *Executor) execGrantMicroflowAccess(s *ast.GrantMicroflowAccessStmt) err
 
 		// Validate all roles exist
 		for _, role := range s.Roles {
-			if err := e.validateModuleRole(role); err != nil {
+			if err := validateModuleRole(ctx, role); err != nil {
 				return err
 			}
 		}
@@ -563,36 +574,36 @@ func (e *Executor) execGrantMicroflowAccess(s *ast.GrantMicroflowAccessStmt) err
 			}
 		}
 
-		if err := e.writer.UpdateAllowedRoles(mf.ID, merged); err != nil {
-			return fmt.Errorf("failed to update microflow access: %w", err)
+		if err := ctx.Backend.UpdateAllowedRoles(mf.ID, merged); err != nil {
+			return mdlerrors.NewBackend("update microflow access", err)
 		}
 
 		if len(added) == 0 {
-			fmt.Fprintf(e.output, "All specified roles already have execute access on %s.%s\n", modName, mf.Name)
+			fmt.Fprintf(ctx.Output, "All specified roles already have execute access on %s.%s\n", modName, mf.Name)
 		} else {
-			fmt.Fprintf(e.output, "Granted execute access on %s.%s to %s\n", modName, mf.Name, strings.Join(added, ", "))
+			fmt.Fprintf(ctx.Output, "Granted execute access on %s.%s to %s\n", modName, mf.Name, strings.Join(added, ", "))
 		}
 		return nil
 	}
 
-	return fmt.Errorf("microflow not found: %s.%s", s.Microflow.Module, s.Microflow.Name)
+	return mdlerrors.NewNotFound("microflow", s.Microflow.Module+"."+s.Microflow.Name)
 }
 
 // execRevokeMicroflowAccess handles REVOKE EXECUTE ON MICROFLOW Module.MF FROM roles.
-func (e *Executor) execRevokeMicroflowAccess(s *ast.RevokeMicroflowAccessStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project in write mode")
+func execRevokeMicroflowAccess(ctx *ExecContext, s *ast.RevokeMicroflowAccessStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to build hierarchy: %w", err)
+		return mdlerrors.NewBackend("build hierarchy", err)
 	}
 
 	// Find the microflow
-	mfs, err := e.reader.ListMicroflows()
+	mfs, err := ctx.Backend.ListMicroflows()
 	if err != nil {
-		return fmt.Errorf("failed to list microflows: %w", err)
+		return mdlerrors.NewBackend("list microflows", err)
 	}
 
 	for _, mf := range mfs {
@@ -619,36 +630,36 @@ func (e *Executor) execRevokeMicroflowAccess(s *ast.RevokeMicroflowAccessStmt) e
 			}
 		}
 
-		if err := e.writer.UpdateAllowedRoles(mf.ID, remaining); err != nil {
-			return fmt.Errorf("failed to update microflow access: %w", err)
+		if err := ctx.Backend.UpdateAllowedRoles(mf.ID, remaining); err != nil {
+			return mdlerrors.NewBackend("update microflow access", err)
 		}
 
 		if len(removed) == 0 {
-			fmt.Fprintf(e.output, "None of the specified roles had execute access on %s.%s\n", modName, mf.Name)
+			fmt.Fprintf(ctx.Output, "None of the specified roles had execute access on %s.%s\n", modName, mf.Name)
 		} else {
-			fmt.Fprintf(e.output, "Revoked execute access on %s.%s from %s\n", modName, mf.Name, strings.Join(removed, ", "))
+			fmt.Fprintf(ctx.Output, "Revoked execute access on %s.%s from %s\n", modName, mf.Name, strings.Join(removed, ", "))
 		}
 		return nil
 	}
 
-	return fmt.Errorf("microflow not found: %s.%s", s.Microflow.Module, s.Microflow.Name)
+	return mdlerrors.NewNotFound("microflow", s.Microflow.Module+"."+s.Microflow.Name)
 }
 
 // execGrantPageAccess handles GRANT VIEW ON PAGE Module.Page TO roles.
-func (e *Executor) execGrantPageAccess(s *ast.GrantPageAccessStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project in write mode")
+func execGrantPageAccess(ctx *ExecContext, s *ast.GrantPageAccessStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to build hierarchy: %w", err)
+		return mdlerrors.NewBackend("build hierarchy", err)
 	}
 
 	// Find the page
-	pages, err := e.reader.ListPages()
+	pages, err := ctx.Backend.ListPages()
 	if err != nil {
-		return fmt.Errorf("failed to list pages: %w", err)
+		return mdlerrors.NewBackend("list pages", err)
 	}
 
 	for _, pg := range pages {
@@ -660,7 +671,7 @@ func (e *Executor) execGrantPageAccess(s *ast.GrantPageAccessStmt) error {
 
 		// Validate all roles exist
 		for _, role := range s.Roles {
-			if err := e.validateModuleRole(role); err != nil {
+			if err := validateModuleRole(ctx, role); err != nil {
 				return err
 			}
 		}
@@ -681,36 +692,36 @@ func (e *Executor) execGrantPageAccess(s *ast.GrantPageAccessStmt) error {
 			}
 		}
 
-		if err := e.writer.UpdateAllowedRoles(pg.ID, merged); err != nil {
-			return fmt.Errorf("failed to update page access: %w", err)
+		if err := ctx.Backend.UpdateAllowedRoles(pg.ID, merged); err != nil {
+			return mdlerrors.NewBackend("update page access", err)
 		}
 
 		if len(added) == 0 {
-			fmt.Fprintf(e.output, "All specified roles already have view access on %s.%s\n", modName, pg.Name)
+			fmt.Fprintf(ctx.Output, "All specified roles already have view access on %s.%s\n", modName, pg.Name)
 		} else {
-			fmt.Fprintf(e.output, "Granted view access on %s.%s to %s\n", modName, pg.Name, strings.Join(added, ", "))
+			fmt.Fprintf(ctx.Output, "Granted view access on %s.%s to %s\n", modName, pg.Name, strings.Join(added, ", "))
 		}
 		return nil
 	}
 
-	return fmt.Errorf("page not found: %s.%s", s.Page.Module, s.Page.Name)
+	return mdlerrors.NewNotFound("page", s.Page.Module+"."+s.Page.Name)
 }
 
 // execRevokePageAccess handles REVOKE VIEW ON PAGE Module.Page FROM roles.
-func (e *Executor) execRevokePageAccess(s *ast.RevokePageAccessStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project in write mode")
+func execRevokePageAccess(ctx *ExecContext, s *ast.RevokePageAccessStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to build hierarchy: %w", err)
+		return mdlerrors.NewBackend("build hierarchy", err)
 	}
 
 	// Find the page
-	pages, err := e.reader.ListPages()
+	pages, err := ctx.Backend.ListPages()
 	if err != nil {
-		return fmt.Errorf("failed to list pages: %w", err)
+		return mdlerrors.NewBackend("list pages", err)
 	}
 
 	for _, pg := range pages {
@@ -737,45 +748,45 @@ func (e *Executor) execRevokePageAccess(s *ast.RevokePageAccessStmt) error {
 			}
 		}
 
-		if err := e.writer.UpdateAllowedRoles(pg.ID, remaining); err != nil {
-			return fmt.Errorf("failed to update page access: %w", err)
+		if err := ctx.Backend.UpdateAllowedRoles(pg.ID, remaining); err != nil {
+			return mdlerrors.NewBackend("update page access", err)
 		}
 
 		if len(removed) == 0 {
-			fmt.Fprintf(e.output, "None of the specified roles had view access on %s.%s\n", modName, pg.Name)
+			fmt.Fprintf(ctx.Output, "None of the specified roles had view access on %s.%s\n", modName, pg.Name)
 		} else {
-			fmt.Fprintf(e.output, "Revoked view access on %s.%s from %s\n", modName, pg.Name, strings.Join(removed, ", "))
+			fmt.Fprintf(ctx.Output, "Revoked view access on %s.%s from %s\n", modName, pg.Name, strings.Join(removed, ", "))
 		}
 		return nil
 	}
 
-	return fmt.Errorf("page not found: %s.%s", s.Page.Module, s.Page.Name)
+	return mdlerrors.NewNotFound("page", s.Page.Module+"."+s.Page.Name)
 }
 
 // execGrantWorkflowAccess handles GRANT EXECUTE ON WORKFLOW Module.WF TO roles.
 // Mendix workflows do not have a document-level AllowedModuleRoles field (unlike
 // microflows and pages), so this operation is not supported.
-func (e *Executor) execGrantWorkflowAccess(s *ast.GrantWorkflowAccessStmt) error {
-	return fmt.Errorf("GRANT EXECUTE ON WORKFLOW is not supported: Mendix workflows do not have document-level AllowedModuleRoles (unlike microflows and pages). Workflow access is controlled through the microflow that triggers the workflow and UserTask targeting")
+func execGrantWorkflowAccess(ctx *ExecContext, s *ast.GrantWorkflowAccessStmt) error {
+	return mdlerrors.NewUnsupported("grant execute on workflow is not supported: Mendix workflows do not have document-level AllowedModuleRoles (unlike microflows and pages). Workflow access is controlled through the microflow that triggers the workflow and UserTask targeting")
 }
 
 // execRevokeWorkflowAccess handles REVOKE EXECUTE ON WORKFLOW Module.WF FROM roles.
 // Mendix workflows do not have a document-level AllowedModuleRoles field (unlike
 // microflows and pages), so this operation is not supported.
-func (e *Executor) execRevokeWorkflowAccess(s *ast.RevokeWorkflowAccessStmt) error {
-	return fmt.Errorf("REVOKE EXECUTE ON WORKFLOW is not supported: Mendix workflows do not have document-level AllowedModuleRoles (unlike microflows and pages). Workflow access is controlled through the microflow that triggers the workflow and UserTask targeting")
+func execRevokeWorkflowAccess(ctx *ExecContext, s *ast.RevokeWorkflowAccessStmt) error {
+	return mdlerrors.NewUnsupported("revoke execute on workflow is not supported: Mendix workflows do not have document-level AllowedModuleRoles (unlike microflows and pages). Workflow access is controlled through the microflow that triggers the workflow and UserTask targeting")
 }
 
 // validateModuleRole checks that a module role exists in the project.
-func (e *Executor) validateModuleRole(role ast.QualifiedName) error {
-	module, err := e.findModule(role.Module)
+func validateModuleRole(ctx *ExecContext, role ast.QualifiedName) error {
+	module, err := findModule(ctx, role.Module)
 	if err != nil {
-		return fmt.Errorf("module not found for role %s.%s: %w", role.Module, role.Name, err)
+		return mdlerrors.NewBackend(fmt.Sprintf("module not found for role %s.%s", role.Module, role.Name), err)
 	}
 
-	ms, err := e.reader.GetModuleSecurity(module.ID)
+	ms, err := ctx.Backend.GetModuleSecurity(module.ID)
 	if err != nil {
-		return fmt.Errorf("failed to read module security for %s: %w", role.Module, err)
+		return mdlerrors.NewBackend(fmt.Sprintf("read module security for %s", role.Module), err)
 	}
 
 	for _, mr := range ms.ModuleRoles {
@@ -784,18 +795,18 @@ func (e *Executor) validateModuleRole(role ast.QualifiedName) error {
 		}
 	}
 
-	return fmt.Errorf("module role not found: %s.%s", role.Module, role.Name)
+	return mdlerrors.NewNotFound("module role", role.Module+"."+role.Name)
 }
 
 // execAlterProjectSecurity handles ALTER PROJECT SECURITY LEVEL/DEMO USERS.
-func (e *Executor) execAlterProjectSecurity(s *ast.AlterProjectSecurityStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project in write mode")
+func execAlterProjectSecurity(ctx *ExecContext, s *ast.AlterProjectSecurityStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	ps, err := e.reader.GetProjectSecurity()
+	ps, err := ctx.Backend.GetProjectSecurity()
 	if err != nil {
-		return fmt.Errorf("failed to read project security: %w", err)
+		return mdlerrors.NewBackend("read project security", err)
 	}
 
 	if s.SecurityLevel != "" {
@@ -809,50 +820,50 @@ func (e *Executor) execAlterProjectSecurity(s *ast.AlterProjectSecurityStmt) err
 		case "Off":
 			bsonLevel = security.SecurityLevelOff
 		default:
-			return fmt.Errorf("unknown security level: %s", s.SecurityLevel)
+			return mdlerrors.NewUnsupported(fmt.Sprintf("unknown security level: %s", s.SecurityLevel))
 		}
 
-		if err := e.writer.SetProjectSecurityLevel(ps.ID, bsonLevel); err != nil {
-			return fmt.Errorf("failed to set security level: %w", err)
+		if err := ctx.Backend.SetProjectSecurityLevel(ps.ID, bsonLevel); err != nil {
+			return mdlerrors.NewBackend("set security level", err)
 		}
-		fmt.Fprintf(e.output, "Set project security level to %s\n", s.SecurityLevel)
+		fmt.Fprintf(ctx.Output, "Set project security level to %s\n", s.SecurityLevel)
 	}
 
 	if s.DemoUsersEnabled != nil {
-		if err := e.writer.SetProjectDemoUsersEnabled(ps.ID, *s.DemoUsersEnabled); err != nil {
-			return fmt.Errorf("failed to set demo users: %w", err)
+		if err := ctx.Backend.SetProjectDemoUsersEnabled(ps.ID, *s.DemoUsersEnabled); err != nil {
+			return mdlerrors.NewBackend("set demo users", err)
 		}
 		state := "disabled"
 		if *s.DemoUsersEnabled {
 			state = "enabled"
 		}
-		fmt.Fprintf(e.output, "Demo users %s\n", state)
+		fmt.Fprintf(ctx.Output, "Demo users %s\n", state)
 	}
 
 	return nil
 }
 
 // execCreateDemoUser handles CREATE [OR MODIFY] DEMO USER 'name' PASSWORD 'pw' [ENTITY Module.Entity] (Roles).
-func (e *Executor) execCreateDemoUser(s *ast.CreateDemoUserStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project in write mode")
+func execCreateDemoUser(ctx *ExecContext, s *ast.CreateDemoUserStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	ps, err := e.reader.GetProjectSecurity()
+	ps, err := ctx.Backend.GetProjectSecurity()
 	if err != nil {
-		return fmt.Errorf("failed to read project security: %w", err)
+		return mdlerrors.NewBackend("read project security", err)
 	}
 
 	// Validate password against project password policy
 	if err := ps.PasswordPolicy.ValidatePassword(s.Password); err != nil {
-		return fmt.Errorf("password policy violation for demo user '%s': %w\nhint: check your project's password policy with SHOW PROJECT SECURITY", s.UserName, err)
+		return mdlerrors.NewValidationf("password policy violation for demo user '%s': %v\nhint: check your project's password policy with show project security", s.UserName, err)
 	}
 
 	// Check if user already exists
 	for _, du := range ps.DemoUsers {
 		if du.UserName == s.UserName {
 			if !s.CreateOrModify {
-				return fmt.Errorf("demo user already exists: %s", s.UserName)
+				return mdlerrors.NewAlreadyExists("demo user", s.UserName)
 			}
 			// Additive: merge roles, update password. Drop and re-create with merged roles.
 			mergedRoles := du.UserRoles
@@ -869,13 +880,13 @@ func (e *Executor) execCreateDemoUser(s *ast.CreateDemoUserStmt) error {
 			if s.Entity != "" {
 				entity = s.Entity
 			}
-			if err := e.writer.RemoveDemoUser(ps.ID, s.UserName); err != nil {
-				return fmt.Errorf("failed to update demo user: %w", err)
+			if err := ctx.Backend.RemoveDemoUser(ps.ID, s.UserName); err != nil {
+				return mdlerrors.NewBackend("update demo user", err)
 			}
-			if err := e.writer.AddDemoUser(ps.ID, s.UserName, s.Password, entity, mergedRoles); err != nil {
-				return fmt.Errorf("failed to update demo user: %w", err)
+			if err := ctx.Backend.AddDemoUser(ps.ID, s.UserName, s.Password, entity, mergedRoles); err != nil {
+				return mdlerrors.NewBackend("update demo user", err)
 			}
-			fmt.Fprintf(e.output, "Modified demo user: %s\n", s.UserName)
+			fmt.Fprintf(ctx.Output, "Modified demo user: %s\n", s.UserName)
 			return nil
 		}
 	}
@@ -883,35 +894,35 @@ func (e *Executor) execCreateDemoUser(s *ast.CreateDemoUserStmt) error {
 	// Resolve entity: use explicit value or auto-detect from domain models
 	entity := s.Entity
 	if entity == "" {
-		detected, err := e.detectUserEntity()
+		detected, err := detectUserEntity(ctx)
 		if err != nil {
 			return err
 		}
 		entity = detected
 	}
 
-	if err := e.writer.AddDemoUser(ps.ID, s.UserName, s.Password, entity, s.UserRoles); err != nil {
-		return fmt.Errorf("failed to create demo user: %w", err)
+	if err := ctx.Backend.AddDemoUser(ps.ID, s.UserName, s.Password, entity, s.UserRoles); err != nil {
+		return mdlerrors.NewBackend("create demo user", err)
 	}
 
-	fmt.Fprintf(e.output, "Created demo user: %s (entity: %s)\n", s.UserName, entity)
+	fmt.Fprintf(ctx.Output, "Created demo user: %s (entity: %s)\n", s.UserName, entity)
 	return nil
 }
 
 // detectUserEntity finds the entity that generalizes System.User.
-func (e *Executor) detectUserEntity() (string, error) {
-	modules, err := e.reader.ListModules()
+func detectUserEntity(ctx *ExecContext) (string, error) {
+	modules, err := ctx.Backend.ListModules()
 	if err != nil {
-		return "", fmt.Errorf("failed to list modules: %w", err)
+		return "", mdlerrors.NewBackend("list modules", err)
 	}
 	moduleNameByID := make(map[model.ID]string, len(modules))
 	for _, m := range modules {
 		moduleNameByID[m.ID] = m.Name
 	}
 
-	dms, err := e.reader.ListDomainModels()
+	dms, err := ctx.Backend.ListDomainModels()
 	if err != nil {
-		return "", fmt.Errorf("failed to list domain models: %w", err)
+		return "", mdlerrors.NewBackend("list domain models", err)
 	}
 
 	var candidates []string
@@ -926,11 +937,11 @@ func (e *Executor) detectUserEntity() (string, error) {
 
 	switch len(candidates) {
 	case 0:
-		return "", fmt.Errorf("no entity found that generalizes System.User; use ENTITY clause to specify one")
+		return "", mdlerrors.NewValidation("no entity found that generalizes System.User; use entity clause to specify one")
 	case 1:
 		return candidates[0], nil
 	default:
-		return "", fmt.Errorf("multiple entities generalize System.User: %s; use ENTITY clause to specify one", joinCandidates(candidates))
+		return "", mdlerrors.NewValidationf("multiple entities generalize System.User: %s; use entity clause to specify one", joinCandidates(candidates))
 	}
 }
 
@@ -943,14 +954,14 @@ func joinCandidates(candidates []string) string {
 }
 
 // execDropDemoUser handles DROP DEMO USER 'name'.
-func (e *Executor) execDropDemoUser(s *ast.DropDemoUserStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project in write mode")
+func execDropDemoUser(ctx *ExecContext, s *ast.DropDemoUserStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	ps, err := e.reader.GetProjectSecurity()
+	ps, err := ctx.Backend.GetProjectSecurity()
 	if err != nil {
-		return fmt.Errorf("failed to read project security: %w", err)
+		return mdlerrors.NewBackend("read project security", err)
 	}
 
 	// Check if user exists
@@ -962,14 +973,14 @@ func (e *Executor) execDropDemoUser(s *ast.DropDemoUserStmt) error {
 		}
 	}
 	if !found {
-		return fmt.Errorf("demo user not found: %s", s.UserName)
+		return mdlerrors.NewNotFound("demo user", s.UserName)
 	}
 
-	if err := e.writer.RemoveDemoUser(ps.ID, s.UserName); err != nil {
-		return fmt.Errorf("failed to drop demo user: %w", err)
+	if err := ctx.Backend.RemoveDemoUser(ps.ID, s.UserName); err != nil {
+		return mdlerrors.NewBackend("drop demo user", err)
 	}
 
-	fmt.Fprintf(e.output, "Dropped demo user: %s\n", s.UserName)
+	fmt.Fprintf(ctx.Output, "Dropped demo user: %s\n", s.UserName)
 	return nil
 }
 
@@ -978,20 +989,20 @@ func (e *Executor) execDropDemoUser(s *ast.DropDemoUserStmt) error {
 // ============================================================================
 
 // execGrantODataServiceAccess handles GRANT ACCESS ON ODATA SERVICE Module.Svc TO roles.
-func (e *Executor) execGrantODataServiceAccess(s *ast.GrantODataServiceAccessStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project in write mode")
+func execGrantODataServiceAccess(ctx *ExecContext, s *ast.GrantODataServiceAccessStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to build hierarchy: %w", err)
+		return mdlerrors.NewBackend("build hierarchy", err)
 	}
 
 	// Find the published OData service
-	services, err := e.reader.ListPublishedODataServices()
+	services, err := ctx.Backend.ListPublishedODataServices()
 	if err != nil {
-		return fmt.Errorf("failed to list published OData services: %w", err)
+		return mdlerrors.NewBackend("list published OData services", err)
 	}
 
 	for _, svc := range services {
@@ -1003,7 +1014,7 @@ func (e *Executor) execGrantODataServiceAccess(s *ast.GrantODataServiceAccessStm
 
 		// Validate all roles exist
 		for _, role := range s.Roles {
-			if err := e.validateModuleRole(role); err != nil {
+			if err := validateModuleRole(ctx, role); err != nil {
 				return err
 			}
 		}
@@ -1024,36 +1035,36 @@ func (e *Executor) execGrantODataServiceAccess(s *ast.GrantODataServiceAccessStm
 			}
 		}
 
-		if err := e.writer.UpdateAllowedRoles(svc.ID, merged); err != nil {
-			return fmt.Errorf("failed to update OData service access: %w", err)
+		if err := ctx.Backend.UpdateAllowedRoles(svc.ID, merged); err != nil {
+			return mdlerrors.NewBackend("update OData service access", err)
 		}
 
 		if len(added) == 0 {
-			fmt.Fprintf(e.output, "All specified roles already have access on OData service %s.%s\n", modName, svc.Name)
+			fmt.Fprintf(ctx.Output, "All specified roles already have access on OData service %s.%s\n", modName, svc.Name)
 		} else {
-			fmt.Fprintf(e.output, "Granted access on OData service %s.%s to %s\n", modName, svc.Name, strings.Join(added, ", "))
+			fmt.Fprintf(ctx.Output, "Granted access on OData service %s.%s to %s\n", modName, svc.Name, strings.Join(added, ", "))
 		}
 		return nil
 	}
 
-	return fmt.Errorf("published OData service not found: %s.%s", s.Service.Module, s.Service.Name)
+	return mdlerrors.NewNotFound("published OData service", s.Service.Module+"."+s.Service.Name)
 }
 
 // execRevokeODataServiceAccess handles REVOKE ACCESS ON ODATA SERVICE Module.Svc FROM roles.
-func (e *Executor) execRevokeODataServiceAccess(s *ast.RevokeODataServiceAccessStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project in write mode")
+func execRevokeODataServiceAccess(ctx *ExecContext, s *ast.RevokeODataServiceAccessStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to build hierarchy: %w", err)
+		return mdlerrors.NewBackend("build hierarchy", err)
 	}
 
 	// Find the published OData service
-	services, err := e.reader.ListPublishedODataServices()
+	services, err := ctx.Backend.ListPublishedODataServices()
 	if err != nil {
-		return fmt.Errorf("failed to list published OData services: %w", err)
+		return mdlerrors.NewBackend("list published OData services", err)
 	}
 
 	for _, svc := range services {
@@ -1080,19 +1091,19 @@ func (e *Executor) execRevokeODataServiceAccess(s *ast.RevokeODataServiceAccessS
 			}
 		}
 
-		if err := e.writer.UpdateAllowedRoles(svc.ID, remaining); err != nil {
-			return fmt.Errorf("failed to update OData service access: %w", err)
+		if err := ctx.Backend.UpdateAllowedRoles(svc.ID, remaining); err != nil {
+			return mdlerrors.NewBackend("update OData service access", err)
 		}
 
 		if len(removed) == 0 {
-			fmt.Fprintf(e.output, "None of the specified roles had access on OData service %s.%s\n", modName, svc.Name)
+			fmt.Fprintf(ctx.Output, "None of the specified roles had access on OData service %s.%s\n", modName, svc.Name)
 		} else {
-			fmt.Fprintf(e.output, "Revoked access on OData service %s.%s from %s\n", modName, svc.Name, strings.Join(removed, ", "))
+			fmt.Fprintf(ctx.Output, "Revoked access on OData service %s.%s from %s\n", modName, svc.Name, strings.Join(removed, ", "))
 		}
 		return nil
 	}
 
-	return fmt.Errorf("published OData service not found: %s.%s", s.Service.Module, s.Service.Name)
+	return mdlerrors.NewNotFound("published OData service", s.Service.Module+"."+s.Service.Name)
 }
 
 // ============================================================================
@@ -1100,25 +1111,25 @@ func (e *Executor) execRevokeODataServiceAccess(s *ast.RevokeODataServiceAccessS
 // ============================================================================
 
 // execGrantPublishedRestServiceAccess handles GRANT ACCESS ON PUBLISHED REST SERVICE Module.Svc TO roles.
-func (e *Executor) execGrantPublishedRestServiceAccess(s *ast.GrantPublishedRestServiceAccessStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project in write mode")
+func execGrantPublishedRestServiceAccess(ctx *ExecContext, s *ast.GrantPublishedRestServiceAccessStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	if err := e.checkFeature("integration", "published_rest_grant_revoke",
-		"GRANT ACCESS ON PUBLISHED REST SERVICE",
+	if err := checkFeature(ctx, "integration", "published_rest_grant_revoke",
+		"grant access on published rest service",
 		"upgrade your project to 10.0+"); err != nil {
 		return err
 	}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to build hierarchy: %w", err)
+		return mdlerrors.NewBackend("build hierarchy", err)
 	}
 
-	services, err := e.reader.ListPublishedRestServices()
+	services, err := ctx.Backend.ListPublishedRestServices()
 	if err != nil {
-		return fmt.Errorf("failed to list published REST services: %w", err)
+		return mdlerrors.NewBackend("list published rest services", err)
 	}
 
 	for _, svc := range services {
@@ -1130,7 +1141,7 @@ func (e *Executor) execGrantPublishedRestServiceAccess(s *ast.GrantPublishedRest
 
 		// Validate all roles exist
 		for _, role := range s.Roles {
-			if err := e.validateModuleRole(role); err != nil {
+			if err := validateModuleRole(ctx, role); err != nil {
 				return err
 			}
 		}
@@ -1151,35 +1162,35 @@ func (e *Executor) execGrantPublishedRestServiceAccess(s *ast.GrantPublishedRest
 			}
 		}
 
-		if err := e.writer.UpdatePublishedRestServiceRoles(svc.ID, merged); err != nil {
-			return fmt.Errorf("failed to update published REST service access: %w", err)
+		if err := ctx.Backend.UpdatePublishedRestServiceRoles(svc.ID, merged); err != nil {
+			return mdlerrors.NewBackend("update published rest service access", err)
 		}
 
 		if len(added) == 0 {
-			fmt.Fprintf(e.output, "All specified roles already have access on published REST service %s.%s\n", modName, svc.Name)
+			fmt.Fprintf(ctx.Output, "All specified roles already have access on published rest service %s.%s\n", modName, svc.Name)
 		} else {
-			fmt.Fprintf(e.output, "Granted access on published REST service %s.%s to %s\n", modName, svc.Name, strings.Join(added, ", "))
+			fmt.Fprintf(ctx.Output, "Granted access on published rest service %s.%s to %s\n", modName, svc.Name, strings.Join(added, ", "))
 		}
 		return nil
 	}
 
-	return fmt.Errorf("published REST service not found: %s.%s", s.Service.Module, s.Service.Name)
+	return mdlerrors.NewNotFound("published rest service", s.Service.Module+"."+s.Service.Name)
 }
 
 // execRevokePublishedRestServiceAccess handles REVOKE ACCESS ON PUBLISHED REST SERVICE Module.Svc FROM roles.
-func (e *Executor) execRevokePublishedRestServiceAccess(s *ast.RevokePublishedRestServiceAccessStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project in write mode")
+func execRevokePublishedRestServiceAccess(ctx *ExecContext, s *ast.RevokePublishedRestServiceAccessStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to build hierarchy: %w", err)
+		return mdlerrors.NewBackend("build hierarchy", err)
 	}
 
-	services, err := e.reader.ListPublishedRestServices()
+	services, err := ctx.Backend.ListPublishedRestServices()
 	if err != nil {
-		return fmt.Errorf("failed to list published REST services: %w", err)
+		return mdlerrors.NewBackend("list published rest services", err)
 	}
 
 	for _, svc := range services {
@@ -1206,28 +1217,28 @@ func (e *Executor) execRevokePublishedRestServiceAccess(s *ast.RevokePublishedRe
 			}
 		}
 
-		if err := e.writer.UpdatePublishedRestServiceRoles(svc.ID, remaining); err != nil {
-			return fmt.Errorf("failed to update published REST service access: %w", err)
+		if err := ctx.Backend.UpdatePublishedRestServiceRoles(svc.ID, remaining); err != nil {
+			return mdlerrors.NewBackend("update published rest service access", err)
 		}
 
 		if len(removed) == 0 {
-			fmt.Fprintf(e.output, "None of the specified roles had access on published REST service %s.%s\n", modName, svc.Name)
+			fmt.Fprintf(ctx.Output, "None of the specified roles had access on published rest service %s.%s\n", modName, svc.Name)
 		} else {
-			fmt.Fprintf(e.output, "Revoked access on published REST service %s.%s from %s\n", modName, svc.Name, strings.Join(removed, ", "))
+			fmt.Fprintf(ctx.Output, "Revoked access on published rest service %s.%s from %s\n", modName, svc.Name, strings.Join(removed, ", "))
 		}
 		return nil
 	}
 
-	return fmt.Errorf("published REST service not found: %s.%s", s.Service.Module, s.Service.Name)
+	return mdlerrors.NewNotFound("published rest service", s.Service.Module+"."+s.Service.Name)
 }
 
 // execUpdateSecurity handles UPDATE SECURITY [IN Module].
-func (e *Executor) execUpdateSecurity(s *ast.UpdateSecurityStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project in write mode")
+func execUpdateSecurity(ctx *ExecContext, s *ast.UpdateSecurityStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	modules, err := e.getModulesFromCache()
+	modules, err := getModulesFromCache(ctx)
 	if err != nil {
 		return err
 	}
@@ -1238,24 +1249,27 @@ func (e *Executor) execUpdateSecurity(s *ast.UpdateSecurityStmt) error {
 			continue
 		}
 
-		dm, err := e.reader.GetDomainModel(mod.ID)
+		dm, err := ctx.Backend.GetDomainModel(mod.ID)
 		if err != nil {
 			continue // module may not have a domain model
 		}
 
-		count, err := e.writer.ReconcileMemberAccesses(dm.ID, mod.Name)
+		count, err := ctx.Backend.ReconcileMemberAccesses(dm.ID, mod.Name)
 		if err != nil {
-			return fmt.Errorf("failed to reconcile security for module %s: %w", mod.Name, err)
+			return mdlerrors.NewBackend(fmt.Sprintf("reconcile security for module %s", mod.Name), err)
 		}
 		if count > 0 {
-			fmt.Fprintf(e.output, "Reconciled %d access rule(s) in module %s\n", count, mod.Name)
+			fmt.Fprintf(ctx.Output, "Reconciled %d access rule(s) in module %s\n", count, mod.Name)
 			totalModified += count
 		}
 	}
 
 	if totalModified == 0 {
-		fmt.Fprintf(e.output, "All entity access rules are up to date\n")
+		fmt.Fprintf(ctx.Output, "All entity access rules are up to date\n")
 	}
 
 	return nil
 }
+
+// Executor method wrappers — delegate to free functions for callers that
+// still use the Executor receiver (e.g. executor_query.go).

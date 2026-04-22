@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
 	"github.com/mendixlabs/mxcli/model"
 	"github.com/mendixlabs/mxcli/sdk/pages"
 
@@ -19,17 +20,17 @@ import (
 // ============================================================================
 
 // describePage handles DESCRIBE PAGE command - outputs MDL V3 syntax.
-func (e *Executor) describePage(name ast.QualifiedName) error {
+func describePage(ctx *ExecContext, name ast.QualifiedName) error {
 	// Get hierarchy for module/folder resolution
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to build hierarchy: %w", err)
+		return mdlerrors.NewBackend("build hierarchy", err)
 	}
 
 	// Find the page
-	allPages, err := e.reader.ListPages()
+	allPages, err := ctx.Backend.ListPages()
 	if err != nil {
-		return fmt.Errorf("failed to list pages: %w", err)
+		return mdlerrors.NewBackend("list pages", err)
 	}
 
 	var foundPage *pages.Page
@@ -43,7 +44,7 @@ func (e *Executor) describePage(name ast.QualifiedName) error {
 	}
 
 	if foundPage == nil {
-		return fmt.Errorf("page %s not found", name.String())
+		return mdlerrors.NewNotFound("page", name.String())
 	}
 
 	// Get module name for the page
@@ -53,11 +54,11 @@ func (e *Executor) describePage(name ast.QualifiedName) error {
 	// Output documentation if present
 	if foundPage.Documentation != "" {
 		lines := strings.Split(foundPage.Documentation, "\n")
-		fmt.Fprint(e.output, "/**\n")
+		fmt.Fprint(ctx.Output, "/**\n")
 		for _, line := range lines {
-			fmt.Fprintf(e.output, " * %s\n", line)
+			fmt.Fprintf(ctx.Output, " * %s\n", line)
 		}
-		fmt.Fprint(e.output, " */\n")
+		fmt.Fprint(ctx.Output, " */\n")
 	}
 
 	// Get title
@@ -74,11 +75,11 @@ func (e *Executor) describePage(name ast.QualifiedName) error {
 
 	// Get layout from raw data
 	layoutName := ""
-	rawData, _ := e.reader.GetRawUnit(foundPage.ID)
+	rawData, _ := ctx.Backend.GetRawUnit(foundPage.ID)
 	if rawData != nil {
 		if formCall, ok := rawData["FormCall"].(map[string]any); ok {
 			if layoutID := extractBinaryID(formCall["Layout"]); layoutID != "" {
-				layoutName = e.resolveLayoutName(model.ID(layoutID))
+				layoutName = resolveLayoutName(ctx, model.ID(layoutID))
 			} else if formName, ok := formCall["Form"].(string); ok && formName != "" {
 				layoutName = formName
 			}
@@ -87,11 +88,11 @@ func (e *Executor) describePage(name ast.QualifiedName) error {
 
 	// @excluded annotation
 	if foundPage.Excluded {
-		fmt.Fprintln(e.output, "@excluded")
+		fmt.Fprintln(ctx.Output, "@excluded")
 	}
 
 	// V3 syntax: CREATE PAGE Module.Page (Title: '...', Layout: ..., Params: { })
-	header := fmt.Sprintf("CREATE OR MODIFY PAGE %s.%s", modName, foundPage.Name)
+	header := fmt.Sprintf("create or modify page %s.%s", modName, foundPage.Name)
 	props := []string{}
 	if title != "" {
 		props = append(props, fmt.Sprintf("Title: %s", mdlQuote(title)))
@@ -134,15 +135,15 @@ func (e *Executor) describePage(name ast.QualifiedName) error {
 	}
 
 	// Output widgets from raw page data
-	rawWidgets := e.getPageWidgetsFromRaw(foundPage.ID)
+	rawWidgets := getPageWidgetsFromRaw(ctx, foundPage.ID)
 	if len(rawWidgets) > 0 {
-		formatWidgetProps(e.output, "", header, props, " {\n")
+		formatWidgetProps(ctx.Output, "", header, props, " {\n")
 		for _, w := range rawWidgets {
-			e.outputWidgetMDLV3(w, 1)
+			outputWidgetMDLV3(ctx, w, 1)
 		}
-		fmt.Fprint(e.output, "}")
+		fmt.Fprint(ctx.Output, "}")
 	} else {
-		formatWidgetProps(e.output, "", header, props, "")
+		formatWidgetProps(ctx.Output, "", header, props, "")
 	}
 
 	// Add GRANT VIEW if roles are assigned
@@ -151,11 +152,11 @@ func (e *Executor) describePage(name ast.QualifiedName) error {
 		for i, r := range foundPage.AllowedRoles {
 			roles[i] = string(r)
 		}
-		fmt.Fprintf(e.output, "\n\nGRANT VIEW ON PAGE %s.%s TO %s;",
+		fmt.Fprintf(ctx.Output, "\n\ngrant view on page %s.%s to %s;",
 			modName, foundPage.Name, strings.Join(roles, ", "))
 	}
 
-	fmt.Fprint(e.output, "\n")
+	fmt.Fprint(ctx.Output, "\n")
 	return nil
 }
 
@@ -174,17 +175,17 @@ func formatParametersV3(params []string) []string {
 }
 
 // describeSnippet handles DESCRIBE SNIPPET command - outputs MDL V3 syntax.
-func (e *Executor) describeSnippet(name ast.QualifiedName) error {
+func describeSnippet(ctx *ExecContext, name ast.QualifiedName) error {
 	// Get hierarchy for module/folder resolution
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to build hierarchy: %w", err)
+		return mdlerrors.NewBackend("build hierarchy", err)
 	}
 
 	// Find the snippet
-	allSnippets, err := e.reader.ListSnippets()
+	allSnippets, err := ctx.Backend.ListSnippets()
 	if err != nil {
-		return fmt.Errorf("failed to list snippets: %w", err)
+		return mdlerrors.NewBackend("list snippets", err)
 	}
 
 	var foundSnippet *pages.Snippet
@@ -198,7 +199,7 @@ func (e *Executor) describeSnippet(name ast.QualifiedName) error {
 	}
 
 	if foundSnippet == nil {
-		return fmt.Errorf("snippet %s not found", name.String())
+		return mdlerrors.NewNotFound("snippet", name.String())
 	}
 
 	// Get module name for the snippet
@@ -208,22 +209,22 @@ func (e *Executor) describeSnippet(name ast.QualifiedName) error {
 	// Output documentation if present
 	if foundSnippet.Documentation != "" {
 		lines := strings.Split(foundSnippet.Documentation, "\n")
-		fmt.Fprint(e.output, "/**\n")
+		fmt.Fprint(ctx.Output, "/**\n")
 		for _, line := range lines {
-			fmt.Fprintf(e.output, " * %s\n", line)
+			fmt.Fprintf(ctx.Output, " * %s\n", line)
 		}
-		fmt.Fprint(e.output, " */\n")
+		fmt.Fprint(ctx.Output, " */\n")
 	}
 
 	// Get raw data to check for parameters
-	rawData, _ := e.reader.GetRawUnit(foundSnippet.ID)
+	rawData, _ := ctx.Backend.GetRawUnit(foundSnippet.ID)
 	var params []map[string]any
 	if rawData != nil {
 		params = getBsonArrayMaps(rawData["Parameters"])
 	}
 
 	// Output CREATE SNIPPET statement (V3 syntax)
-	fmt.Fprintf(e.output, "CREATE OR MODIFY SNIPPET %s.%s", modName, foundSnippet.Name)
+	fmt.Fprintf(ctx.Output, "create or modify snippet %s.%s", modName, foundSnippet.Name)
 	folderPath := h.BuildFolderPath(foundSnippet.ContainerID)
 	if len(params) > 0 || folderPath != "" {
 		snippetProps := []string{}
@@ -239,35 +240,35 @@ func (e *Executor) describeSnippet(name ast.QualifiedName) error {
 		if folderPath != "" {
 			snippetProps = append(snippetProps, fmt.Sprintf("Folder: %s", mdlQuote(folderPath)))
 		}
-		fmt.Fprintf(e.output, " (%s)", strings.Join(snippetProps, ", "))
+		fmt.Fprintf(ctx.Output, " (%s)", strings.Join(snippetProps, ", "))
 	}
 
 	// Output widgets from raw snippet data
-	rawWidgets := e.getSnippetWidgetsFromRaw(foundSnippet.ID)
+	rawWidgets := getSnippetWidgetsFromRaw(ctx, foundSnippet.ID)
 	if len(rawWidgets) > 0 {
-		fmt.Fprint(e.output, " {\n")
+		fmt.Fprint(ctx.Output, " {\n")
 		for _, w := range rawWidgets {
-			e.outputWidgetMDLV3(w, 1)
+			outputWidgetMDLV3(ctx, w, 1)
 		}
-		fmt.Fprint(e.output, "}")
+		fmt.Fprint(ctx.Output, "}")
 	}
 
-	fmt.Fprint(e.output, "\n")
+	fmt.Fprint(ctx.Output, "\n")
 	return nil
 }
 
 // describeLayout handles DESCRIBE LAYOUT command - outputs MDL-style representation.
-func (e *Executor) describeLayout(name ast.QualifiedName) error {
+func describeLayout(ctx *ExecContext, name ast.QualifiedName) error {
 	// Get hierarchy for module/folder resolution
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to build hierarchy: %w", err)
+		return mdlerrors.NewBackend("build hierarchy", err)
 	}
 
 	// Find the layout
-	allLayouts, err := e.reader.ListLayouts()
+	allLayouts, err := ctx.Backend.ListLayouts()
 	if err != nil {
-		return fmt.Errorf("failed to list layouts: %w", err)
+		return mdlerrors.NewBackend("list layouts", err)
 	}
 
 	var foundLayout *pages.Layout
@@ -281,7 +282,7 @@ func (e *Executor) describeLayout(name ast.QualifiedName) error {
 	}
 
 	if foundLayout == nil {
-		return fmt.Errorf("layout %s not found", name.String())
+		return mdlerrors.NewNotFound("layout", name.String())
 	}
 
 	// Get module name for the layout
@@ -291,11 +292,11 @@ func (e *Executor) describeLayout(name ast.QualifiedName) error {
 	// Output documentation if present
 	if foundLayout.Documentation != "" {
 		lines := strings.Split(foundLayout.Documentation, "\n")
-		fmt.Fprint(e.output, "/**\n")
+		fmt.Fprint(ctx.Output, "/**\n")
 		for _, line := range lines {
-			fmt.Fprintf(e.output, " * %s\n", line)
+			fmt.Fprintf(ctx.Output, " * %s\n", line)
 		}
-		fmt.Fprint(e.output, " */\n")
+		fmt.Fprint(ctx.Output, " */\n")
 	}
 
 	// Output layout type comment
@@ -304,30 +305,30 @@ func (e *Executor) describeLayout(name ast.QualifiedName) error {
 		layoutTypeStr = "Responsive"
 	}
 
-	fmt.Fprintf(e.output, "-- Layout Type: %s\n", layoutTypeStr)
-	fmt.Fprintf(e.output, "-- This is a layout document. Layouts define the structure that pages are built upon.\n")
-	fmt.Fprintf(e.output, "-- Layouts cannot be created via MDL; they must be created in Studio Pro.\n\n")
+	fmt.Fprintf(ctx.Output, "-- Layout Type: %s\n", layoutTypeStr)
+	fmt.Fprintf(ctx.Output, "-- This is a layout document. Layouts define the structure that pages are built upon.\n")
+	fmt.Fprintf(ctx.Output, "-- Layouts cannot be created via MDL; they must be created in Studio Pro.\n\n")
 
 	// Output as a comment showing the layout name
-	fmt.Fprintf(e.output, "-- LAYOUT %s.%s\n", modName, foundLayout.Name)
+	fmt.Fprintf(ctx.Output, "-- layout %s.%s\n", modName, foundLayout.Name)
 
 	// Output widgets from raw layout data
-	rawWidgets := e.getLayoutWidgetsFromRaw(foundLayout.ID)
+	rawWidgets := getLayoutWidgetsFromRaw(ctx, foundLayout.ID)
 	if len(rawWidgets) > 0 {
-		fmt.Fprint(e.output, "-- Widget structure:\n")
+		fmt.Fprint(ctx.Output, "-- Widget structure:\n")
 		for _, w := range rawWidgets {
-			e.outputWidgetMDLV3Comment(w, 0)
+			outputWidgetMDLV3Comment(ctx, w, 0)
 		}
 	}
 
-	fmt.Fprint(e.output, "\n")
+	fmt.Fprint(ctx.Output, "\n")
 	return nil
 }
 
 // getLayoutWidgetsFromRaw extracts widgets from raw layout BSON.
-func (e *Executor) getLayoutWidgetsFromRaw(layoutID model.ID) []rawWidget {
+func getLayoutWidgetsFromRaw(ctx *ExecContext, layoutID model.ID) []rawWidget {
 	// Get raw layout data
-	rawData, err := e.reader.GetRawUnit(layoutID)
+	rawData, err := ctx.Backend.GetRawUnit(layoutID)
 	if err != nil {
 		return nil
 	}
@@ -338,24 +339,24 @@ func (e *Executor) getLayoutWidgetsFromRaw(layoutID model.ID) []rawWidget {
 		return nil
 	}
 
-	return e.parseRawWidget(widgetData)
+	return parseRawWidget(ctx, widgetData)
 }
 
 // outputWidgetMDLV3Comment outputs a widget as MDL V3 comment.
-func (e *Executor) outputWidgetMDLV3Comment(w rawWidget, indent int) {
+func outputWidgetMDLV3Comment(ctx *ExecContext, w rawWidget, indent int) {
 	prefix := strings.Repeat("  ", indent)
-	fmt.Fprintf(e.output, "%s-- %s %s\n", prefix, w.Type, w.Name)
+	fmt.Fprintf(ctx.Output, "%s-- %s %s\n", prefix, w.Type, w.Name)
 
 	// Output children
 	for _, child := range w.Children {
-		e.outputWidgetMDLV3Comment(child, indent+1)
+		outputWidgetMDLV3Comment(ctx, child, indent+1)
 	}
 }
 
 // getSnippetWidgetsFromRaw extracts widgets from raw snippet BSON.
-func (e *Executor) getSnippetWidgetsFromRaw(snippetID model.ID) []rawWidget {
+func getSnippetWidgetsFromRaw(ctx *ExecContext, snippetID model.ID) []rawWidget {
 	// Get raw snippet data
-	rawData, err := e.reader.GetRawUnit(snippetID)
+	rawData, err := ctx.Backend.GetRawUnit(snippetID)
 	if err != nil {
 		return nil
 	}
@@ -376,7 +377,7 @@ func (e *Executor) getSnippetWidgetsFromRaw(snippetID model.ID) []rawWidget {
 	var result []rawWidget
 	for _, w := range widgetsArray {
 		if wMap, ok := w.(map[string]any); ok {
-			result = append(result, e.parseRawWidget(wMap)...)
+			result = append(result, parseRawWidget(ctx, wMap)...)
 		}
 	}
 	return result
@@ -431,13 +432,13 @@ func getBsonArrayMaps(v any) []map[string]any {
 }
 
 // resolveLayoutName resolves a layout ID to its qualified name.
-func (e *Executor) resolveLayoutName(layoutID model.ID) string {
-	layouts, err := e.reader.ListLayouts()
+func resolveLayoutName(ctx *ExecContext, layoutID model.ID) string {
+	layouts, err := ctx.Backend.ListLayouts()
 	if err != nil {
 		return string(layoutID)
 	}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
 		return string(layoutID)
 	}
@@ -609,9 +610,9 @@ func getBsonArrayElements(v any) []any {
 }
 
 // getPageWidgetsFromRaw extracts widgets from raw page BSON.
-func (e *Executor) getPageWidgetsFromRaw(pageID model.ID) []rawWidget {
+func getPageWidgetsFromRaw(ctx *ExecContext, pageID model.ID) []rawWidget {
 	// Get raw page data
-	rawData, err := e.reader.GetRawUnit(pageID)
+	rawData, err := ctx.Backend.GetRawUnit(pageID)
 	if err != nil {
 		return nil
 	}
@@ -637,7 +638,7 @@ func (e *Executor) getPageWidgetsFromRaw(pageID model.ID) []rawWidget {
 		argWidgets := getBsonArrayElements(argMap["Widgets"])
 		for _, w := range argWidgets {
 			if wMap, ok := w.(map[string]any); ok {
-				parsed := e.parseRawWidget(wMap)
+				parsed := parseRawWidget(ctx, wMap)
 				for _, pw := range parsed {
 					// Unwrap the conditionalVisibilityWidget wrapper that
 					// mxcli (and Studio Pro) adds as a layout placeholder

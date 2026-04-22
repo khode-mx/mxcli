@@ -60,11 +60,12 @@ type WidgetV3 struct {
 
 // DataSourceV3 represents a V3 datasource expression.
 type DataSourceV3 struct {
-	Type      string          // "parameter", "database", "microflow", "nanoflow", "association", "selection"
-	Reference string          // Entity name, flow name, widget name, or parameter name
-	Args      []FlowArgV3     // Arguments for microflow/nanoflow calls
-	Where     string          // XPath constraint (for database source)
-	OrderBy   []OrderByItemV3 // Sort order (for database source)
+	Type            string          // "parameter", "database", "microflow", "nanoflow", "association", "selection"
+	Reference       string          // Entity name, flow name, widget name, or parameter name
+	ContextVariable string          // Context variable name (for association source: $currentObject → "currentObject")
+	Args            []FlowArgV3     // Arguments for microflow/nanoflow calls
+	Where           string          // XPath constraint (for database source)
+	OrderBy         []OrderByItemV3 // Sort order (for database source)
 }
 
 // FlowArgV3 represents an argument for microflow/nanoflow/page calls.

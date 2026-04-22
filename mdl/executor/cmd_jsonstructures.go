@@ -10,17 +10,18 @@ import (
 	"unicode"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
-	"github.com/mendixlabs/mxcli/sdk/mpr"
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
+	"github.com/mendixlabs/mxcli/mdl/types"
 )
 
-// showJsonStructures handles SHOW JSON STRUCTURES [IN module].
-func (e *Executor) showJsonStructures(moduleName string) error {
-	structures, err := e.reader.ListJsonStructures()
+// listJsonStructures handles SHOW JSON STRUCTURES [IN module].
+func listJsonStructures(ctx *ExecContext, moduleName string) error {
+	structures, err := ctx.Backend.ListJsonStructures()
 	if err != nil {
-		return fmt.Errorf("failed to list JSON structures: %w", err)
+		return mdlerrors.NewBackend("list json structures", err)
 	}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
 		return err
 	}
@@ -48,7 +49,7 @@ func (e *Executor) showJsonStructures(moduleName string) error {
 
 		source := "Manual"
 		if js.JsonSnippet != "" {
-			source = "JSON Snippet"
+			source = "json Snippet"
 		}
 
 		rows = append(rows, row{qualifiedName: qualifiedName, elemCount: elemCount, source: source})
@@ -58,24 +59,24 @@ func (e *Executor) showJsonStructures(moduleName string) error {
 	sort.Slice(rows, func(i, j int) bool { return rows[i].qualifiedName < rows[j].qualifiedName })
 
 	tr := &TableResult{
-		Columns: []string{"JSON Structure", "Elements", "Source"},
-		Summary: fmt.Sprintf("(%d JSON structure(s))", len(rows)),
+		Columns: []string{"json Structure", "Elements", "Source"},
+		Summary: fmt.Sprintf("(%d json structure(s))", len(rows)),
 	}
 	for _, r := range rows {
 		tr.Rows = append(tr.Rows, []any{r.qualifiedName, r.elemCount, r.source})
 	}
-	return e.writeResult(tr)
+	return writeResult(ctx, tr)
 }
 
 // describeJsonStructure handles DESCRIBE JSON STRUCTURE Module.Name.
 // Output is re-executable CREATE OR REPLACE MDL followed by the element tree as comments.
-func (e *Executor) describeJsonStructure(name ast.QualifiedName) error {
-	js := e.findJsonStructure(name.Module, name.Name)
+func describeJsonStructure(ctx *ExecContext, name ast.QualifiedName) error {
+	js := findJsonStructure(ctx, name.Module, name.Name)
 	if js == nil {
-		return fmt.Errorf("JSON structure not found: %s", name)
+		return mdlerrors.NewNotFound("json structure", name.String())
 	}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
 		return err
 	}
@@ -86,24 +87,24 @@ func (e *Executor) describeJsonStructure(name ast.QualifiedName) error {
 
 	// Documentation as doc comment
 	if js.Documentation != "" {
-		fmt.Fprintf(e.output, "/**\n * %s\n */\n", js.Documentation)
+		fmt.Fprintf(ctx.Output, "/**\n * %s\n */\n", js.Documentation)
 	}
 
 	// Re-executable CREATE OR REPLACE statement
-	fmt.Fprintf(e.output, "CREATE OR REPLACE JSON STRUCTURE %s", qualifiedName)
+	fmt.Fprintf(ctx.Output, "create or replace json structure %s", qualifiedName)
 	if folderPath := h.BuildFolderPath(js.ContainerID); folderPath != "" {
-		fmt.Fprintf(e.output, "\n  FOLDER '%s'", folderPath)
+		fmt.Fprintf(ctx.Output, "\n  folder '%s'", folderPath)
 	}
 	if js.Documentation != "" {
-		fmt.Fprintf(e.output, "\n  COMMENT '%s'", strings.ReplaceAll(js.Documentation, "'", "''"))
+		fmt.Fprintf(ctx.Output, "\n  comment '%s'", strings.ReplaceAll(js.Documentation, "'", "''"))
 	}
 
 	if js.JsonSnippet != "" {
-		snippet := mpr.PrettyPrintJSON(js.JsonSnippet)
+		snippet := types.PrettyPrintJSON(js.JsonSnippet)
 		if strings.Contains(snippet, "'") || strings.Contains(snippet, "\n") {
-			fmt.Fprintf(e.output, "\n  SNIPPET $$%s$$", snippet)
+			fmt.Fprintf(ctx.Output, "\n  snippet $$%s$$", snippet)
 		} else {
-			fmt.Fprintf(e.output, "\n  SNIPPET '%s'", snippet)
+			fmt.Fprintf(ctx.Output, "\n  snippet '%s'", snippet)
 		}
 	}
 
@@ -117,24 +118,24 @@ func (e *Executor) describeJsonStructure(name ast.QualifiedName) error {
 		}
 		sort.Strings(keys)
 
-		fmt.Fprintf(e.output, "\n  CUSTOM NAME MAP (\n")
+		fmt.Fprintf(ctx.Output, "\n  CUSTOM NAME map (\n")
 		for i, jsonKey := range keys {
 			sep := ","
 			if i == len(keys)-1 {
 				sep = ""
 			}
-			fmt.Fprintf(e.output, "    '%s' AS '%s'%s\n", jsonKey, customMappings[jsonKey], sep)
+			fmt.Fprintf(ctx.Output, "    '%s' as '%s'%s\n", jsonKey, customMappings[jsonKey], sep)
 		}
-		fmt.Fprintf(e.output, "  )")
+		fmt.Fprintf(ctx.Output, "  )")
 	}
 
-	fmt.Fprintln(e.output, ";")
+	fmt.Fprintln(ctx.Output, ";")
 	return nil
 }
 
 // collectCustomNameMappings walks the element tree and returns JSON key → ExposedName
 // mappings where the ExposedName differs from the auto-generated default (capitalizeFirst).
-func collectCustomNameMappings(elements []*mpr.JsonElement) map[string]string {
+func collectCustomNameMappings(elements []*types.JsonElement) map[string]string {
 	mappings := make(map[string]string)
 	for _, elem := range elements {
 		collectCustomNames(elem, mappings)
@@ -142,7 +143,7 @@ func collectCustomNameMappings(elements []*mpr.JsonElement) map[string]string {
 	return mappings
 }
 
-func collectCustomNames(elem *mpr.JsonElement, mappings map[string]string) {
+func collectCustomNames(elem *types.JsonElement, mappings map[string]string) {
 	// Extract the JSON key from the last segment of the Path.
 	// Path format: "(Object)|fieldName" or "(Object)|parent|(Object)|child"
 	if parts := strings.Split(elem.Path, "|"); len(parts) > 1 {
@@ -171,13 +172,13 @@ func capitalizeFirstRune(s string) string {
 }
 
 // execCreateJsonStructure handles CREATE [OR REPLACE] JSON STRUCTURE statements.
-func (e *Executor) execCreateJsonStructure(s *ast.CreateJsonStructureStmt) error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+func execCreateJsonStructure(ctx *ExecContext, s *ast.CreateJsonStructureStmt) error {
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
 	// Find or auto-create module
-	module, err := e.findOrCreateModule(s.Name.Module)
+	module, err := findOrCreateModule(ctx, s.Name.Module)
 	if err != nil {
 		return err
 	}
@@ -185,30 +186,30 @@ func (e *Executor) execCreateJsonStructure(s *ast.CreateJsonStructureStmt) error
 	// Resolve folder if specified
 	containerID := module.ID
 	if s.Folder != "" {
-		folderID, err := e.resolveFolder(module.ID, s.Folder)
+		folderID, err := resolveFolder(ctx, module.ID, s.Folder)
 		if err != nil {
-			return fmt.Errorf("failed to resolve folder %s: %w", s.Folder, err)
+			return mdlerrors.NewBackend("resolve folder "+s.Folder, err)
 		}
 		containerID = folderID
 	}
 
 	// Check if already exists
-	existing := e.findJsonStructure(s.Name.Module, s.Name.Name)
+	existing := findJsonStructure(ctx, s.Name.Module, s.Name.Name)
 	if existing != nil {
 		if s.CreateOrReplace {
 			// Delete existing before recreating
-			if err := e.writer.DeleteJsonStructure(string(existing.ID)); err != nil {
-				return fmt.Errorf("failed to delete existing JSON structure: %w", err)
+			if err := ctx.Backend.DeleteJsonStructure(string(existing.ID)); err != nil {
+				return mdlerrors.NewBackend("delete existing json structure", err)
 			}
 		} else {
-			return fmt.Errorf("JSON structure already exists: %s.%s", s.Name.Module, s.Name.Name)
+			return mdlerrors.NewAlreadyExists("json structure", s.Name.Module+"."+s.Name.Name)
 		}
 	}
 
 	// Build element tree from JSON snippet, applying custom name mappings
-	elements, err := mpr.BuildJsonElementsFromSnippet(s.JsonSnippet, s.CustomNameMap)
+	elements, err := types.BuildJsonElementsFromSnippet(s.JsonSnippet, s.CustomNameMap)
 	if err != nil {
-		return fmt.Errorf("failed to build element tree: %w", err)
+		return mdlerrors.NewBackend("build element tree", err)
 	}
 
 	// For CREATE OR REPLACE, keep original folder unless a new one is specified
@@ -216,56 +217,56 @@ func (e *Executor) execCreateJsonStructure(s *ast.CreateJsonStructureStmt) error
 		containerID = existing.ContainerID
 	}
 
-	js := &mpr.JsonStructure{
+	js := &types.JsonStructure{
 		ContainerID:   containerID,
 		Name:          s.Name.Name,
 		Documentation: s.Documentation,
-		JsonSnippet:   mpr.PrettyPrintJSON(s.JsonSnippet),
+		JsonSnippet:   types.PrettyPrintJSON(s.JsonSnippet),
 		Elements:      elements,
 	}
 
-	if err := e.writer.CreateJsonStructure(js); err != nil {
-		return fmt.Errorf("failed to create JSON structure: %w", err)
+	if err := ctx.Backend.CreateJsonStructure(js); err != nil {
+		return mdlerrors.NewBackend("create json structure", err)
 	}
 
 	// Invalidate hierarchy cache
-	e.invalidateHierarchy()
+	invalidateHierarchy(ctx)
 
 	action := "Created"
 	if existing != nil {
 		action = "Replaced"
 	}
-	fmt.Fprintf(e.output, "%s JSON structure: %s\n", action, s.Name)
+	fmt.Fprintf(ctx.Output, "%s json structure: %s\n", action, s.Name)
 	return nil
 }
 
 // execDropJsonStructure handles DROP JSON STRUCTURE statements.
-func (e *Executor) execDropJsonStructure(s *ast.DropJsonStructureStmt) error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+func execDropJsonStructure(ctx *ExecContext, s *ast.DropJsonStructureStmt) error {
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
-	js := e.findJsonStructure(s.Name.Module, s.Name.Name)
+	js := findJsonStructure(ctx, s.Name.Module, s.Name.Name)
 	if js == nil {
-		return fmt.Errorf("JSON structure not found: %s", s.Name)
+		return mdlerrors.NewNotFound("json structure", s.Name.String())
 	}
 
-	if err := e.writer.DeleteJsonStructure(string(js.ID)); err != nil {
-		return fmt.Errorf("failed to delete JSON structure: %w", err)
+	if err := ctx.Backend.DeleteJsonStructure(string(js.ID)); err != nil {
+		return mdlerrors.NewBackend("delete json structure", err)
 	}
 
-	fmt.Fprintf(e.output, "Dropped JSON structure: %s\n", s.Name)
+	fmt.Fprintf(ctx.Output, "Dropped json structure: %s\n", s.Name)
 	return nil
 }
 
 // findJsonStructure finds a JSON structure by module and name.
-func (e *Executor) findJsonStructure(moduleName, structName string) *mpr.JsonStructure {
-	structures, err := e.reader.ListJsonStructures()
+func findJsonStructure(ctx *ExecContext, moduleName, structName string) *types.JsonStructure {
+	structures, err := ctx.Backend.ListJsonStructures()
 	if err != nil {
 		return nil
 	}
 
-	h, _ := e.getHierarchy()
+	h, _ := getHierarchy(ctx)
 	if h == nil {
 		return nil
 	}

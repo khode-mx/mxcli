@@ -180,6 +180,7 @@ Available topics:
   fragment    - Show fragment (reusable widget group) syntax
   java-action - Show Java action syntax (CREATE/DESCRIBE/CALL, type params, EXPOSED AS)
   business-events - Show business event service syntax
+  agents      - Show AI agent document syntax (Model, KB, MCP Service, Agent)
   xpath       - Show XPath constraint syntax for WHERE clauses
   oql         - Show OQL query execution syntax (mxcli oql)
   sql         - Show external SQL query execution syntax (mxcli sql)
@@ -245,6 +246,8 @@ Example:
 			showTopicHelp("java-action")
 		case "business-events", "businessevents", "business_events", "be":
 			showTopicHelp("business-events")
+		case "agents", "agent", "agent-editor", "agenteditor", "model", "models", "knowledge-base", "knowledgebase", "mcp", "mcp-service":
+			showTopicHelp("agents")
 		case "xpath", "xpath-constraints":
 			showTopicHelp("xpath")
 		case "oql":

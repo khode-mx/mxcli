@@ -11,19 +11,20 @@ import (
 	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
 	"github.com/mendixlabs/mxcli/sdk/javaactions"
 )
 
-// showJavaScriptActions handles SHOW JAVASCRIPT ACTIONS command.
-func (e *Executor) showJavaScriptActions(moduleName string) error {
-	h, err := e.getHierarchy()
+// listJavaScriptActions handles SHOW JAVASCRIPT ACTIONS command.
+func listJavaScriptActions(ctx *ExecContext, moduleName string) error {
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to build hierarchy: %w", err)
+		return mdlerrors.NewBackend("build hierarchy", err)
 	}
 
-	jsActions, err := e.reader.ListJavaScriptActions()
+	jsActions, err := ctx.Backend.ListJavaScriptActions()
 	if err != nil {
-		return fmt.Errorf("failed to list javascript actions: %w", err)
+		return mdlerrors.NewBackend("list javascript actions", err)
 	}
 
 	type row struct {
@@ -60,15 +61,15 @@ func (e *Executor) showJavaScriptActions(moduleName string) error {
 	for _, r := range rows {
 		result.Rows = append(result.Rows, []any{r.qualifiedName, r.module, r.name, r.platform, r.folderPath})
 	}
-	return e.writeResult(result)
+	return writeResult(ctx, result)
 }
 
 // describeJavaScriptAction handles DESCRIBE JAVASCRIPT ACTION command.
-func (e *Executor) describeJavaScriptAction(name ast.QualifiedName) error {
+func describeJavaScriptAction(ctx *ExecContext, name ast.QualifiedName) error {
 	qualifiedName := name.Module + "." + name.Name
-	jsa, err := e.reader.ReadJavaScriptActionByName(qualifiedName)
+	jsa, err := ctx.Backend.ReadJavaScriptActionByName(qualifiedName)
 	if err != nil {
-		return fmt.Errorf("javascript action not found: %s", qualifiedName)
+		return mdlerrors.NewNotFound("javascript action", qualifiedName)
 	}
 
 	var sb strings.Builder
@@ -87,7 +88,7 @@ func (e *Executor) describeJavaScriptAction(name ast.QualifiedName) error {
 	}
 
 	// Type parameters
-	sb.WriteString("CREATE JAVASCRIPT ACTION ")
+	sb.WriteString("create javascript action ")
 	sb.WriteString(qualifiedName)
 	if len(jsa.TypeParameters) > 0 {
 		sb.WriteString("<")
@@ -125,7 +126,7 @@ func (e *Executor) describeJavaScriptAction(name ast.QualifiedName) error {
 			sb.WriteString("Object")
 		}
 		if param.IsRequired {
-			sb.WriteString(" NOT NULL")
+			sb.WriteString(" not null")
 		}
 		if param.Description != "" {
 			paramDoc := strings.ReplaceAll(param.Description, "\r\n", "\n")
@@ -152,58 +153,58 @@ func (e *Executor) describeJavaScriptAction(name ast.QualifiedName) error {
 
 	// Return type
 	if jsa.ReturnType != nil {
-		sb.WriteString("\n  RETURNS ")
+		sb.WriteString("\n  returns ")
 		sb.WriteString(formatJavaActionReturnType(jsa.ReturnType))
 	}
 
 	// RETURN NAME metadata
 	if jsa.ActionDefaultReturnName != "" {
-		sb.WriteString("\n-- RETURN NAME: '")
+		sb.WriteString("\n-- return NAME: '")
 		sb.WriteString(jsa.ActionDefaultReturnName)
 		sb.WriteString("'")
 	}
 
 	// EXPOSED AS clause
 	if jsa.MicroflowActionInfo != nil && jsa.MicroflowActionInfo.Caption != "" {
-		sb.WriteString("\n  EXPOSED AS '")
+		sb.WriteString("\n  exposed as '")
 		sb.WriteString(jsa.MicroflowActionInfo.Caption)
-		sb.WriteString("' IN '")
+		sb.WriteString("' in '")
 		sb.WriteString(jsa.MicroflowActionInfo.Category)
 		sb.WriteString("'")
 		if jsa.MicroflowActionInfo.Icon != "" {
-			sb.WriteString("\n-- ICON: ")
+			sb.WriteString("\n-- icon: ")
 			sb.WriteString(jsa.MicroflowActionInfo.Icon)
 		}
 	}
 
 	// JavaScript source code
-	userCode, extraCode := e.readJavaScriptActionSource(name.Module, name.Name)
+	userCode, extraCode := readJavaScriptActionSource(ctx.MprPath, name.Module, name.Name)
 	if userCode != "" {
-		sb.WriteString("\nAS $$\n")
+		sb.WriteString("\nas $$\n")
 		sb.WriteString(userCode)
 		sb.WriteString("\n$$")
 	}
 
 	sb.WriteString(";")
 
-	fmt.Fprintln(e.output, sb.String())
+	fmt.Fprintln(ctx.Output, sb.String())
 
 	// Additional info as comments
 	if jsa.ExportLevel != "" && jsa.ExportLevel != "Hidden" {
-		fmt.Fprintf(e.output, "-- EXPORT LEVEL: %s\n", jsa.ExportLevel)
+		fmt.Fprintf(ctx.Output, "-- export level: %s\n", jsa.ExportLevel)
 	}
 	if jsa.Excluded {
-		fmt.Fprintln(e.output, "-- EXCLUDED: true")
+		fmt.Fprintln(ctx.Output, "-- EXCLUDED: true")
 	}
 	if platform != "All" {
 		// already shown inline
 	} else {
-		fmt.Fprintln(e.output, "-- PLATFORM: All")
+		fmt.Fprintln(ctx.Output, "-- PLATFORM: All")
 	}
 	if extraCode != "" {
-		fmt.Fprintln(e.output, "-- EXTRA CODE:")
+		fmt.Fprintln(ctx.Output, "-- EXTRA CODE:")
 		for line := range strings.SplitSeq(extraCode, "\n") {
-			fmt.Fprintf(e.output, "-- %s\n", line)
+			fmt.Fprintf(ctx.Output, "-- %s\n", line)
 		}
 	}
 
@@ -211,12 +212,12 @@ func (e *Executor) describeJavaScriptAction(name ast.QualifiedName) error {
 }
 
 // readJavaScriptActionSource reads the JavaScript source file and extracts user code and extra code.
-func (e *Executor) readJavaScriptActionSource(moduleName, actionName string) (userCode, extraCode string) {
-	if e.mprPath == "" {
+func readJavaScriptActionSource(mprPath, moduleName, actionName string) (userCode, extraCode string) {
+	if mprPath == "" {
 		return "", ""
 	}
 
-	projectRoot := filepath.Dir(e.mprPath)
+	projectRoot := filepath.Dir(mprPath)
 	// JavaScript source uses original module name casing (not lowercased like javasource)
 	jsPath := filepath.Join(projectRoot, "javascriptsource", moduleName, "actions", actionName+".js")
 
@@ -233,8 +234,8 @@ func (e *Executor) readJavaScriptActionSource(moduleName, actionName string) (us
 	source := string(content)
 
 	// Extract user code
-	beginUserCode := "// BEGIN USER CODE"
-	endUserCode := "// END USER CODE"
+	beginUserCode := "// begin user CODE"
+	endUserCode := "// end user CODE"
 	if beginIdx := strings.Index(source, beginUserCode); beginIdx != -1 {
 		if endIdx := strings.Index(source, endUserCode); endIdx != -1 && endIdx > beginIdx {
 			uc := source[beginIdx+len(beginUserCode) : endIdx]
@@ -246,8 +247,8 @@ func (e *Executor) readJavaScriptActionSource(moduleName, actionName string) (us
 	}
 
 	// Extract extra code
-	beginExtraCode := "// BEGIN EXTRA CODE"
-	endExtraCode := "// END EXTRA CODE"
+	beginExtraCode := "// begin EXTRA CODE"
+	endExtraCode := "// end EXTRA CODE"
 	if beginIdx := strings.Index(source, beginExtraCode); beginIdx != -1 {
 		if endIdx := strings.Index(source, endExtraCode); endIdx != -1 && endIdx > beginIdx {
 			ec := source[beginIdx+len(beginExtraCode) : endIdx]
@@ -269,9 +270,9 @@ func formatJavaScriptActionType(t javaactions.CodeActionParameterType) string {
 	// EntityTypeParameterType → ENTITY <name> syntax
 	if etp, ok := t.(*javaactions.EntityTypeParameterType); ok {
 		if etp.TypeParameterName != "" {
-			return "ENTITY <" + etp.TypeParameterName + ">"
+			return "entity <" + etp.TypeParameterName + ">"
 		}
-		return "ENTITY <>"
+		return "entity <>"
 	}
 	return t.TypeString()
 }

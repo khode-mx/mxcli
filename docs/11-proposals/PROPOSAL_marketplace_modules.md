@@ -1,8 +1,37 @@
 # Proposal: `mxcli marketplace` — Download & Manage Marketplace Modules
 
-**Status:** Draft
-**Date:** 2026-03-23
+**Status:** Partial — read-only commands shipping; install blocked upstream
+**Date:** 2026-03-23 (initial), revised 2026-04-16 (spike results)
 **Author:** Generated with Claude Code
+
+## Status update (2026-04-16)
+
+After four rounds of spiking (`scripts/auth-discovery-spike.sh`), the
+**install** path is blocked by a gap in Mendix's API: there is no way to
+obtain the `.mpk` download URL with a Personal Access Token.
+
+- The API at `marketplace-api.mendix.com` does not expose `downloadUrl` or
+  any equivalent field on content or version objects.
+- The CDN at `files.appstore.mendix.com` is public for GET, but its path
+  format (`/{N}/{M}/{version}/{filename}.mpk`) contains three opaque
+  per-module values (N, M, and the filename convention) that the API does
+  not return and we cannot derive.
+- The marketplace website at `marketplace.mendix.com/link/component/{id}`
+  contains the download link in its HTML, but requires AAD SSO — PATs
+  return a 404/login page.
+- `mx` (mxbuild) has no marketplace subcommand; only `module-import` for
+  an already-downloaded `.mpk`.
+
+This proposal is therefore scoped in two phases:
+
+- **Phase A — ship now**: read-only discovery commands (`search`, `info`,
+  `versions`). These work with the existing PAT auth layer and the
+  confirmed API endpoints. They deliver concrete user value (CLI
+  marketplace browsing, version-compat filtering) without the install gap.
+- **Phase B — parked**: `install` and `update` commands. Unblocked by
+  either Mendix adding `downloadUrl` to the API, or a future AAD device-
+  code auth flow that could access the web app HTML (see
+  `PROPOSAL_platform_auth.md` Phase 6).
 
 ## Problem
 
@@ -15,29 +44,90 @@ This creates friction in two areas:
 
 ## API Discovery
 
-The Mendix Marketplace REST API is at:
+Validated against a real PAT on 2026-04-14 (see `scripts/auth-discovery-spike.sh`).
+
+**Base URL:** `https://marketplace-api.mendix.com`
+
+(An earlier draft of this proposal pointed at `appstore.home.mendix.com/rest/packagesapi/v2/`.
+That host is a different service and does not accept PAT auth at all. The correct marketplace
+host is `marketplace-api.mendix.com`.)
+
+**Auth:** `Authorization: MxToken <pat>`. PATs are created at
+<https://user-settings.mendix.com/> (Developer Settings → Personal Access Tokens).
+Invalid/missing PAT returns 401 or 403 with a JSON error body; malformed tokens
+may be rejected at the gateway with 400.
+
+### Validated Endpoints
+
+| Endpoint | Returns | Purpose |
+|----------|---------|---------|
+| `get /v1/content` | `{"items": [content, ...]}` | List marketplace content |
+| `get /v1/content?search=<query>` | same list shape | Search (query accepted; filter behavior TBD) |
+| `get /v1/content/{id}` | single content object | Module/widget detail |
+| `get /v1/content/{id}/versions` | `{"items": [version, ...]}` | Available versions with compatibility metadata |
+
+### Response Shapes
+
+**Content object** (from `/v1/content` and `/v1/content/{id}`):
+
+```jsonc
+{
+  "contentId": 2888,
+  "publisher": "Mendix",
+  "type": "module",             // or "widget", "Theme", etc.
+  "categories": [{"name": "data"}],
+  "supportCategory": "Platform", // or "Community", "deprecated", ...
+  "licenseUrl": "http://www.apache.org/licenses/LICENSE-2.0.html",
+  "isPrivate": false,
+  // ...more fields including latest version info (not yet fully mapped)
+}
+```
+
+**Version object** (from `/v1/content/{id}/versions`):
+
+```jsonc
+{
+  "name": "database connector",
+  "versionId": "f7c2bddf-05a3-4db0-8185-e7adf6c6d4af",  // uuid
+  "versionNumber": "7.0.2",
+  "minSupportedMendixVersion": "10.24.11",               // enables version-compat filtering
+  "publicationDate": "2025-12-12T08:08:53.880Z"
+  // release notes, download url(s) TBD — need to inspect full response
+}
+```
+
+### Download URL — blocked
+
+The `.mpk` download URL follows the pattern:
 
 ```
-https://appstore.home.mendix.com/rest/packagesapi/v2/
+https://files.appstore.mendix.com/<company-id>/<component-id>/<version>/<filename>.mpk
 ```
 
-All endpoints return `401 Unauthorized` without authentication. Mendix uses header-based auth on its platform APIs:
+None of the path components are returned by the marketplace API:
 
-| Auth Pattern | Headers | Used By |
+| Path segment | Example | In API response? |
 |---|---|---|
-| API Key | `Mendix-UserName` + `Mendix-ApiKey` | Deploy API, Team Server |
-| PAT | `Authorization: MxToken <token>` | Platform APIs |
+| `company-id` | `5` (Mendix), `50537` (third party) | No |
+| `component-id` | `170`, `219862` — differs from the API's `contentId` | No |
+| `version` | `11.5.0` | Yes (`versionNumber`) — but useless without the other segments |
+| `filename` | Varies per module (`CommunityCommons_11.5.0.mpk`, `ExternalDatabaseConnector-v6.2.4.mpk`, `JamAuditLog.mpk`) | No |
 
-The exact auth scheme for the marketplace API needs validation with real credentials.
+The CDN itself is **public** (no auth needed for GET), but the URL cannot be
+constructed from API data. The marketplace website at `marketplace.mendix.com`
+contains the download links but requires AAD SSO — PATs do not work against
+the web app.
 
-### Discovered Endpoints (to validate)
+**Unblocking paths:**
+1. Mendix adds a `downloadUrl` field to the content or versions API response
+2. `mxcli` gains AAD device-code auth (see `PROPOSAL_platform_auth.md` Phase 6)
+   to access the web app and scrape the download link
+3. Mendix publishes a CLI-accessible download endpoint (e.g., `post /v1/content/{id}/versions/{versionId}/download` returning a signed URL)
 
-| Endpoint | Purpose |
-|----------|---------|
-| `GET /rest/packagesapi/v2/packages/{id}` | Module metadata (name, versions, AppStoreGuid) |
-| `GET /rest/packagesapi/v2/packages/{id}/versions` | List available versions |
-| `GET /rest/packagesapi/v2/packages/{id}/versions/{ver}/download` | Download .mpk |
-| `GET /rest/packagesapi/v2/packages?search=keyword` | Search marketplace |
+### Open Endpoint Questions
+
+- **Search semantics**: `?search=database` accepted without error but truncated output made
+  it unclear whether the result set was actually filtered vs. returned unchanged.
 
 ### Known Component IDs
 
@@ -51,40 +141,40 @@ The exact auth scheme for the marketplace API needs validation with real credent
 ### Authentication
 
 ```bash
-# Interactive login (prompts for email + API key or PAT)
+# Interactive login (prompts for email + api key or PAT)
 mxcli auth login
 
-# Non-interactive login (for CI)
+# non-interactive login (for CI)
 mxcli auth login --token <PAT>
 mxcli auth login --username user@company.com --api-key <KEY>
 
-# Check auth status
+# check auth status
 mxcli auth status
 
-# Clear stored credentials
+# clear stored credentials
 mxcli auth logout
 ```
 
 ### Marketplace Operations
 
 ```bash
-# Search marketplace
+# search marketplace
 mxcli marketplace search "database connector"
 
-# Show module details
+# show module details
 mxcli marketplace info 2888
 
 # Install module into project
 mxcli marketplace install 2888 -p app.mpr
 mxcli marketplace install 2888 --version 6.2.3 -p app.mpr
 
-# List installed marketplace modules
+# list installed marketplace modules
 mxcli marketplace list -p app.mpr
 
-# Update all marketplace modules to latest compatible version
+# update all marketplace modules to latest compatible version
 mxcli marketplace update -p app.mpr
 
-# Update specific module
+# update specific module
 mxcli marketplace update 2888 -p app.mpr
 ```
 
@@ -94,8 +184,8 @@ mxcli marketplace update 2888 -p app.mpr
 
 ```
 cmd/mxcli/
-├── auth.go                 # Login/logout/status commands
-├── cmd_marketplace.go      # Search/install/update/list commands
+├── auth.go                 # login/logout/status commands
+├── cmd_marketplace.go      # search/install/update/list commands
 
 internal/
 ├── auth/
@@ -103,10 +193,10 @@ internal/
 │   └── client.go           # Authenticated HTTP client factory
 │
 ├── marketplace/
-│   ├── api.go              # REST API client for appstore.home.mendix.com
-│   ├── search.go           # Search and list components
+│   ├── api.go              # rest api client for appstore.home.mendix.com
+│   ├── search.go           # search and list components
 │   ├── download.go         # Download .mpk files (with progress bar)
-│   └── install.go          # Import via mx module-import + version tracking
+│   └── install.go          # import via mx module-import + version tracking
 ```
 
 ### Credential Storage
@@ -134,11 +224,11 @@ export MENDIX_API_KEY=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 mxcli marketplace install 2888 -p app.mpr
   │
   ├─ 1. Load credentials (env vars → ~/.mxcli/auth.json)
-  ├─ 2. GET /packages/2888 → module name, available versions
-  ├─ 3. Filter versions compatible with project's Mendix version
-  ├─ 4. GET /packages/2888/versions/{ver}/download → download .mpk to temp
+  ├─ 2. get /packages/2888 → module name, available versions
+  ├─ 3. filter versions compatible with project's Mendix version
+  ├─ 4. get /packages/2888/versions/{ver}/download → download .mpk to temp
   ├─ 5. mx module-import /tmp/module.mpk app.mpr
-  └─ 6. Log: "Installed ExternalDatabaseConnector v6.2.3"
+  └─ 6. log: "Installed ExternalDatabaseConnector v6.2.3"
 ```
 
 ### Integration with Existing Code
@@ -225,12 +315,12 @@ See dedicated proposal: [`PROPOSAL_platform_auth.md`](PROPOSAL_platform_auth.md)
 
 ### Phase 5: MDL Integration
 
-- `INSTALL MODULE <id> [VERSION <version>];` MDL statement
+- `INSTALL module <id> [version <version>];` MDL statement
 - Auto-dependency resolution in `mxcli exec` when module references are missing
 
 ## Open Questions
 
-1. **Which auth scheme does the marketplace API use?** Need to test with real credentials. Mendix platform APIs use either `Mendix-UserName + Mendix-ApiKey` headers or `MxToken` PAT tokens.
+1. **Which auth scheme does the marketplace API use?** Need to test with real credentials. Mendix platform APIs use either `Mendix-username + Mendix-ApiKey` headers or `MxToken` PAT tokens.
 
 2. **Version compatibility filtering** — The API likely returns Mendix version compatibility metadata per module version. Need to confirm the response format.
 

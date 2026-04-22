@@ -8,18 +8,19 @@ import (
 	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
+	"github.com/mendixlabs/mxcli/mdl/types"
 	"github.com/mendixlabs/mxcli/model"
 	"github.com/mendixlabs/mxcli/sdk/domainmodel"
-	"github.com/mendixlabs/mxcli/sdk/mpr"
 )
 
-// showContractEntities handles SHOW CONTRACT ENTITIES FROM Module.Service.
-func (e *Executor) showContractEntities(name *ast.QualifiedName) error {
+// listContractEntities handles SHOW CONTRACT ENTITIES FROM Module.Service.
+func listContractEntities(ctx *ExecContext, name *ast.QualifiedName) error {
 	if name == nil {
-		return fmt.Errorf("service name required: SHOW CONTRACT ENTITIES FROM Module.Service")
+		return mdlerrors.NewValidation("service name required: show contract entities from Module.Service")
 	}
 
-	doc, svcQN, err := e.parseServiceContract(*name)
+	doc, svcQN, err := parseServiceContract(ctx, *name)
 	if err != nil {
 		return err
 	}
@@ -54,8 +55,8 @@ func (e *Executor) showContractEntities(name *ast.QualifiedName) error {
 		}
 	}
 
-	if len(rows) == 0 {
-		fmt.Fprintf(e.output, "No entity types found in contract for %s.\n", svcQN)
+	if len(rows) == 0 && ctx.Format != FormatJSON {
+		fmt.Fprintf(ctx.Output, "No entity types found in contract for %s.\n", svcQN)
 		return nil
 	}
 
@@ -70,22 +71,22 @@ func (e *Executor) showContractEntities(name *ast.QualifiedName) error {
 	for _, r := range rows {
 		result.Rows = append(result.Rows, []any{r.entitySet, r.entityType, r.key, r.props, r.navs, r.summary})
 	}
-	return e.writeResult(result)
+	return writeResult(ctx, result)
 }
 
-// showContractActions handles SHOW CONTRACT ACTIONS FROM Module.Service.
-func (e *Executor) showContractActions(name *ast.QualifiedName) error {
+// listContractActions handles SHOW CONTRACT ACTIONS FROM Module.Service.
+func listContractActions(ctx *ExecContext, name *ast.QualifiedName) error {
 	if name == nil {
-		return fmt.Errorf("service name required: SHOW CONTRACT ACTIONS FROM Module.Service")
+		return mdlerrors.NewValidation("service name required: show contract actions from Module.Service")
 	}
 
-	doc, svcQN, err := e.parseServiceContract(*name)
+	doc, svcQN, err := parseServiceContract(ctx, *name)
 	if err != nil {
 		return err
 	}
 
-	if len(doc.Actions) == 0 {
-		fmt.Fprintf(e.output, "No actions/functions found in contract for %s.\n", svcQN)
+	if len(doc.Actions) == 0 && ctx.Format != FormatJSON {
+		fmt.Fprintf(ctx.Output, "No actions/functions found in contract for %s.\n", svcQN)
 		return nil
 	}
 
@@ -134,11 +135,11 @@ func (e *Executor) showContractActions(name *ast.QualifiedName) error {
 	for _, r := range rows {
 		result.Rows = append(result.Rows, []any{r.name, r.params, r.returnType, r.bound})
 	}
-	return e.writeResult(result)
+	return writeResult(ctx, result)
 }
 
 // describeContractEntity handles DESCRIBE CONTRACT ENTITY Service.EntityName [FORMAT mdl].
-func (e *Executor) describeContractEntity(name ast.QualifiedName, format string) error {
+func describeContractEntity(ctx *ExecContext, name ast.QualifiedName, format string) error {
 	// Name is Module.Service.EntityName — split into service ref and entity name
 	// or Module.Service (list all) — but DESCRIBE should have a specific entity
 	svcName, entityName, err := splitContractRef(name)
@@ -146,29 +147,29 @@ func (e *Executor) describeContractEntity(name ast.QualifiedName, format string)
 		return err
 	}
 
-	doc, svcQN, err := e.parseServiceContract(svcName)
+	doc, svcQN, err := parseServiceContract(ctx, svcName)
 	if err != nil {
 		return err
 	}
 
 	et := doc.FindEntityType(entityName)
 	if et == nil {
-		return fmt.Errorf("entity type %q not found in contract for %s", entityName, svcQN)
+		return mdlerrors.NewNotFoundMsg("entity type", entityName, fmt.Sprintf("entity type %q not found in contract for %s", entityName, svcQN))
 	}
 
 	if strings.EqualFold(format, "mdl") {
-		return e.outputContractEntityMDL(et, svcQN, doc)
+		return outputContractEntityMDL(ctx, et, svcQN, doc)
 	}
 
 	// Default: human-readable format
-	fmt.Fprintf(e.output, "%s (Key: %s)\n", et.Name, strings.Join(et.KeyProperties, ", "))
+	fmt.Fprintf(ctx.Output, "%s (Key: %s)\n", et.Name, strings.Join(et.KeyProperties, ", "))
 	if et.Summary != "" {
-		fmt.Fprintf(e.output, "  Summary: %s\n", et.Summary)
+		fmt.Fprintf(ctx.Output, "  Summary: %s\n", et.Summary)
 	}
 	if et.Description != "" {
-		fmt.Fprintf(e.output, "  Description: %s\n", et.Description)
+		fmt.Fprintf(ctx.Output, "  Description: %s\n", et.Description)
 	}
-	fmt.Fprintln(e.output)
+	fmt.Fprintln(ctx.Output)
 
 	// Properties
 	nameWidth := len("Property")
@@ -183,20 +184,20 @@ func (e *Executor) describeContractEntity(name ast.QualifiedName, format string)
 		}
 	}
 
-	fmt.Fprintf(e.output, "  %-*s  %-*s  %s\n", nameWidth, "Property", typeWidth, "Type", "Nullable")
-	fmt.Fprintf(e.output, "  %s  %s  %s\n", strings.Repeat("-", nameWidth), strings.Repeat("-", typeWidth), "--------")
+	fmt.Fprintf(ctx.Output, "  %-*s  %-*s  %s\n", nameWidth, "Property", typeWidth, "Type", "Nullable")
+	fmt.Fprintf(ctx.Output, "  %s  %s  %s\n", strings.Repeat("-", nameWidth), strings.Repeat("-", typeWidth), "--------")
 	for _, p := range et.Properties {
 		nullable := "Yes"
 		if p.Nullable != nil && !*p.Nullable {
 			nullable = "No"
 		}
-		fmt.Fprintf(e.output, "  %-*s  %-*s  %s\n", nameWidth, p.Name, typeWidth, formatEdmType(p), nullable)
+		fmt.Fprintf(ctx.Output, "  %-*s  %-*s  %s\n", nameWidth, p.Name, typeWidth, formatEdmType(p), nullable)
 	}
 
 	// Navigation properties
 	if len(et.NavigationProperties) > 0 {
-		fmt.Fprintln(e.output)
-		fmt.Fprintln(e.output, "  Navigation Properties:")
+		fmt.Fprintln(ctx.Output)
+		fmt.Fprintln(ctx.Output, "  Navigation Properties:")
 		for _, nav := range et.NavigationProperties {
 			multiplicity := "0..1"
 			if nav.IsMany {
@@ -206,7 +207,7 @@ func (e *Executor) describeContractEntity(name ast.QualifiedName, format string)
 			if target == "" && nav.ToRole != "" {
 				target = nav.ToRole
 			}
-			fmt.Fprintf(e.output, "    → %-20s  (%s %s)\n", nav.Name, target, multiplicity)
+			fmt.Fprintf(ctx.Output, "    → %-20s  (%s %s)\n", nav.Name, target, multiplicity)
 		}
 	}
 
@@ -214,18 +215,18 @@ func (e *Executor) describeContractEntity(name ast.QualifiedName, format string)
 }
 
 // describeContractAction handles DESCRIBE CONTRACT ACTION Service.ActionName [FORMAT mdl].
-func (e *Executor) describeContractAction(name ast.QualifiedName, format string) error {
+func describeContractAction(ctx *ExecContext, name ast.QualifiedName, format string) error {
 	svcName, actionName, err := splitContractRef(name)
 	if err != nil {
 		return err
 	}
 
-	doc, svcQN, err := e.parseServiceContract(svcName)
+	doc, svcQN, err := parseServiceContract(ctx, svcName)
 	if err != nil {
 		return err
 	}
 
-	var action *mpr.EdmAction
+	var action *types.EdmAction
 	for _, a := range doc.Actions {
 		if strings.EqualFold(a.Name, actionName) {
 			action = a
@@ -233,36 +234,36 @@ func (e *Executor) describeContractAction(name ast.QualifiedName, format string)
 		}
 	}
 	if action == nil {
-		return fmt.Errorf("action %q not found in contract for %s", actionName, svcQN)
+		return mdlerrors.NewNotFoundMsg("action", actionName, fmt.Sprintf("action %q not found in contract for %s", actionName, svcQN))
 	}
 
-	fmt.Fprintf(e.output, "%s\n", action.Name)
+	fmt.Fprintf(ctx.Output, "%s\n", action.Name)
 	if action.IsBound {
-		fmt.Fprintln(e.output, "  Bound: Yes")
+		fmt.Fprintln(ctx.Output, "  Bound: Yes")
 	}
 
 	if len(action.Parameters) > 0 {
-		fmt.Fprintln(e.output, "  Parameters:")
+		fmt.Fprintln(ctx.Output, "  Parameters:")
 		for _, p := range action.Parameters {
 			nullable := ""
 			if p.Nullable != nil && !*p.Nullable {
-				nullable = " NOT NULL"
+				nullable = " not null"
 			}
-			fmt.Fprintf(e.output, "    %-20s  %s%s\n", p.Name, shortenEdmType(p.Type), nullable)
+			fmt.Fprintf(ctx.Output, "    %-20s  %s%s\n", p.Name, shortenEdmType(p.Type), nullable)
 		}
 	}
 
 	if action.ReturnType != "" {
-		fmt.Fprintf(e.output, "  Returns: %s\n", shortenEdmType(action.ReturnType))
+		fmt.Fprintf(ctx.Output, "  Returns: %s\n", shortenEdmType(action.ReturnType))
 	} else {
-		fmt.Fprintln(e.output, "  Returns: (void)")
+		fmt.Fprintln(ctx.Output, "  Returns: (void)")
 	}
 
 	return nil
 }
 
 // outputContractEntityMDL outputs a CREATE EXTERNAL ENTITY statement from contract metadata.
-func (e *Executor) outputContractEntityMDL(et *mpr.EdmEntityType, svcQN string, doc *mpr.EdmxDocument) error {
+func outputContractEntityMDL(ctx *ExecContext, et *types.EdmEntityType, svcQN string, doc *types.EdmxDocument) error {
 	// Find entity set name
 	entitySetName := et.Name + "s" // fallback
 	for _, es := range doc.EntitySets {
@@ -278,13 +279,13 @@ func (e *Executor) outputContractEntityMDL(et *mpr.EdmEntityType, svcQN string, 
 		module = svcQN[:idx]
 	}
 
-	fmt.Fprintf(e.output, "CREATE EXTERNAL ENTITY %s.%s\n", module, et.Name)
-	fmt.Fprintf(e.output, "FROM ODATA CLIENT %s (\n", svcQN)
-	fmt.Fprintf(e.output, "    EntitySet: '%s',\n", entitySetName)
-	fmt.Fprintf(e.output, "    RemoteName: '%s',\n", et.Name)
-	fmt.Fprintf(e.output, "    Countable: Yes\n")
-	fmt.Fprintln(e.output, ")")
-	fmt.Fprintln(e.output, "(")
+	fmt.Fprintf(ctx.Output, "create external entity %s.%s\n", module, et.Name)
+	fmt.Fprintf(ctx.Output, "from odata client %s (\n", svcQN)
+	fmt.Fprintf(ctx.Output, "    EntitySet: '%s',\n", entitySetName)
+	fmt.Fprintf(ctx.Output, "    RemoteName: '%s',\n", et.Name)
+	fmt.Fprintf(ctx.Output, "    Countable: Yes\n")
+	fmt.Fprintln(ctx.Output, ")")
+	fmt.Fprintln(ctx.Output, "(")
 
 	for i, p := range et.Properties {
 		// Skip ID properties that are not real attributes
@@ -304,25 +305,25 @@ func (e *Executor) outputContractEntityMDL(et *mpr.EdmEntityType, svcQN string, 
 		if i == len(et.Properties)-1 {
 			comma = ""
 		}
-		fmt.Fprintf(e.output, "    %s: %s%s\n", p.Name, mendixType, comma)
+		fmt.Fprintf(ctx.Output, "    %s: %s%s\n", p.Name, mendixType, comma)
 	}
 
-	fmt.Fprintln(e.output, ");")
-	fmt.Fprintln(e.output, "/")
+	fmt.Fprintln(ctx.Output, ");")
+	fmt.Fprintln(ctx.Output, "/")
 
 	return nil
 }
 
 // parseServiceContract finds a consumed OData service by name and parses its cached $metadata.
-func (e *Executor) parseServiceContract(name ast.QualifiedName) (*mpr.EdmxDocument, string, error) {
-	services, err := e.reader.ListConsumedODataServices()
+func parseServiceContract(ctx *ExecContext, name ast.QualifiedName) (*types.EdmxDocument, string, error) {
+	services, err := ctx.Backend.ListConsumedODataServices()
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to list consumed OData services: %w", err)
+		return nil, "", mdlerrors.NewBackend("list consumed OData services", err)
 	}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to build hierarchy: %w", err)
+		return nil, "", mdlerrors.NewBackend("build hierarchy", err)
 	}
 
 	for _, svc := range services {
@@ -336,18 +337,18 @@ func (e *Executor) parseServiceContract(name ast.QualifiedName) (*mpr.EdmxDocume
 		svcQN := modName + "." + svc.Name
 
 		if svc.Metadata == "" {
-			return nil, svcQN, fmt.Errorf("no cached contract metadata for %s (MetadataUrl: %s). The service metadata has not been downloaded yet", svcQN, svc.MetadataUrl)
+			return nil, svcQN, mdlerrors.NewValidationf("no cached contract metadata for %s (MetadataUrl: %s). The service metadata has not been downloaded yet", svcQN, svc.MetadataUrl)
 		}
 
-		doc, err := mpr.ParseEdmx(svc.Metadata)
+		doc, err := types.ParseEdmx(svc.Metadata)
 		if err != nil {
-			return nil, svcQN, fmt.Errorf("failed to parse contract metadata for %s: %w", svcQN, err)
+			return nil, svcQN, mdlerrors.NewBackend(fmt.Sprintf("parse contract metadata for %s", svcQN), err)
 		}
 
 		return doc, svcQN, nil
 	}
 
-	return nil, "", fmt.Errorf("consumed OData service not found: %s.%s", name.Module, name.Name)
+	return nil, "", mdlerrors.NewNotFound("consumed OData service", name.Module+"."+name.Name)
 }
 
 // splitContractRef splits Module.Service.EntityName into (Module.Service, EntityName).
@@ -359,7 +360,7 @@ func splitContractRef(name ast.QualifiedName) (ast.QualifiedName, string, error)
 	// We need to split Name into service name and entity name.
 	parts := strings.SplitN(name.Name, ".", 2)
 	if len(parts) != 2 {
-		return name, "", fmt.Errorf("expected Module.Service.EntityName, got %s.%s", name.Module, name.Name)
+		return name, "", mdlerrors.NewValidationf("expected Module.Service.EntityName, got %s.%s", name.Module, name.Name)
 	}
 
 	svcName := ast.QualifiedName{
@@ -370,7 +371,7 @@ func splitContractRef(name ast.QualifiedName) (ast.QualifiedName, string, error)
 }
 
 // formatEdmType returns a human-readable type string for a property.
-func formatEdmType(p *mpr.EdmProperty) string {
+func formatEdmType(p *types.EdmProperty) string {
 	t := p.Type
 	if p.MaxLength != "" {
 		t += "(" + p.MaxLength + ")"
@@ -397,7 +398,7 @@ func shortenEdmType(t string) string {
 }
 
 // edmToMendixType maps an Edm type to a Mendix attribute type string for MDL output.
-func edmToMendixType(p *mpr.EdmProperty) string {
+func edmToMendixType(p *types.EdmProperty) string {
 	switch p.Type {
 	case "Edm.String":
 		if p.MaxLength != "" && p.MaxLength != "max" {
@@ -444,19 +445,19 @@ var reservedEntityAttrNames = map[string]bool{
 // It reads entity types from the cached $metadata and creates external entities in the domain model,
 // populating Source, Key, and per-attribute RemoteName/RemoteType fields so the resulting BSON matches
 // what Studio Pro produces.
-func (e *Executor) createExternalEntities(s *ast.CreateExternalEntitiesStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project in write mode")
+func createExternalEntities(ctx *ExecContext, s *ast.CreateExternalEntitiesStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	doc, svcQN, err := e.parseServiceContract(s.ServiceRef)
+	doc, svcQN, err := parseServiceContract(ctx, s.ServiceRef)
 	if err != nil {
 		return err
 	}
 
 	// Build entity set lookup: entity type qualified name → entity set name
 	esMap := make(map[string]string)
-	esByType := make(map[string]*mpr.EdmEntitySet)
+	esByType := make(map[string]*types.EdmEntitySet)
 	for _, es := range doc.EntitySets {
 		esMap[es.EntityType] = es.Name
 		esByType[es.EntityType] = es
@@ -474,13 +475,13 @@ func (e *Executor) createExternalEntities(s *ast.CreateExternalEntitiesStmt) err
 		targetModule = s.ServiceRef.Module
 	}
 
-	module, err := e.findModule(targetModule)
+	module, err := findModule(ctx, targetModule)
 	if err != nil {
 		return err
 	}
-	dm, err := e.reader.GetDomainModel(module.ID)
+	dm, err := ctx.Backend.GetDomainModel(module.ID)
 	if err != nil {
-		return fmt.Errorf("failed to get domain model: %w", err)
+		return mdlerrors.NewBackend("get domain model", err)
 	}
 
 	// Index existing entities by name for upsert
@@ -490,7 +491,7 @@ func (e *Executor) createExternalEntities(s *ast.CreateExternalEntitiesStmt) err
 	}
 
 	// Build a global type lookup so we can resolve BaseType references across schemas.
-	typeByQualified := make(map[string]*mpr.EdmEntityType)
+	typeByQualified := make(map[string]*types.EdmEntityType)
 	for _, schema := range doc.Schemas {
 		for _, et := range schema.EntityTypes {
 			typeByQualified[schema.Namespace+"."+et.Name] = et
@@ -532,7 +533,7 @@ func (e *Executor) createExternalEntities(s *ast.CreateExternalEntitiesStmt) err
 			// Build key parts from the resolved key (root entity in the chain)
 			var keyParts []*domainmodel.RemoteKeyPart
 			for _, keyName := range keyProps {
-				var keyProp *mpr.EdmProperty
+				var keyProp *types.EdmProperty
 				for _, p := range mergedProps {
 					if p.Name == keyName {
 						keyProp = p
@@ -550,19 +551,35 @@ func (e *Executor) createExternalEntities(s *ast.CreateExternalEntitiesStmt) err
 				})
 			}
 
-			// Default Updatable for attributes follows the entity-set's
-			// UpdateRestrictions when available; otherwise falls back to true
-			// for non-top-level entities and false for top-level (matching
-			// TripPin's pattern where attributes are read-only on writable
-			// entity sets but mutable on contained types).
-			defaultUpdatable := !isTopLevel
+			// Default Creatable / Updatable for attributes. For top-level
+			// entities the default follows the entity set's Insert/Update
+			// restrictions — missing annotations mean read-only (Mendix
+			// Studio Pro applies the same conservative default, and
+			// mxbuild treats silent metadata as non-writable). For
+			// non-top-level (contained/derived) entities both default to
+			// true, matching Studio Pro's output where contained types are
+			// mutated via their parent's write flow.
+			defaultCreatable := false
+			defaultUpdatable := false
+			if !isTopLevel {
+				defaultCreatable = true
+				defaultUpdatable = true
+			}
+			if entitySet != nil && entitySet.Insertable != nil {
+				defaultCreatable = *entitySet.Insertable
+			}
 			if entitySet != nil && entitySet.Updatable != nil {
 				defaultUpdatable = *entitySet.Updatable
 			}
-			// Default Creatable for attributes follows InsertRestrictions.
-			defaultCreatable := true
-			if entitySet != nil && entitySet.Insertable != nil {
-				defaultCreatable = *entitySet.Insertable
+			nonInsertable := make(map[string]bool)
+			nonUpdatable := make(map[string]bool)
+			if entitySet != nil {
+				for _, name := range entitySet.NonInsertableProperties {
+					nonInsertable[name] = true
+				}
+				for _, name := range entitySet.NonUpdatableProperties {
+					nonUpdatable[name] = true
+				}
 			}
 
 			// Build attributes from merged properties
@@ -584,6 +601,15 @@ func (e *Executor) createExternalEntities(s *ast.CreateExternalEntitiesStmt) err
 					continue
 				}
 
+				creatable := defaultCreatable
+				updatable := defaultUpdatable
+				if nonInsertable[p.Name] || p.Computed {
+					creatable = false
+				}
+				if nonUpdatable[p.Name] || p.Computed || p.Immutable {
+					updatable = false
+				}
+
 				attrName := attrNameForOData(p.Name, et.Name)
 				attr := &domainmodel.Attribute{
 					Name:       attrName,
@@ -592,22 +618,22 @@ func (e *Executor) createExternalEntities(s *ast.CreateExternalEntitiesStmt) err
 					RemoteType: p.Type,
 					Filterable: true,
 					Sortable:   true,
-					Creatable:  defaultCreatable,
-					Updatable:  defaultUpdatable,
+					Creatable:  creatable,
+					Updatable:  updatable,
 				}
-				attr.ID = model.ID(mpr.GenerateID())
+				attr.ID = model.ID(types.GenerateID())
 				attrs = append(attrs, attr)
 			}
 
 			if existingEntity, ok := existing[mendixName]; ok {
 				if !s.CreateOrModify {
-					fmt.Fprintf(e.output, "  SKIPPED: %s.%s (already exists; use CREATE OR MODIFY to update)\n", targetModule, mendixName)
+					fmt.Fprintf(ctx.Output, "  SKIPPED: %s.%s (already exists; use create or modify to update)\n", targetModule, mendixName)
 					skipped++
 					continue
 				}
 				applyExternalEntityFields(existingEntity, et, isTopLevel, serviceRef, entitySet, keyParts, attrs)
-				if err := e.writer.UpdateEntity(dm.ID, existingEntity); err != nil {
-					fmt.Fprintf(e.output, "  FAILED: %s.%s — %v\n", targetModule, mendixName, err)
+				if err := ctx.Backend.UpdateEntity(dm.ID, existingEntity); err != nil {
+					fmt.Fprintf(ctx.Output, "  FAILED: %s.%s — %v\n", targetModule, mendixName, err)
 					failed++
 					continue
 				}
@@ -620,10 +646,10 @@ func (e *Executor) createExternalEntities(s *ast.CreateExternalEntitiesStmt) err
 				Name:     mendixName,
 				Location: location,
 			}
-			newEntity.ID = model.ID(mpr.GenerateID())
+			newEntity.ID = model.ID(types.GenerateID())
 			applyExternalEntityFields(newEntity, et, isTopLevel, serviceRef, entitySet, keyParts, attrs)
-			if err := e.writer.CreateEntity(dm.ID, newEntity); err != nil {
-				fmt.Fprintf(e.output, "  FAILED: %s.%s — %v\n", targetModule, mendixName, err)
+			if err := ctx.Backend.CreateEntity(dm.ID, newEntity); err != nil {
+				fmt.Fprintf(ctx.Output, "  FAILED: %s.%s — %v\n", targetModule, mendixName, err)
 				failed++
 				continue
 			}
@@ -634,26 +660,26 @@ func (e *Executor) createExternalEntities(s *ast.CreateExternalEntitiesStmt) err
 	// Second pass: create primitive-collection NPEs (e.g. TripTag for
 	// Trip.Tags = Collection(Edm.String)) and the association from the
 	// parent entity to each NPE.
-	dm, err = e.reader.GetDomainModel(module.ID)
+	dm, err = ctx.Backend.GetDomainModel(module.ID)
 	if err == nil {
-		npesCreated := e.createPrimitiveCollectionNPEs(dm, doc, typeByQualified, esMap, serviceRef)
+		npesCreated := createPrimitiveCollectionNPEs(ctx, dm, doc, typeByQualified, esMap, serviceRef)
 		if npesCreated > 0 {
-			fmt.Fprintf(e.output, "Created %d primitive-collection NPEs\n", npesCreated)
+			fmt.Fprintf(ctx.Output, "Created %d primitive-collection NPEs\n", npesCreated)
 		}
 	}
 
 	// Third pass: walk navigation properties and create associations between
 	// the entities we just created. Re-read the domain model so the NPEs
 	// from the previous pass are visible.
-	dm, err = e.reader.GetDomainModel(module.ID)
+	dm, err = ctx.Backend.GetDomainModel(module.ID)
 	if err == nil {
-		assocsCreated := e.createNavigationAssociations(dm, doc, typeByQualified, esMap, serviceRef)
+		assocsCreated := createNavigationAssociations(ctx, dm, doc, typeByQualified, esMap, serviceRef)
 		if assocsCreated > 0 {
-			fmt.Fprintf(e.output, "Created %d navigation associations\n", assocsCreated)
+			fmt.Fprintf(ctx.Output, "Created %d navigation associations\n", assocsCreated)
 		}
 	}
 
-	fmt.Fprintf(e.output, "\nFrom %s into %s: %d created, %d updated, %d skipped, %d failed\n",
+	fmt.Fprintf(ctx.Output, "\nFrom %s into %s: %d created, %d updated, %d skipped, %d failed\n",
 		svcQN, targetModule, created, updated, skipped, failed)
 
 	return nil
@@ -670,10 +696,11 @@ type assocKey struct {
 // the values plus an association from the parent entity. This mirrors how
 // Studio Pro handles e.g. Trip.Tags = Collection(Edm.String) by creating a
 // TripTag NPE and a Trip_TripTag ReferenceSet.
-func (e *Executor) createPrimitiveCollectionNPEs(
+func createPrimitiveCollectionNPEs(
+	ctx *ExecContext,
 	dm *domainmodel.DomainModel,
-	doc *mpr.EdmxDocument,
-	typeByQualified map[string]*mpr.EdmEntityType,
+	doc *types.EdmxDocument,
+	typeByQualified map[string]*types.EdmEntityType,
 	esMap map[string]string,
 	serviceRef string,
 ) int {
@@ -732,7 +759,7 @@ func (e *Executor) createPrimitiveCollectionNPEs(
 
 				// Build the inner attribute type from the element type
 				innerType := p.Type[len("Collection(") : len(p.Type)-1]
-				innerProp := &mpr.EdmProperty{
+				innerProp := &types.EdmProperty{
 					Name:      singular(p.Name),
 					Type:      innerType,
 					MaxLength: p.MaxLength,
@@ -746,7 +773,7 @@ func (e *Executor) createPrimitiveCollectionNPEs(
 					RemoteType:            primitiveCollectionRemoteType(innerType, p.Nullable),
 					IsPrimitiveCollection: true,
 				}
-				attr.ID = model.ID(mpr.GenerateID())
+				attr.ID = model.ID(types.GenerateID())
 
 				npe := &domainmodel.Entity{
 					Name:              npeName,
@@ -756,10 +783,10 @@ func (e *Executor) createPrimitiveCollectionNPEs(
 					Source:            "Rest$ODataPrimitiveCollectionEntitySource",
 					RemoteServiceName: serviceRef,
 				}
-				npe.ID = model.ID(mpr.GenerateID())
+				npe.ID = model.ID(types.GenerateID())
 
-				if err := e.writer.CreateEntity(dm.ID, npe); err != nil {
-					fmt.Fprintf(e.output, "  NPE FAILED: %s — %v\n", npeName, err)
+				if err := ctx.Backend.CreateEntity(dm.ID, npe); err != nil {
+					fmt.Fprintf(ctx.Output, "  NPE FAILED: %s — %v\n", npeName, err)
 					continue
 				}
 				count++
@@ -778,9 +805,9 @@ func (e *Executor) createPrimitiveCollectionNPEs(
 					StorageFormat: domainmodel.StorageFormatColumn,
 					Source:        "Rest$ODataPrimitiveCollectionAssociationSource",
 				}
-				assoc.ID = model.ID(mpr.GenerateID())
-				if err := e.writer.CreateAssociation(dm.ID, assoc); err != nil {
-					fmt.Fprintf(e.output, "  NPE ASSOC FAILED: %s — %v\n", assocName, err)
+				assoc.ID = model.ID(types.GenerateID())
+				if err := ctx.Backend.CreateAssociation(dm.ID, assoc); err != nil {
+					fmt.Fprintf(ctx.Output, "  NPE ASSOC FAILED: %s — %v\n", assocName, err)
 				}
 			}
 		}
@@ -790,7 +817,7 @@ func (e *Executor) createPrimitiveCollectionNPEs(
 
 // isInheritedProperty reports whether a property name comes from one of the
 // entity type's base types (rather than being defined on the type itself).
-func isInheritedProperty(et *mpr.EdmEntityType, propName string, byQN map[string]*mpr.EdmEntityType) bool {
+func isInheritedProperty(et *types.EdmEntityType, propName string, byQN map[string]*types.EdmEntityType) bool {
 	for _, p := range et.Properties {
 		if p.Name == propName {
 			return false
@@ -852,19 +879,23 @@ func singular(name string) string {
 // CreatableFromParent / UpdatableFromParent come from the entity set's
 // Org.OData.Capabilities.V1.{Insert,Update}Restrictions/Non*NavigationProperties
 // annotations.
-func (e *Executor) createNavigationAssociations(
+func createNavigationAssociations(
+	ctx *ExecContext,
 	dm *domainmodel.DomainModel,
-	doc *mpr.EdmxDocument,
-	typeByQualified map[string]*mpr.EdmEntityType,
+	doc *types.EdmxDocument,
+	typeByQualified map[string]*types.EdmEntityType,
 	esMap map[string]string,
 	serviceRef string,
 ) int {
-	// Build per-entity-type lookup of nav property name → restricted flags.
+	// Build per-entity-type lookup of nav property name → restricted flags,
+	// plus a direct entity-set lookup so we can read the base Insertable /
+	// Updatable defaults for the FROM entity.
 	type navRestrictions struct {
 		nonInsertable map[string]bool
 		nonUpdatable  map[string]bool
 	}
 	restrictionsByType := make(map[string]navRestrictions)
+	esByType := make(map[string]*types.EdmEntitySet)
 	for _, es := range doc.EntitySets {
 		r := navRestrictions{
 			nonInsertable: make(map[string]bool),
@@ -877,6 +908,7 @@ func (e *Executor) createNavigationAssociations(
 			r.nonUpdatable[name] = true
 		}
 		restrictionsByType[es.EntityType] = r
+		esByType[es.EntityType] = es
 	}
 	// Build a lookup from EDMX type qualified name → existing Mendix entity.
 	// An entity type matches by its EntitySet name when present, otherwise by
@@ -958,13 +990,21 @@ func (e *Executor) createNavigationAssociations(
 					assocType = domainmodel.AssociationTypeReferenceSet
 				}
 
-				// Apply per-association capability defaults. For top-level
-				// entities (entity-set source), Studio Pro defaults
-				// UpdatableFromParent=false because link updates happen via
-				// the foreign key on the entity, not by updating the nav
-				// property. For contained/derived types, both default to true.
+				// Per-association capability defaults. For a top-level FROM
+				// entity (has its own entity set), CreatableFromParent /
+				// UpdatableFromParent follow the entity set's Insertable /
+				// Updatable annotations — silent metadata means the service
+				// doesn't advertise write support, so default to false.
+				// For contained/derived FROM entities (no entity set), both
+				// default to true because the relationship is mutated via
+				// the parent's write flow. Per-nav overrides from
+				// Non{Insertable,Updatable}NavigationProperties still apply.
 				creatable := true
-				updatable := !parentEnt.Persistable
+				updatable := true
+				if es, ok := esByType[parentQN]; ok {
+					creatable = es.Insertable != nil && *es.Insertable
+					updatable = es.Updatable != nil && *es.Updatable
+				}
 				if r, ok := restrictionsByType[parentQN]; ok {
 					if r.nonInsertable[np.Name] {
 						creatable = false
@@ -987,10 +1027,10 @@ func (e *Executor) createNavigationAssociations(
 					CreatableFromParent:            creatable,
 					UpdatableFromParent:            updatable,
 				}
-				assoc.ID = model.ID(mpr.GenerateID())
+				assoc.ID = model.ID(types.GenerateID())
 
-				if err := e.writer.CreateAssociation(dm.ID, assoc); err != nil {
-					fmt.Fprintf(e.output, "  ASSOC FAILED: %s.%s — %v\n", parentEnt.Name, assocName, err)
+				if err := ctx.Backend.CreateAssociation(dm.ID, assoc); err != nil {
+					fmt.Fprintf(ctx.Output, "  ASSOC FAILED: %s.%s — %v\n", parentEnt.Name, assocName, err)
 					continue
 				}
 				existingAssocs[assocKey{parentEnt.Name, assocName}] = true
@@ -1042,10 +1082,10 @@ func uniqueAssocName(base string, dm *domainmodel.DomainModel, existingAssocs ma
 // optimistic defaults.
 func applyExternalEntityFields(
 	ent *domainmodel.Entity,
-	et *mpr.EdmEntityType,
+	et *types.EdmEntityType,
 	isTopLevel bool,
 	serviceRef string,
-	entitySet *mpr.EdmEntitySet,
+	entitySet *types.EdmEntitySet,
 	keyParts []*domainmodel.RemoteKeyPart,
 	attrs []*domainmodel.Attribute,
 ) {
@@ -1059,14 +1099,15 @@ func applyExternalEntityFields(
 		ent.Persistable = true
 		ent.RemoteEntitySet = entitySet.Name
 		ent.Countable = true
-		// Capabilities default to true unless the entity set's annotations
-		// say otherwise.
-		ent.Creatable = entitySet.Insertable == nil || *entitySet.Insertable
-		ent.Updatable = entitySet.Updatable == nil || *entitySet.Updatable
-		// Deletable defaults to false in TripPin and most read-mostly OData
-		// services, so default to the annotation value when present and to
-		// false otherwise.
+		// Capabilities default to false when the entity set's Capabilities
+		// annotations are absent. Silent metadata means the service doesn't
+		// advertise write support, so Mendix treats it as read-only — this
+		// matches Studio Pro's behaviour and mxbuild's validation rules.
+		// Rest$ODataRemoteEntitySource has no Updatable field; updatability
+		// is expressed per attribute via Rest$ODataMappedValue.
+		ent.Creatable = entitySet.Insertable != nil && *entitySet.Insertable
 		ent.Deletable = entitySet.Deletable != nil && *entitySet.Deletable
+		ent.Updatable = false
 		ent.SkipSupported = true
 		ent.TopSupported = true
 		ent.CreateChangeLocally = false
@@ -1092,20 +1133,20 @@ func applyExternalEntityFields(
 // mergedPropertiesWithKey walks the BaseType chain of an entity type and
 // returns the merged property list (base properties first, then derived) along
 // with the key property names from the root of the chain.
-func mergedPropertiesWithKey(et *mpr.EdmEntityType, byQualified map[string]*mpr.EdmEntityType) ([]*mpr.EdmProperty, []string) {
+func mergedPropertiesWithKey(et *types.EdmEntityType, byQualified map[string]*types.EdmEntityType) ([]*types.EdmProperty, []string) {
 	// Walk to the root, collecting types in order from base → derived.
-	chain := []*mpr.EdmEntityType{et}
+	chain := []*types.EdmEntityType{et}
 	current := et
 	for current.BaseType != "" {
 		parent := byQualified[current.BaseType]
 		if parent == nil {
 			break
 		}
-		chain = append([]*mpr.EdmEntityType{parent}, chain...)
+		chain = append([]*types.EdmEntityType{parent}, chain...)
 		current = parent
 	}
 
-	var merged []*mpr.EdmProperty
+	var merged []*types.EdmProperty
 	seen := make(map[string]bool)
 	for _, t := range chain {
 		for _, p := range t.Properties {
@@ -1135,7 +1176,7 @@ func attrNameForOData(propName, entityName string) string {
 // edmToDomainModelAttrType converts an EDM property to a domainmodel attribute type.
 // isKey forces a non-zero length for string keys: Mendix forbids unlimited
 // strings as part of an external entity key (CE6121).
-func edmToDomainModelAttrType(p *mpr.EdmProperty, isKey bool) domainmodel.AttributeType {
+func edmToDomainModelAttrType(p *types.EdmProperty, isKey bool) domainmodel.AttributeType {
 	switch p.Type {
 	case "Edm.String":
 		// Studio Pro stores Length=0 (unlimited) for OData strings without MaxLength.
@@ -1167,7 +1208,7 @@ func edmToDomainModelAttrType(p *mpr.EdmProperty, isKey bool) domainmodel.Attrib
 }
 
 // edmToAstDataType converts an Edm property to an AST data type.
-func edmToAstDataType(p *mpr.EdmProperty) ast.DataType {
+func edmToAstDataType(p *types.EdmProperty) ast.DataType {
 	switch p.Type {
 	case "Edm.String":
 		length := 200
@@ -1204,19 +1245,19 @@ func edmToAstDataType(p *mpr.EdmProperty) ast.DataType {
 // AsyncAPI Contract Commands
 // ============================================================================
 
-// showContractChannels handles SHOW CONTRACT CHANNELS FROM Module.Service.
-func (e *Executor) showContractChannels(name *ast.QualifiedName) error {
+// listContractChannels handles SHOW CONTRACT CHANNELS FROM Module.Service.
+func listContractChannels(ctx *ExecContext, name *ast.QualifiedName) error {
 	if name == nil {
-		return fmt.Errorf("service name required: SHOW CONTRACT CHANNELS FROM Module.Service")
+		return mdlerrors.NewValidation("service name required: show contract channels from Module.Service")
 	}
 
-	doc, svcQN, err := e.parseAsyncAPIContract(*name)
+	doc, svcQN, err := parseAsyncAPIContract(ctx, *name)
 	if err != nil {
 		return err
 	}
 
-	if len(doc.Channels) == 0 {
-		fmt.Fprintf(e.output, "No channels found in contract for %s.\n", svcQN)
+	if len(doc.Channels) == 0 && ctx.Format != FormatJSON {
+		fmt.Fprintf(ctx.Output, "No channels found in contract for %s.\n", svcQN)
 		return nil
 	}
 
@@ -1240,22 +1281,22 @@ func (e *Executor) showContractChannels(name *ast.QualifiedName) error {
 	for _, r := range rows {
 		result.Rows = append(result.Rows, []any{r.channel, r.operation, r.opID, r.message})
 	}
-	return e.writeResult(result)
+	return writeResult(ctx, result)
 }
 
-// showContractMessages handles SHOW CONTRACT MESSAGES FROM Module.Service.
-func (e *Executor) showContractMessages(name *ast.QualifiedName) error {
+// listContractMessages handles SHOW CONTRACT MESSAGES FROM Module.Service.
+func listContractMessages(ctx *ExecContext, name *ast.QualifiedName) error {
 	if name == nil {
-		return fmt.Errorf("service name required: SHOW CONTRACT MESSAGES FROM Module.Service")
+		return mdlerrors.NewValidation("service name required: show contract messages from Module.Service")
 	}
 
-	doc, svcQN, err := e.parseAsyncAPIContract(*name)
+	doc, svcQN, err := parseAsyncAPIContract(ctx, *name)
 	if err != nil {
 		return err
 	}
 
-	if len(doc.Messages) == 0 {
-		fmt.Fprintf(e.output, "No messages found in contract for %s.\n", svcQN)
+	if len(doc.Messages) == 0 && ctx.Format != FormatJSON {
+		fmt.Fprintf(ctx.Output, "No messages found in contract for %s.\n", svcQN)
 		return nil
 	}
 
@@ -1283,39 +1324,39 @@ func (e *Executor) showContractMessages(name *ast.QualifiedName) error {
 	for _, r := range rows {
 		result.Rows = append(result.Rows, []any{r.name, r.title, r.contentType, r.props})
 	}
-	return e.writeResult(result)
+	return writeResult(ctx, result)
 }
 
 // describeContractMessage handles DESCRIBE CONTRACT MESSAGE Module.Service.MessageName.
-func (e *Executor) describeContractMessage(name ast.QualifiedName) error {
+func describeContractMessage(ctx *ExecContext, name ast.QualifiedName) error {
 	svcName, msgName, err := splitContractRef(name)
 	if err != nil {
 		return err
 	}
 
-	doc, svcQN, err := e.parseAsyncAPIContract(svcName)
+	doc, svcQN, err := parseAsyncAPIContract(ctx, svcName)
 	if err != nil {
 		return err
 	}
 
 	msg := doc.FindMessage(msgName)
 	if msg == nil {
-		return fmt.Errorf("message %q not found in contract for %s", msgName, svcQN)
+		return mdlerrors.NewNotFoundMsg("message", msgName, fmt.Sprintf("message %q not found in contract for %s", msgName, svcQN))
 	}
 
-	fmt.Fprintf(e.output, "%s\n", msg.Name)
+	fmt.Fprintf(ctx.Output, "%s\n", msg.Name)
 	if msg.Title != "" {
-		fmt.Fprintf(e.output, "  Title: %s\n", msg.Title)
+		fmt.Fprintf(ctx.Output, "  Title: %s\n", msg.Title)
 	}
 	if msg.Description != "" {
-		fmt.Fprintf(e.output, "  Description: %s\n", msg.Description)
+		fmt.Fprintf(ctx.Output, "  Description: %s\n", msg.Description)
 	}
 	if msg.ContentType != "" {
-		fmt.Fprintf(e.output, "  ContentType: %s\n", msg.ContentType)
+		fmt.Fprintf(ctx.Output, "  ContentType: %s\n", msg.ContentType)
 	}
 
 	if len(msg.Properties) > 0 {
-		fmt.Fprintln(e.output)
+		fmt.Fprintln(ctx.Output)
 		nameWidth := len("Property")
 		typeWidth := len("Type")
 		for _, p := range msg.Properties {
@@ -1328,10 +1369,10 @@ func (e *Executor) describeContractMessage(name ast.QualifiedName) error {
 			}
 		}
 
-		fmt.Fprintf(e.output, "  %-*s  %-*s\n", nameWidth, "Property", typeWidth, "Type")
-		fmt.Fprintf(e.output, "  %s  %s\n", strings.Repeat("-", nameWidth), strings.Repeat("-", typeWidth))
+		fmt.Fprintf(ctx.Output, "  %-*s  %-*s\n", nameWidth, "Property", typeWidth, "Type")
+		fmt.Fprintf(ctx.Output, "  %s  %s\n", strings.Repeat("-", nameWidth), strings.Repeat("-", typeWidth))
 		for _, p := range msg.Properties {
-			fmt.Fprintf(e.output, "  %-*s  %-*s\n", nameWidth, p.Name, typeWidth, asyncTypeString(p))
+			fmt.Fprintf(ctx.Output, "  %-*s  %-*s\n", nameWidth, p.Name, typeWidth, asyncTypeString(p))
 		}
 	}
 
@@ -1339,15 +1380,15 @@ func (e *Executor) describeContractMessage(name ast.QualifiedName) error {
 }
 
 // parseAsyncAPIContract finds a business event service by name and parses its cached AsyncAPI document.
-func (e *Executor) parseAsyncAPIContract(name ast.QualifiedName) (*mpr.AsyncAPIDocument, string, error) {
-	services, err := e.reader.ListBusinessEventServices()
+func parseAsyncAPIContract(ctx *ExecContext, name ast.QualifiedName) (*types.AsyncAPIDocument, string, error) {
+	services, err := ctx.Backend.ListBusinessEventServices()
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to list business event services: %w", err)
+		return nil, "", mdlerrors.NewBackend("list business event services", err)
 	}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to build hierarchy: %w", err)
+		return nil, "", mdlerrors.NewBackend("build hierarchy", err)
 	}
 
 	for _, svc := range services {
@@ -1361,24 +1402,26 @@ func (e *Executor) parseAsyncAPIContract(name ast.QualifiedName) (*mpr.AsyncAPID
 		svcQN := modName + "." + svc.Name
 
 		if svc.Document == "" {
-			return nil, svcQN, fmt.Errorf("no cached AsyncAPI contract for %s. This service has no Document field (it may be a publisher, not a consumer)", svcQN)
+			return nil, svcQN, mdlerrors.NewValidationf("no cached AsyncAPI contract for %s. This service has no Document field (it may be a publisher, not a consumer)", svcQN)
 		}
 
-		doc, err := mpr.ParseAsyncAPI(svc.Document)
+		doc, err := types.ParseAsyncAPI(svc.Document)
 		if err != nil {
-			return nil, svcQN, fmt.Errorf("failed to parse AsyncAPI contract for %s: %w", svcQN, err)
+			return nil, svcQN, mdlerrors.NewBackend(fmt.Sprintf("parse AsyncAPI contract for %s", svcQN), err)
 		}
 
 		return doc, svcQN, nil
 	}
 
-	return nil, "", fmt.Errorf("business event service not found: %s.%s", name.Module, name.Name)
+	return nil, "", mdlerrors.NewNotFound("business event service", name.Module+"."+name.Name)
 }
 
 // asyncTypeString formats an AsyncAPI property type for display.
-func asyncTypeString(p *mpr.AsyncAPIProperty) string {
+func asyncTypeString(p *types.AsyncAPIProperty) string {
 	if p.Format != "" {
 		return p.Type + " (" + p.Format + ")"
 	}
 	return p.Type
 }
+
+// --- Executor method wrappers for backward compatibility ---

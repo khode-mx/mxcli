@@ -357,6 +357,7 @@ const (
 	ListOpSubtract
 	ListOpContains
 	ListOpEquals
+	ListOpRange
 )
 
 func (t ListOperationType) String() string {
@@ -381,6 +382,8 @@ func (t ListOperationType) String() string {
 		return "CONTAINS"
 	case ListOpEquals:
 		return "EQUALS"
+	case ListOpRange:
+		return "RANGE"
 	default:
 		return "UNKNOWN"
 	}
@@ -404,6 +407,8 @@ type ListOperationStmt struct {
 	SecondVariable string               // Second operand for UNION, INTERSECT, SUBTRACT, CONTAINS, EQUALS
 	Condition      Expression           // Condition for FIND/FILTER
 	SortSpecs      []SortSpec           // Sort specifications for SORT
+	OffsetExpr     Expression           // Offset expression for RANGE
+	LimitExpr      Expression           // Limit expression for RANGE
 	Annotations    *ActivityAnnotations // Optional @position, @caption, @color, @annotation
 }
 
@@ -657,11 +662,11 @@ func (s *ExportToMappingStmt) isMicroflowStatement() {}
 
 // TransformJsonStmt represents: $Result = TRANSFORM $Input WITH Module.Transformer
 type TransformJsonStmt struct {
-	OutputVariable  string               // Result string variable (without $)
-	InputVariable   string               // Source JSON string variable (without $)
-	Transformation  QualifiedName        // Data transformer qualified name
-	ErrorHandling   *ErrorHandlingClause // Optional ON ERROR clause
-	Annotations     *ActivityAnnotations // Optional @position, @caption, @color, @annotation
+	OutputVariable string               // Result string variable (without $)
+	InputVariable  string               // Source JSON string variable (without $)
+	Transformation QualifiedName        // Data transformer qualified name
+	ErrorHandling  *ErrorHandlingClause // Optional ON ERROR clause
+	Annotations    *ActivityAnnotations // Optional @position, @caption, @color, @annotation
 }
 
 func (s *TransformJsonStmt) isMicroflowStatement() {}

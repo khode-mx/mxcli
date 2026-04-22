@@ -9,82 +9,85 @@ import (
 	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
 	"github.com/mendixlabs/mxcli/sdk/pages"
 )
 
 // execDefineFragment stores a fragment definition in the executor's session state.
-func (e *Executor) execDefineFragment(s *ast.DefineFragmentStmt) error {
-	if e.fragments == nil {
-		e.fragments = make(map[string]*ast.DefineFragmentStmt)
+func execDefineFragment(ctx *ExecContext, s *ast.DefineFragmentStmt) error {
+	if ctx.Fragments == nil {
+		ctx.Fragments = make(map[string]*ast.DefineFragmentStmt)
+		// Also update the executor's fragments map so newExecContext picks it up.
+		ctx.executor.fragments = ctx.Fragments
 	}
-	if _, exists := e.fragments[s.Name]; exists {
-		return fmt.Errorf("fragment %q already defined", s.Name)
+	if _, exists := ctx.Fragments[s.Name]; exists {
+		return mdlerrors.NewAlreadyExists("fragment", s.Name)
 	}
-	e.fragments[s.Name] = s
-	fmt.Fprintf(e.output, "Defined fragment %s (%d widgets)\n", s.Name, len(s.Widgets))
+	ctx.Fragments[s.Name] = s
+	fmt.Fprintf(ctx.Output, "Defined fragment %s (%d widgets)\n", s.Name, len(s.Widgets))
 	return nil
 }
 
-// showFragments lists all defined fragments in the current session.
-func (e *Executor) showFragments() error {
-	if len(e.fragments) == 0 {
-		fmt.Fprintln(e.output, "No fragments defined.")
+// listFragments lists all defined fragments in the current session.
+func listFragments(ctx *ExecContext) error {
+	if len(ctx.Fragments) == 0 {
+		fmt.Fprintln(ctx.Output, "No fragments defined.")
 		return nil
 	}
 
 	// Sort by name for consistent output
-	names := make([]string, 0, len(e.fragments))
-	for name := range e.fragments {
+	names := make([]string, 0, len(ctx.Fragments))
+	for name := range ctx.Fragments {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 
-	fmt.Fprintf(e.output, "%-30s %s\n", "Fragment", "Widgets")
-	fmt.Fprintf(e.output, "%-30s %s\n", strings.Repeat("-", 30), strings.Repeat("-", 10))
+	fmt.Fprintf(ctx.Output, "%-30s %s\n", "Fragment", "Widgets")
+	fmt.Fprintf(ctx.Output, "%-30s %s\n", strings.Repeat("-", 30), strings.Repeat("-", 10))
 	for _, name := range names {
-		frag := e.fragments[name]
-		fmt.Fprintf(e.output, "%-30s %d\n", name, len(frag.Widgets))
+		frag := ctx.Fragments[name]
+		fmt.Fprintf(ctx.Output, "%-30s %d\n", name, len(frag.Widgets))
 	}
 	return nil
 }
 
 // describeFragment outputs a fragment's definition as MDL.
-func (e *Executor) describeFragment(name ast.QualifiedName) error {
-	if e.fragments == nil {
-		return fmt.Errorf("fragment %q not found", name.Name)
+func describeFragment(ctx *ExecContext, name ast.QualifiedName) error {
+	if ctx.Fragments == nil {
+		return mdlerrors.NewNotFound("fragment", name.Name)
 	}
-	frag, ok := e.fragments[name.Name]
+	frag, ok := ctx.Fragments[name.Name]
 	if !ok {
-		return fmt.Errorf("fragment %q not found", name.Name)
+		return mdlerrors.NewNotFound("fragment", name.Name)
 	}
 
-	fmt.Fprintf(e.output, "DEFINE FRAGMENT %s AS {\n", frag.Name)
+	fmt.Fprintf(ctx.Output, "define fragment %s as {\n", frag.Name)
 	for _, w := range frag.Widgets {
-		outputASTWidgetMDL(e.output, w, 1)
+		outputASTWidgetMDL(ctx.Output, w, 1)
 	}
-	fmt.Fprintln(e.output, "};")
+	fmt.Fprintln(ctx.Output, "};")
 	return nil
 }
 
 // describeFragmentFrom handles DESCRIBE FRAGMENT FROM PAGE/SNIPPET ... WIDGET ... command.
 // It finds a named widget in a page or snippet and outputs it as MDL.
-func (e *Executor) describeFragmentFrom(s *ast.DescribeFragmentFromStmt) error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+func describeFragmentFrom(ctx *ExecContext, s *ast.DescribeFragmentFromStmt) error {
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to build hierarchy: %w", err)
+		return mdlerrors.NewBackend("build hierarchy", err)
 	}
 
 	var rawWidgets []rawWidget
 
 	switch s.ContainerType {
-	case "PAGE":
-		allPages, err := e.reader.ListPages()
+	case "page":
+		allPages, err := ctx.Backend.ListPages()
 		if err != nil {
-			return fmt.Errorf("failed to list pages: %w", err)
+			return mdlerrors.NewBackend("list pages", err)
 		}
 		var foundPage *pages.Page
 		for _, p := range allPages {
@@ -96,14 +99,14 @@ func (e *Executor) describeFragmentFrom(s *ast.DescribeFragmentFromStmt) error {
 			}
 		}
 		if foundPage == nil {
-			return fmt.Errorf("page %s not found", s.ContainerName.String())
+			return mdlerrors.NewNotFound("page", s.ContainerName.String())
 		}
-		rawWidgets = e.getPageWidgetsFromRaw(foundPage.ID)
+		rawWidgets = getPageWidgetsFromRaw(ctx, foundPage.ID)
 
-	case "SNIPPET":
-		allSnippets, err := e.reader.ListSnippets()
+	case "snippet":
+		allSnippets, err := ctx.Backend.ListSnippets()
 		if err != nil {
-			return fmt.Errorf("failed to list snippets: %w", err)
+			return mdlerrors.NewBackend("list snippets", err)
 		}
 		var foundSnippet *pages.Snippet
 		for _, sn := range allSnippets {
@@ -115,19 +118,19 @@ func (e *Executor) describeFragmentFrom(s *ast.DescribeFragmentFromStmt) error {
 			}
 		}
 		if foundSnippet == nil {
-			return fmt.Errorf("snippet %s not found", s.ContainerName.String())
+			return mdlerrors.NewNotFound("snippet", s.ContainerName.String())
 		}
-		rawWidgets = e.getSnippetWidgetsFromRaw(foundSnippet.ID)
+		rawWidgets = getSnippetWidgetsFromRaw(ctx, foundSnippet.ID)
 	}
 
 	// Find the widget by name
 	target := findRawWidgetByName(rawWidgets, s.WidgetName)
 	if target == nil {
-		return fmt.Errorf("widget %q not found in %s %s", s.WidgetName, strings.ToLower(s.ContainerType), s.ContainerName.String())
+		return mdlerrors.NewNotFoundMsg("widget", s.WidgetName, fmt.Sprintf("not found in %s %s", strings.ToLower(s.ContainerType), s.ContainerName.String()))
 	}
 
 	// Output as MDL
-	e.outputWidgetMDLV3(*target, 0)
+	outputWidgetMDLV3(ctx, *target, 0)
 	return nil
 }
 
@@ -243,15 +246,15 @@ func formatDataSourceV3(ds *ast.DataSourceV3) string {
 	case "parameter":
 		return ds.Reference
 	case "database":
-		return "DATABASE " + ds.Reference
+		return "database " + ds.Reference
 	case "microflow":
-		return "MICROFLOW " + ds.Reference
+		return "microflow " + ds.Reference
 	case "nanoflow":
-		return "NANOFLOW " + ds.Reference
+		return "nanoflow " + ds.Reference
 	case "association":
-		return "ASSOCIATION " + ds.Reference
+		return "association " + ds.Reference
 	case "selection":
-		return "SELECTION " + ds.Reference
+		return "selection " + ds.Reference
 	default:
 		return ds.Reference
 	}
@@ -261,28 +264,28 @@ func formatActionV3(a *ast.ActionV3) string {
 	switch a.Type {
 	case "save":
 		if a.ClosePage {
-			return "SAVE_CHANGES CLOSE_PAGE"
+			return "save_changes close_page"
 		}
-		return "SAVE_CHANGES"
+		return "save_changes"
 	case "cancel":
 		if a.ClosePage {
-			return "CANCEL_CHANGES CLOSE_PAGE"
+			return "cancel_changes close_page"
 		}
-		return "CANCEL_CHANGES"
+		return "cancel_changes"
 	case "close":
-		return "CLOSE_PAGE"
+		return "close_page"
 	case "delete":
-		return "DELETE_OBJECT"
+		return "delete_object"
 	case "showPage":
-		return "SHOW_PAGE " + a.Target
+		return "show_page " + a.Target
 	case "microflow":
-		return "MICROFLOW " + a.Target
+		return "microflow " + a.Target
 	case "nanoflow":
-		return "NANOFLOW " + a.Target
+		return "nanoflow " + a.Target
 	case "signOut":
-		return "SIGN_OUT"
+		return "sign_out"
 	case "completeTask":
-		return "COMPLETE_TASK '" + strings.ReplaceAll(a.OutcomeValue, "'", "''") + "'"
+		return "complete_task '" + strings.ReplaceAll(a.OutcomeValue, "'", "''") + "'"
 	default:
 		return a.Type
 	}

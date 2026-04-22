@@ -3,11 +3,21 @@
 package executor
 
 import (
+	"context"
 	"strings"
 
+	"github.com/mendixlabs/mxcli/mdl/backend"
+	"github.com/mendixlabs/mxcli/mdl/types"
 	"github.com/mendixlabs/mxcli/model"
-	"github.com/mendixlabs/mxcli/sdk/mpr"
 )
+
+// hierarchySource is the minimal interface needed to build a ContainerHierarchy.
+// Both *mpr.Reader and backend.FullBackend satisfy this.
+type hierarchySource interface {
+	ListModules() ([]*model.Module, error)
+	ListUnits() ([]*types.UnitInfo, error)
+	ListFolders() ([]*types.FolderInfo, error)
+}
 
 // ContainerHierarchy provides efficient module and folder resolution for documents.
 // It caches the container hierarchy to avoid repeated lookups.
@@ -18,8 +28,18 @@ type ContainerHierarchy struct {
 	folderNames     map[model.ID]string
 }
 
-// NewContainerHierarchy creates a new hierarchy from the reader.
-func NewContainerHierarchy(reader *mpr.Reader) (*ContainerHierarchy, error) {
+// NewContainerHierarchy creates a new hierarchy from any source that provides
+// modules, units, and folders (e.g. *mpr.Reader or backend.FullBackend).
+func NewContainerHierarchy(src hierarchySource) (*ContainerHierarchy, error) {
+	return newContainerHierarchyImpl(src)
+}
+
+// NewContainerHierarchyFromBackend creates a new hierarchy from a Backend interface.
+func NewContainerHierarchyFromBackend(b backend.FullBackend) (*ContainerHierarchy, error) {
+	return newContainerHierarchyImpl(b)
+}
+
+func newContainerHierarchyImpl(src hierarchySource) (*ContainerHierarchy, error) {
 	h := &ContainerHierarchy{
 		moduleIDs:       make(map[model.ID]bool),
 		moduleNames:     make(map[model.ID]string),
@@ -27,8 +47,7 @@ func NewContainerHierarchy(reader *mpr.Reader) (*ContainerHierarchy, error) {
 		folderNames:     make(map[model.ID]string),
 	}
 
-	// Load modules
-	modules, err := reader.ListModules()
+	modules, err := src.ListModules()
 	if err != nil {
 		return nil, err
 	}
@@ -37,14 +56,12 @@ func NewContainerHierarchy(reader *mpr.Reader) (*ContainerHierarchy, error) {
 		h.moduleNames[m.ID] = m.Name
 	}
 
-	// Load units for container hierarchy
-	units, _ := reader.ListUnits()
+	units, _ := src.ListUnits()
 	for _, u := range units {
 		h.containerParent[u.ID] = u.ContainerID
 	}
 
-	// Load folders
-	folders, _ := reader.ListFolders()
+	folders, _ := src.ListFolders()
 	for _, f := range folders {
 		h.folderNames[f.ID] = f.Name
 		h.containerParent[f.ID] = f.ContainerID
@@ -110,37 +127,47 @@ func (h *ContainerHierarchy) GetQualifiedName(containerID model.ID, name string)
 }
 
 // getHierarchy returns a cached ContainerHierarchy or creates a new one.
-func (e *Executor) getHierarchy() (*ContainerHierarchy, error) {
-	// Ensure cache exists
-	if e.reader == nil {
+func getHierarchy(ctx *ExecContext) (*ContainerHierarchy, error) {
+	if !ctx.Connected() {
 		return nil, nil
 	}
-	if e.cache == nil {
-		e.cache = &executorCache{}
+	if ctx.Cache == nil {
+		ctx.Cache = &executorCache{}
+		if ctx.executor != nil {
+			ctx.executor.cache = ctx.Cache
+		}
 	}
-	if e.cache.hierarchy != nil {
-		return e.cache.hierarchy, nil
+	if ctx.Cache.hierarchy != nil {
+		return ctx.Cache.hierarchy, nil
 	}
-	h, err := NewContainerHierarchy(e.reader)
+	h, err := NewContainerHierarchyFromBackend(ctx.Backend)
 	if err != nil {
 		return nil, err
 	}
-	e.cache.hierarchy = h
+	ctx.Cache.hierarchy = h
 	return h, nil
 }
 
 // invalidateHierarchy clears the cached hierarchy so it will be rebuilt on next access.
 // This should be called after any write operation that creates or deletes units.
-func (e *Executor) invalidateHierarchy() {
-	if e.cache != nil {
-		e.cache.hierarchy = nil
+func invalidateHierarchy(ctx *ExecContext) {
+	if ctx.Cache != nil {
+		ctx.Cache.hierarchy = nil
 	}
 }
 
 // invalidateDomainModelsCache clears the cached domain models so they will be reloaded.
 // This should be called after any write operation that creates or modifies entities.
-func (e *Executor) invalidateDomainModelsCache() {
-	if e.cache != nil {
-		e.cache.domainModels = nil
+func invalidateDomainModelsCache(ctx *ExecContext) {
+	if ctx.Cache != nil {
+		ctx.Cache.domainModels = nil
 	}
+}
+
+// ----------------------------------------------------------------------------
+// Executor method wrappers (for callers in unmigrated files)
+// ----------------------------------------------------------------------------
+
+func (e *Executor) getHierarchy() (*ContainerHierarchy, error) {
+	return getHierarchy(e.newExecContext(context.Background()))
 }

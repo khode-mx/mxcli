@@ -16,6 +16,33 @@ Each of these APIs uses a different authentication header scheme, and today `mxc
 
 This proposal specifies a shared `internal/auth` package and `mxcli auth` command set that every platform-API consumer can use.
 
+## Spike Results (2026-04-14)
+
+Validated against real credentials. See `scripts/auth-discovery-spike.sh`.
+
+- **Marketplace lives at `marketplace-api.mendix.com`, not `appstore.home.mendix.com`.**
+  The older host is a different service that does not accept PAT auth at all.
+- **PAT works as documented** — `Authorization: MxToken <pat>` (capital M, capital T)
+  against `marketplace-api.mendix.com/v1/content` returns 200 with a well-formed JSON
+  list. Catalog host also accepts the same header; paths TBD.
+- **401 and 403** are both "credential rejected" — our `authTransport` wraps either
+  as `ErrUnauthenticated`. A malformed token may return 400 at the gateway (nginx)
+  with an HTML body; we do not treat 400 as an auth failure since it is a client
+  error, not an auth rejection.
+- **No API key needed for marketplace.** The earlier assumption that marketplace
+  required the Deploy-API-style `Mendix-username` + `Mendix-ApiKey` scheme was wrong.
+  PAT is sufficient for both Content API and marketplace.
+
+`internal/auth/scheme.go` host map now lists:
+
+```go
+"marketplace-api.mendix.com": SchemePAT,
+"catalog.mendix.com":         SchemePAT,
+```
+
+API key (`SchemeAPIKey`) is still reserved for the Deploy API follow-up work;
+marketplace no longer needs it.
+
 ## Mendix Authentication Schemes
 
 Based on current Mendix documentation (2026-04):
@@ -23,7 +50,7 @@ Based on current Mendix documentation (2026-04):
 | Scheme | Header(s) | APIs | Obtained From |
 |---|---|---|---|
 | **PAT** (Personal Access Token) | `Authorization: MxToken <pat>` | Content API (marketplace/modules), Platform APIs | Mendix portal → Developer Settings → Personal Access Tokens |
-| **API Key** | `Mendix-UserName: <email>`<br>`Mendix-ApiKey: <key>` | Deploy API, Team Server | Mendix portal → [Profile → API Keys](https://docs.mendix.com/portal/user-settings/#profile-api-keys) |
+| **API Key** | `Mendix-username: <email>`<br>`Mendix-ApiKey: <key>` | Deploy API, Team Server | Mendix portal → [Profile → API Keys](https://docs.mendix.com/portal/user-settings/#profile-api-keys) |
 
 References:
 - Content API / marketplace: <https://docs.mendix.com/apidocs-mxsdk/apidocs/content-api/> (PAT)
@@ -48,10 +75,10 @@ An AAD device-code flow (`mxcli login` opens a browser, no token pasting) remain
 ```
 internal/auth/
 ├── credential.go       # Credential struct, Scheme enum
-├── scheme.go           # Host → scheme mapping
+├── scheme.go           # host → scheme mapping
 ├── resolver.go         # Env vars → keychain → file priority
 ├── client.go           # *http.Client factory that injects the right headers
-├── store.go            # Store interface
+├── store.go            # store interface
 ├── store_file.go       # ~/.mxcli/auth.json (chmod 0600), always available
 ├── store_keyring.go    # OS keychain via zalando/go-keyring (pure Go, no CGO)
 └── errors.go           # ErrUnauthenticated, ErrNoCredential, ErrSchemeMismatch
@@ -69,16 +96,16 @@ type Scheme string
 
 const (
     SchemePAT    Scheme = "pat"     // MxToken header
-    SchemeAPIKey Scheme = "apikey"  // Mendix-UserName + Mendix-ApiKey
+    SchemeAPIKey Scheme = "apikey"  // Mendix-username + Mendix-ApiKey
 )
 
 type Credential struct {
     Profile   string    `json:"profile"`              // "default", "deploy-ci", ...
     Scheme    Scheme    `json:"scheme"`
-    Username  string    `json:"username,omitempty"`   // required for apikey
-    Token     string    `json:"token"`                // never logged
+    username  string    `json:"username,omitempty"`   // required for apikey
+    token     string    `json:"token"`                // never logged
     CreatedAt time.Time `json:"created_at"`
-    Label     string    `json:"label,omitempty"`      // free-form note
+    label     string    `json:"label,omitempty"`      // free-form note
 }
 ```
 
@@ -118,7 +145,7 @@ func ClientFor(ctx context.Context, profile string) (*http.Client, error) {
     }
     return &http.Client{
         Transport: &authTransport{cred: cred, inner: http.DefaultTransport},
-        Timeout:   30 * time.Second,
+        timeout:   30 * time.Second,
     }, nil
 }
 
@@ -133,14 +160,14 @@ func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
         return nil, fmt.Errorf("unknown Mendix host: %s", req.URL.Host)
     }
     if scheme != t.cred.Scheme {
-        return nil, &ErrSchemeMismatch{Host: req.URL.Host, Need: scheme, Have: t.cred.Scheme}
+        return nil, &ErrSchemeMismatch{host: req.URL.Host, Need: scheme, Have: t.cred.Scheme}
     }
     req = req.Clone(req.Context())
     switch scheme {
     case SchemePAT:
         req.Header.Set("Authorization", "MxToken "+t.cred.Token)
     case SchemeAPIKey:
-        req.Header.Set("Mendix-UserName", t.cred.Username)
+        req.Header.Set("Mendix-username", t.cred.Username)
         req.Header.Set("Mendix-ApiKey", t.cred.Token)
     }
     resp, err := t.inner.RoundTrip(req)
@@ -201,20 +228,20 @@ mxcli auth list                                             # all profiles
 ```
 $ mxcli auth login
 Mendix authentication scheme:
-  [1] Personal Access Token (PAT) — recommended for marketplace, content API
-  [2] API Key                      — required for Deploy API, Team Server
+  [1] Personal access token (PAT) — recommended for marketplace, content api
+  [2] api key                      — required for Deploy api, Team Server
 Choice [1]: 2
 
 Email: user@company.com
-API Key: ****************************
+api key: ****************************
 Validating... ✓ authenticated as user@company.com
-Store in: [1] OS keychain  [2] ~/.mxcli/auth.json
+store in: [1] OS keychain  [2] ~/.mxcli/auth.json
 Choice [1]: 1
 Saved credential to profile 'default' (scheme: apikey)
 ```
 
 - Token is read with `golang.org/x/term` (no echo).
-- Validation hits a cheap, idempotent authenticated endpoint on the scheme's primary host, e.g. `GET https://deploy.mendix.com/api/1/apps` (just to verify the credential works, discarding the response). The exact validation endpoint per scheme is picked during implementation — anything that returns 200 on success and 401 on bad creds.
+- Validation hits a cheap, idempotent authenticated endpoint on the scheme's primary host, e.g. `get https://deploy.mendix.com/api/1/apps` (just to verify the credential works, discarding the response). The exact validation endpoint per scheme is picked during implementation — anything that returns 200 on success and 401 on bad creds.
 - Validation failures do not store the credential.
 
 #### `mxcli auth login` (non-interactive, for CI)
@@ -232,8 +259,8 @@ Or skip `login` entirely and rely on `MENDIX_PAT` / `MENDIX_USERNAME`+`MENDIX_AP
 $ mxcli auth status
 Profile:    default
 Scheme:     pat
-Source:     keychain
-Created:    2026-04-14 12:00:00 UTC
+source:     keychain
+created:    2026-04-14 12:00:00 UTC
 Identity:   user@company.com (verified 2s ago)
 ```
 

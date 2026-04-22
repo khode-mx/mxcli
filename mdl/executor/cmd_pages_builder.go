@@ -3,15 +3,18 @@
 package executor
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	"github.com/mendixlabs/mxcli/mdl/backend"
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
+	"github.com/mendixlabs/mxcli/mdl/types"
 	"github.com/mendixlabs/mxcli/model"
 	"github.com/mendixlabs/mxcli/sdk/domainmodel"
 	"github.com/mendixlabs/mxcli/sdk/microflows"
-	"github.com/mendixlabs/mxcli/sdk/mpr"
 	"github.com/mendixlabs/mxcli/sdk/pages"
 )
 
@@ -21,8 +24,7 @@ import (
 
 // pageBuilder constructs pages from AST.
 type pageBuilder struct {
-	writer           *mpr.Writer
-	reader           *mpr.Reader
+	backend          backend.FullBackend
 	moduleID         model.ID
 	moduleName       string
 	widgetScope      map[string]model.ID                // widget name -> widget ID
@@ -32,6 +34,7 @@ type pageBuilder struct {
 	isSnippet        bool                               // True if building a snippet (affects parameter datasource)
 	fragments        map[string]*ast.DefineFragmentStmt // Fragment registry from executor
 	themeRegistry    *ThemeRegistry                     // Theme design property definitions (may be nil)
+	widgetBackend    backend.WidgetBuilderBackend       // Backend for pluggable widget construction
 
 	// Pluggable widget engine (lazily initialized)
 	widgetRegistry     *WidgetRegistry
@@ -42,7 +45,7 @@ type pageBuilder struct {
 	layoutsCache    []*pages.Layout
 	pagesCache      []*pages.Page
 	microflowsCache []*microflows.Microflow
-	foldersCache    []*mpr.FolderInfo
+	foldersCache    []*types.FolderInfo
 
 	// Entity context for resolving short attribute names inside DataViews
 	entityContext string // Qualified entity name (e.g., "Module.Entity")
@@ -55,27 +58,35 @@ func (pb *pageBuilder) initPluggableEngine() {
 	}
 	registry, err := NewWidgetRegistry()
 	if err != nil {
-		pb.pluggableEngineErr = fmt.Errorf("widget registry init failed: %w", err)
+		pb.pluggableEngineErr = mdlerrors.NewBackend("widget registry init", err)
 		log.Printf("warning: %v", pb.pluggableEngineErr)
 		return
 	}
-	if pb.reader != nil {
-		if loadErr := registry.LoadUserDefinitions(pb.reader.Path()); loadErr != nil {
+	if pb.backend != nil {
+		if loadErr := registry.LoadUserDefinitions(pb.backend.Path()); loadErr != nil {
 			log.Printf("warning: loading user widget definitions: %v", loadErr)
 		}
 	}
 	pb.widgetRegistry = registry
-	pb.pluggableEngine = NewPluggableWidgetEngine(NewOperationRegistry(), pb)
+	pb.pluggableEngine = NewPluggableWidgetEngine(pb.widgetBackend, pb)
 }
 
 // registerWidgetName registers a widget name and returns an error if it's already used.
 // Widget names must be unique within a page/snippet.
+
+// getProjectPath returns the project directory path from the backend.
+func (pb *pageBuilder) getProjectPath() string {
+	if pb.backend != nil {
+		return pb.backend.Path()
+	}
+	return ""
+}
 func (pb *pageBuilder) registerWidgetName(name string, id model.ID) error {
 	if name == "" {
 		return nil // Anonymous widgets are allowed
 	}
 	if existingID, exists := pb.widgetScope[name]; exists {
-		return fmt.Errorf("duplicate widget name '%s': widget names must be unique within a page (existing ID: %s)", name, existingID)
+		return mdlerrors.NewAlreadyExistsMsg("widget", name, fmt.Sprintf("duplicate widget name '%s': widget names must be unique within a page (existing ID: %s)", name, existingID))
 	}
 	pb.widgetScope[name] = id
 	return nil
@@ -86,7 +97,7 @@ func (pb *pageBuilder) getModules() []*model.Module {
 	if pb.execCache != nil && pb.execCache.modules != nil {
 		return pb.execCache.modules
 	}
-	modules, _ := pb.reader.ListModules()
+	modules, _ := pb.backend.ListModules()
 	if pb.execCache != nil {
 		pb.execCache.modules = modules
 	}
@@ -98,7 +109,7 @@ func (pb *pageBuilder) getHierarchy() (*ContainerHierarchy, error) {
 	if pb.execCache != nil && pb.execCache.hierarchy != nil {
 		return pb.execCache.hierarchy, nil
 	}
-	h, err := NewContainerHierarchy(pb.reader)
+	h, err := NewContainerHierarchyFromBackend(pb.backend)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +123,7 @@ func (pb *pageBuilder) getHierarchy() (*ContainerHierarchy, error) {
 func (pb *pageBuilder) getLayouts() ([]*pages.Layout, error) {
 	if pb.layoutsCache == nil {
 		var err error
-		pb.layoutsCache, err = pb.reader.ListLayouts()
+		pb.layoutsCache, err = pb.backend.ListLayouts()
 		if err != nil {
 			return nil, err
 		}
@@ -125,7 +136,7 @@ func (pb *pageBuilder) getDomainModels() ([]*domainmodel.DomainModel, error) {
 	if pb.execCache != nil && pb.execCache.domainModels != nil {
 		return pb.execCache.domainModels, nil
 	}
-	domainModels, err := pb.reader.ListDomainModels()
+	domainModels, err := pb.backend.ListDomainModels()
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +150,7 @@ func (pb *pageBuilder) getDomainModels() ([]*domainmodel.DomainModel, error) {
 func (pb *pageBuilder) getPages() ([]*pages.Page, error) {
 	if pb.pagesCache == nil {
 		var err error
-		pb.pagesCache, err = pb.reader.ListPages()
+		pb.pagesCache, err = pb.backend.ListPages()
 		if err != nil {
 			return nil, err
 		}
@@ -151,7 +162,7 @@ func (pb *pageBuilder) getPages() ([]*pages.Page, error) {
 func (pb *pageBuilder) getMicroflows() ([]*microflows.Microflow, error) {
 	if pb.microflowsCache == nil {
 		var err error
-		pb.microflowsCache, err = pb.reader.ListMicroflows()
+		pb.microflowsCache, err = pb.backend.ListMicroflows()
 		if err != nil {
 			return nil, err
 		}
@@ -163,12 +174,12 @@ func (pb *pageBuilder) getMicroflows() ([]*microflows.Microflow, error) {
 func (pb *pageBuilder) resolveLayout(layoutName string) (model.ID, error) {
 	layouts, err := pb.getLayouts()
 	if err != nil {
-		return "", fmt.Errorf("failed to list layouts: %w", err)
+		return "", mdlerrors.NewBackend("list layouts", err)
 	}
 
 	h, err := pb.getHierarchy()
 	if err != nil {
-		return "", fmt.Errorf("failed to build hierarchy: %w", err)
+		return "", mdlerrors.NewBackend("build hierarchy", err)
 	}
 
 	// Parse qualified name
@@ -190,7 +201,7 @@ func (pb *pageBuilder) resolveLayout(layoutName string) (model.ID, error) {
 		}
 	}
 
-	return "", fmt.Errorf("layout %s not found", layoutName)
+	return "", mdlerrors.NewNotFound("layout", layoutName)
 }
 
 // resolveEntity finds an entity by qualified name.
@@ -198,12 +209,12 @@ func (pb *pageBuilder) resolveEntity(entityRef ast.QualifiedName) (model.ID, err
 	// Get domain models which contain entities
 	domainModels, err := pb.getDomainModels()
 	if err != nil {
-		return "", fmt.Errorf("failed to list domain models: %w", err)
+		return "", mdlerrors.NewBackend("list domain models", err)
 	}
 
 	h, err := pb.getHierarchy()
 	if err != nil {
-		return "", fmt.Errorf("failed to build hierarchy: %w", err)
+		return "", mdlerrors.NewBackend("build hierarchy", err)
 	}
 
 	// Search for entity in domain models
@@ -216,13 +227,13 @@ func (pb *pageBuilder) resolveEntity(entityRef ast.QualifiedName) (model.ID, err
 		}
 	}
 
-	return "", fmt.Errorf("entity %s not found", entityRef.String())
+	return "", mdlerrors.NewNotFound("entity", entityRef.String())
 }
 
 // getModuleID returns the module ID for any container by using the hierarchy.
 // Deprecated: prefer using getHierarchy().FindModuleID() directly.
-func (e *Executor) getModuleID(containerID model.ID) model.ID {
-	h, err := e.getHierarchy()
+func getModuleID(ctx *ExecContext, containerID model.ID) model.ID {
+	h, err := getHierarchy(ctx)
 	if err != nil {
 		return containerID
 	}
@@ -231,8 +242,8 @@ func (e *Executor) getModuleID(containerID model.ID) model.ID {
 
 // getModuleName returns the module name for a module ID.
 // Deprecated: prefer using getHierarchy().GetModuleName() directly.
-func (e *Executor) getModuleName(moduleID model.ID) string {
-	h, err := e.getHierarchy()
+func getModuleName(ctx *ExecContext, moduleID model.ID) string {
+	h, err := getHierarchy(ctx)
 	if err != nil {
 		return ""
 	}
@@ -251,10 +262,10 @@ func (pb *pageBuilder) getMainPlaceholderRef(layoutName string) string {
 }
 
 // getFolders returns cached folders or loads them.
-func (pb *pageBuilder) getFolders() ([]*mpr.FolderInfo, error) {
+func (pb *pageBuilder) getFolders() ([]*types.FolderInfo, error) {
 	if pb.foldersCache == nil {
 		var err error
-		pb.foldersCache, err = pb.reader.ListFolders()
+		pb.foldersCache, err = pb.backend.ListFolders()
 		if err != nil {
 			return nil, err
 		}
@@ -271,7 +282,7 @@ func (pb *pageBuilder) resolveFolder(folderPath string) (model.ID, error) {
 
 	folders, err := pb.getFolders()
 	if err != nil {
-		return "", fmt.Errorf("failed to list folders: %w", err)
+		return "", mdlerrors.NewBackend("list folders", err)
 	}
 
 	// Split path into parts
@@ -284,7 +295,7 @@ func (pb *pageBuilder) resolveFolder(folderPath string) (model.ID, error) {
 		}
 
 		// Find folder with this name under current container
-		var foundFolder *mpr.FolderInfo
+		var foundFolder *types.FolderInfo
 		for _, f := range folders {
 			if f.ContainerID == currentContainerID && f.Name == part {
 				foundFolder = f
@@ -298,16 +309,18 @@ func (pb *pageBuilder) resolveFolder(folderPath string) (model.ID, error) {
 			// Create the folder
 			newFolderID, err := pb.createFolder(part, currentContainerID)
 			if err != nil {
-				return "", fmt.Errorf("failed to create folder %s: %w", part, err)
+				return "", mdlerrors.NewBackend(fmt.Sprintf("create folder %s", part), err)
 			}
+			parentContainerID := currentContainerID
 			currentContainerID = newFolderID
 
 			// Add to cache
-			pb.foldersCache = append(pb.foldersCache, &mpr.FolderInfo{
+			pb.foldersCache = append(pb.foldersCache, &types.FolderInfo{
 				ID:          newFolderID,
-				ContainerID: currentContainerID,
+				ContainerID: parentContainerID,
 				Name:        part,
 			})
+			currentContainerID = newFolderID
 		}
 	}
 
@@ -318,14 +331,14 @@ func (pb *pageBuilder) resolveFolder(folderPath string) (model.ID, error) {
 func (pb *pageBuilder) createFolder(name string, containerID model.ID) (model.ID, error) {
 	folder := &model.Folder{
 		BaseElement: model.BaseElement{
-			ID:       model.ID(mpr.GenerateID()),
+			ID:       model.ID(types.GenerateID()),
 			TypeName: "Projects$Folder",
 		},
 		ContainerID: containerID,
 		Name:        name,
 	}
 
-	if err := pb.writer.CreateFolder(folder); err != nil {
+	if err := pb.backend.CreateFolder(folder); err != nil {
 		return "", err
 	}
 
@@ -333,53 +346,57 @@ func (pb *pageBuilder) createFolder(name string, containerID model.ID) (model.ID
 }
 
 // execDropPage handles DROP PAGE statement.
-func (e *Executor) execDropPage(s *ast.DropPageStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project")
+func execDropPage(ctx *ExecContext, s *ast.DropPageStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	pages, err := e.reader.ListPages()
+	pages, err := ctx.Backend.ListPages()
 	if err != nil {
-		return fmt.Errorf("failed to list pages: %w", err)
+		return mdlerrors.NewBackend("list pages", err)
 	}
 
 	for _, p := range pages {
-		modID := e.getModuleID(p.ContainerID)
-		modName := e.getModuleName(modID)
+		modID := getModuleID(ctx, p.ContainerID)
+		modName := getModuleName(ctx, modID)
 		if modName == s.Name.Module && p.Name == s.Name.Name {
-			if err := e.writer.DeletePage(p.ID); err != nil {
-				return fmt.Errorf("failed to delete page: %w", err)
+			if err := ctx.Backend.DeletePage(p.ID); err != nil {
+				return mdlerrors.NewBackend("delete page", err)
 			}
-			fmt.Fprintf(e.output, "Dropped page %s\n", s.Name.String())
+			fmt.Fprintf(ctx.Output, "Dropped page %s\n", s.Name.String())
 			return nil
 		}
 	}
 
-	return fmt.Errorf("page %s not found", s.Name.String())
+	return mdlerrors.NewNotFound("page", s.Name.String())
 }
 
 // execDropSnippet handles DROP SNIPPET statement.
-func (e *Executor) execDropSnippet(s *ast.DropSnippetStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project")
+func execDropSnippet(ctx *ExecContext, s *ast.DropSnippetStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	snippets, err := e.reader.ListSnippets()
+	snippets, err := ctx.Backend.ListSnippets()
 	if err != nil {
-		return fmt.Errorf("failed to list snippets: %w", err)
+		return mdlerrors.NewBackend("list snippets", err)
 	}
 
 	for _, snip := range snippets {
-		modID := e.getModuleID(snip.ContainerID)
-		modName := e.getModuleName(modID)
+		modID := getModuleID(ctx, snip.ContainerID)
+		modName := getModuleName(ctx, modID)
 		if modName == s.Name.Module && snip.Name == s.Name.Name {
-			if err := e.writer.DeleteSnippet(snip.ID); err != nil {
-				return fmt.Errorf("failed to delete snippet: %w", err)
+			if err := ctx.Backend.DeleteSnippet(snip.ID); err != nil {
+				return mdlerrors.NewBackend("delete snippet", err)
 			}
-			fmt.Fprintf(e.output, "Dropped snippet %s\n", s.Name.String())
+			fmt.Fprintf(ctx.Output, "Dropped snippet %s\n", s.Name.String())
 			return nil
 		}
 	}
 
-	return fmt.Errorf("snippet %s not found", s.Name.String())
+	return mdlerrors.NewNotFound("snippet", s.Name.String())
+}
+
+func (e *Executor) getModuleName(moduleID model.ID) string {
+	return getModuleName(e.newExecContext(context.Background()), moduleID)
 }

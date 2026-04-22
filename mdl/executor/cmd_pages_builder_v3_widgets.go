@@ -7,20 +7,19 @@ import (
 	"regexp"
 	"strings"
 
-	"go.mongodb.org/mongo-driver/bson"
-
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	"github.com/mendixlabs/mxcli/mdl/backend"
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
+	"github.com/mendixlabs/mxcli/mdl/types"
 	"github.com/mendixlabs/mxcli/model"
-	"github.com/mendixlabs/mxcli/sdk/mpr"
 	"github.com/mendixlabs/mxcli/sdk/pages"
-	"github.com/mendixlabs/mxcli/sdk/widgets"
 )
 
 func (pb *pageBuilder) buildDataViewV3(w *ast.WidgetV3) (*pages.DataView, error) {
 	dv := &pages.DataView{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$DataView",
 			},
 			Name: w.Name,
@@ -31,7 +30,7 @@ func (pb *pageBuilder) buildDataViewV3(w *ast.WidgetV3) (*pages.DataView, error)
 	if ds := w.GetDataSource(); ds != nil {
 		dataSource, entityName, err := pb.buildDataSourceV3(ds)
 		if err != nil {
-			return nil, fmt.Errorf("failed to build datasource: %w", err)
+			return nil, mdlerrors.NewBackend("build datasource", err)
 		}
 		dv.DataSource = dataSource
 
@@ -50,7 +49,7 @@ func (pb *pageBuilder) buildDataViewV3(w *ast.WidgetV3) (*pages.DataView, error)
 	// Build child widgets, separating FOOTER widgets into FooterWidgets
 	for _, child := range w.Children {
 		// Check if this is a FOOTER widget - its children go to FooterWidgets
-		if child.Type == "FOOTER" {
+		if child.Type == "footer" {
 			dv.ShowFooter = true
 			for _, fw := range child.Children {
 				widget, err := pb.buildWidgetV3(fw)
@@ -88,28 +87,14 @@ func (pb *pageBuilder) buildDataViewV3(w *ast.WidgetV3) (*pages.DataView, error)
 }
 
 func (pb *pageBuilder) buildDataGridV3(w *ast.WidgetV3) (*pages.CustomWidget, error) {
-	// Build DataGrid2 as a CustomWidget (pluggable widget) like V2 does.
-	// The built-in DataGrid (Forms$DataGrid) has serialization issues.
-	widgetID := model.ID(mpr.GenerateID())
-
-	// Load embedded template (required for pluggable widgets to work)
-	embeddedType, embeddedObject, embeddedIDs, embeddedObjectTypeID, err := widgets.GetTemplateFullBSON(pages.WidgetIDDataGrid2, mpr.GenerateID, pb.reader.Path())
-	if err != nil {
-		return nil, fmt.Errorf("failed to load DataGrid2 template: %w", err)
-	}
-	if embeddedType == nil || embeddedObject == nil {
-		return nil, fmt.Errorf("DataGrid2 template not found")
-	}
-
-	// Convert widget IDs to pages.PropertyTypeIDEntry format
-	propertyTypeIDs := convertPropertyTypeIDs(embeddedIDs)
+	widgetID := model.ID(types.GenerateID())
 
 	// Build datasource from V3 DataSource property
 	var datasource pages.DataSource
 	if ds := w.GetDataSource(); ds != nil {
 		dataSource, entityName, err := pb.buildDataSourceV3(ds)
 		if err != nil {
-			return nil, fmt.Errorf("failed to build datasource: %w", err)
+			return nil, mdlerrors.NewBackend("build datasource", err)
 		}
 		datasource = dataSource
 
@@ -120,64 +105,73 @@ func (pb *pageBuilder) buildDataGridV3(w *ast.WidgetV3) (*pages.CustomWidget, er
 	}
 
 	// Extract column definitions and CONTROLBAR widgets from children
-	var columns []ast.DataGridColumnDef
-	var headerWidgets []bson.D
+	var columns []backend.DataGridColumnSpec
+	var headerWidgets []pages.Widget
 	for _, child := range w.Children {
-		switch strings.ToUpper(child.Type) {
-		case "COLUMN":
+		switch strings.ToLower(child.Type) {
+		case "column":
 			attr := child.GetAttribute()
-			col := ast.DataGridColumnDef{
-				Attribute:  attr,
+			if attr == "" && child.Name != "" && len(child.Children) == 0 {
+				attr = child.Name
+			}
+			col := backend.DataGridColumnSpec{
+				Attribute:  pb.resolveAttributePath(attr),
 				Caption:    child.GetCaption(),
-				ChildrenV3: child.Children, // Child widgets for custom content columns
 				Properties: child.Properties,
 			}
-			columns = append(columns, col)
-		case "CONTROLBAR":
-			// Build CONTROLBAR widgets as BSON for the filtersPlaceholder property
-			for _, controlBarChild := range child.Children {
-				widgetBSON, err := pb.buildWidgetV3ToBSON(controlBarChild)
+			// Build child widgets for custom content columns
+			for _, grandchild := range child.Children {
+				childWidget, err := pb.buildWidgetV3(grandchild)
 				if err != nil {
-					return nil, fmt.Errorf("failed to build controlbar widget: %w", err)
+					return nil, mdlerrors.NewBackend("build column child widget", err)
 				}
-				if widgetBSON != nil {
-					headerWidgets = append(headerWidgets, widgetBSON)
+				if childWidget != nil {
+					col.ChildWidgets = append(col.ChildWidgets, childWidget)
+				}
+			}
+			columns = append(columns, col)
+		case "controlbar":
+			for _, controlBarChild := range child.Children {
+				childWidget, err := pb.buildWidgetV3(controlBarChild)
+				if err != nil {
+					return nil, mdlerrors.NewBackend("build controlbar widget", err)
+				}
+				if childWidget != nil {
+					headerWidgets = append(headerWidgets, childWidget)
 				}
 			}
 		}
 	}
 
-	// Update the template object with datasource, columns, and header widgets
-	var updatedObject bson.D
-	if len(columns) > 0 || len(headerWidgets) > 0 {
-		// Use full update that replaces columns and/or header widgets
-		updatedObject = pb.updateDataGrid2Object(embeddedObject, propertyTypeIDs, datasource, columns, headerWidgets)
-	} else {
-		// No columns or header widgets defined, use template columns
-		updatedObject = pb.cloneDataGrid2ObjectWithDatasourceOnly(embeddedObject, propertyTypeIDs, datasource)
+	// Collect paging overrides from AST properties
+	pagingOverrides := make(map[string]string)
+	for mdlKey, widgetKey := range dataGridPagingPropMap {
+		if v := w.GetStringProp(mdlKey); v != "" {
+			pagingOverrides[widgetKey] = v
+		} else if iv := w.GetIntProp(mdlKey); iv > 0 {
+			pagingOverrides[widgetKey] = fmt.Sprintf("%d", iv)
+		} else if bv, ok := w.Properties[mdlKey]; ok {
+			if boolVal, isBool := bv.(bool); isBool {
+				if boolVal {
+					pagingOverrides[widgetKey] = "yes"
+				} else {
+					pagingOverrides[widgetKey] = "no"
+				}
+			}
+		}
 	}
 
-	// Apply paging properties from AST if specified
-	updatedObject = pb.applyDataGridPagingProps(updatedObject, propertyTypeIDs, w)
-
-	// Apply selection mode if specified
-	if selection := w.GetSelection(); selection != "" {
-		updatedObject = pb.applyDataGridSelectionProp(updatedObject, propertyTypeIDs, selection)
+	spec := backend.DataGridSpec{
+		DataSource:      datasource,
+		Columns:         columns,
+		HeaderWidgets:   headerWidgets,
+		PagingOverrides: pagingOverrides,
+		SelectionMode:   w.GetSelection(),
 	}
 
-	grid := &pages.CustomWidget{
-		BaseWidget: pages.BaseWidget{
-			BaseElement: model.BaseElement{
-				ID:       widgetID,
-				TypeName: "CustomWidgets$CustomWidget",
-			},
-			Name: w.Name,
-		},
-		Editable:          "Always",
-		RawType:           embeddedType,
-		RawObject:         updatedObject,
-		PropertyTypeIDMap: propertyTypeIDs,
-		ObjectTypeID:      embeddedObjectTypeID,
+	grid, err := pb.widgetBackend.BuildDataGrid2Widget(widgetID, w.Name, spec, pb.backend.Path())
+	if err != nil {
+		return nil, err
 	}
 
 	if err := pb.registerWidgetName(w.Name, grid.ID); err != nil {
@@ -190,7 +184,7 @@ func (pb *pageBuilder) buildDataGridV3(w *ast.WidgetV3) (*pages.CustomWidget, er
 func (pb *pageBuilder) buildDataGridColumnV3(w *ast.WidgetV3) (*pages.DataGridColumn, error) {
 	col := &pages.DataGridColumn{
 		BaseElement: model.BaseElement{
-			ID:       model.ID(mpr.GenerateID()),
+			ID:       model.ID(types.GenerateID()),
 			TypeName: "Forms$DataGridColumn",
 		},
 		Name:     w.Name,
@@ -206,7 +200,7 @@ func (pb *pageBuilder) buildDataGridColumnV3(w *ast.WidgetV3) (*pages.DataGridCo
 	if caption := w.GetCaption(); caption != "" {
 		col.Caption = &model.Text{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Texts$Text",
 			},
 			Translations: map[string]string{"en_US": caption},
@@ -220,7 +214,7 @@ func (pb *pageBuilder) buildListViewV3(w *ast.WidgetV3) (*pages.ListView, error)
 	lv := &pages.ListView{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$ListView",
 			},
 			Name: w.Name,
@@ -232,7 +226,7 @@ func (pb *pageBuilder) buildListViewV3(w *ast.WidgetV3) (*pages.ListView, error)
 	if ds := w.GetDataSource(); ds != nil {
 		dataSource, entityName, err := pb.buildDataSourceV3(ds)
 		if err != nil {
-			return nil, fmt.Errorf("failed to build datasource: %w", err)
+			return nil, mdlerrors.NewBackend("build datasource", err)
 		}
 		lv.DataSource = dataSource
 
@@ -268,7 +262,7 @@ func (pb *pageBuilder) buildTextBoxV3(w *ast.WidgetV3) (*pages.TextBox, error) {
 	tb := &pages.TextBox{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$TextBox",
 			},
 			Name: w.Name,
@@ -296,7 +290,7 @@ func (pb *pageBuilder) buildTextAreaV3(w *ast.WidgetV3) (*pages.TextArea, error)
 	ta := &pages.TextArea{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$TextArea",
 			},
 			Name: w.Name,
@@ -324,7 +318,7 @@ func (pb *pageBuilder) buildDatePickerV3(w *ast.WidgetV3) (*pages.DatePicker, er
 	dp := &pages.DatePicker{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$DatePicker",
 			},
 			Name: w.Name,
@@ -352,7 +346,7 @@ func (pb *pageBuilder) buildDropdownV3(w *ast.WidgetV3) (*pages.DropDown, error)
 	dd := &pages.DropDown{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$DropDown",
 			},
 			Name: w.Name,
@@ -380,7 +374,7 @@ func (pb *pageBuilder) buildCheckBoxV3(w *ast.WidgetV3) (*pages.CheckBox, error)
 	cb := &pages.CheckBox{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$CheckBox",
 			},
 			Name: w.Name,
@@ -409,7 +403,7 @@ func (pb *pageBuilder) buildRadioButtonsV3(w *ast.WidgetV3) (*pages.RadioButtons
 	rb := &pages.RadioButtons{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$RadioButtonGroup",
 			},
 			Name: w.Name,
@@ -433,7 +427,7 @@ func (pb *pageBuilder) buildTextWidgetV3(w *ast.WidgetV3) (*pages.Text, error) {
 	st := &pages.Text{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$Text",
 			},
 			Name: w.Name,
@@ -445,7 +439,7 @@ func (pb *pageBuilder) buildTextWidgetV3(w *ast.WidgetV3) (*pages.Text, error) {
 	if content := w.GetContent(); content != "" {
 		st.Caption = &model.Text{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Texts$Text",
 			},
 			Translations: map[string]string{"en_US": content},
@@ -468,7 +462,7 @@ func (pb *pageBuilder) buildDynamicTextV3(w *ast.WidgetV3) (*pages.DynamicText, 
 	dt := &pages.DynamicText{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$DynamicText",
 			},
 			Name: w.Name,
@@ -516,12 +510,12 @@ func (pb *pageBuilder) buildDynamicTextV3(w *ast.WidgetV3) (*pages.DynamicText, 
 
 	dt.Content = &pages.ClientTemplate{
 		BaseElement: model.BaseElement{
-			ID:       model.ID(mpr.GenerateID()),
+			ID:       model.ID(types.GenerateID()),
 			TypeName: "Forms$ClientTemplate",
 		},
 		Template: &model.Text{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Texts$Text",
 			},
 			Translations: map[string]string{"en_US": content},
@@ -532,7 +526,7 @@ func (pb *pageBuilder) buildDynamicTextV3(w *ast.WidgetV3) (*pages.DynamicText, 
 	for _, attrRef := range autoGeneratedParams {
 		param := &pages.ClientTemplateParameter{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$ClientTemplateParameter",
 			},
 		}
@@ -545,7 +539,7 @@ func (pb *pageBuilder) buildDynamicTextV3(w *ast.WidgetV3) (*pages.DynamicText, 
 		for _, p := range explicitParams {
 			param := &pages.ClientTemplateParameter{
 				BaseElement: model.BaseElement{
-					ID:       model.ID(mpr.GenerateID()),
+					ID:       model.ID(types.GenerateID()),
 					TypeName: "Forms$ClientTemplateParameter",
 				},
 			}
@@ -577,7 +571,7 @@ func (pb *pageBuilder) buildTitleV3(w *ast.WidgetV3) (*pages.Title, error) {
 	title := &pages.Title{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$Title",
 			},
 			Name: w.Name,
@@ -589,7 +583,7 @@ func (pb *pageBuilder) buildTitleV3(w *ast.WidgetV3) (*pages.Title, error) {
 	if content != "" {
 		title.Caption = &model.Text{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Texts$Text",
 			},
 			Translations: map[string]string{"en_US": content},
@@ -607,7 +601,7 @@ func (pb *pageBuilder) buildButtonV3(w *ast.WidgetV3) (*pages.ActionButton, erro
 	btn := &pages.ActionButton{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$ActionButton",
 			},
 			Name: w.Name,
@@ -619,12 +613,12 @@ func (pb *pageBuilder) buildButtonV3(w *ast.WidgetV3) (*pages.ActionButton, erro
 	if caption := w.GetCaption(); caption != "" {
 		btn.CaptionTemplate = &pages.ClientTemplate{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$ClientTemplate",
 			},
 			Template: &model.Text{
 				BaseElement: model.BaseElement{
-					ID:       model.ID(mpr.GenerateID()),
+					ID:       model.ID(types.GenerateID()),
 					TypeName: "Texts$Text",
 				},
 				Translations: map[string]string{"en_US": caption},
@@ -636,7 +630,7 @@ func (pb *pageBuilder) buildButtonV3(w *ast.WidgetV3) (*pages.ActionButton, erro
 			for _, p := range params {
 				param := &pages.ClientTemplateParameter{
 					BaseElement: model.BaseElement{
-						ID:       model.ID(mpr.GenerateID()),
+						ID:       model.ID(types.GenerateID()),
 						TypeName: "Forms$ClientTemplateParameter",
 					},
 				}
@@ -667,7 +661,7 @@ func (pb *pageBuilder) buildButtonV3(w *ast.WidgetV3) (*pages.ActionButton, erro
 	if action := w.GetAction(); action != nil {
 		act, err := pb.buildClientActionV3(action)
 		if err != nil {
-			return nil, fmt.Errorf("failed to build action: %w", err)
+			return nil, mdlerrors.NewBackend("build action", err)
 		}
 		btn.Action = act
 	}
@@ -684,7 +678,7 @@ func (pb *pageBuilder) buildNavigationListV3(w *ast.WidgetV3) (*pages.Navigation
 	navList := &pages.NavigationList{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$NavigationList",
 			},
 			Name: w.Name,
@@ -693,7 +687,7 @@ func (pb *pageBuilder) buildNavigationListV3(w *ast.WidgetV3) (*pages.Navigation
 
 	// Build items from children (ITEM widgets)
 	for _, child := range w.Children {
-		if strings.ToUpper(child.Type) == "ITEM" {
+		if strings.ToLower(child.Type) == "item" {
 			item, err := pb.buildNavigationListItemV3(child)
 			if err != nil {
 				return nil, err
@@ -712,12 +706,12 @@ func (pb *pageBuilder) buildNavigationListV3(w *ast.WidgetV3) (*pages.Navigation
 // buildNavigationListItemV3 creates a NavigationListItem from V3 syntax.
 func (pb *pageBuilder) buildNavigationListItemV3(w *ast.WidgetV3) (*pages.NavigationListItem, error) {
 	if w.Name == "" {
-		return nil, fmt.Errorf("ITEM inside NAVIGATIONLIST requires a name")
+		return nil, mdlerrors.NewValidation("item inside navigationlist requires a name")
 	}
 
 	item := &pages.NavigationListItem{
 		BaseElement: model.BaseElement{
-			ID:       model.ID(mpr.GenerateID()),
+			ID:       model.ID(types.GenerateID()),
 			TypeName: "Forms$NavigationListItem",
 		},
 		Name: w.Name,
@@ -731,7 +725,7 @@ func (pb *pageBuilder) buildNavigationListItemV3(w *ast.WidgetV3) (*pages.Naviga
 	if caption := w.GetCaption(); caption != "" {
 		item.Caption = &model.Text{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Texts$Text",
 			},
 			Translations: map[string]string{"en_US": caption},
@@ -764,7 +758,7 @@ func (pb *pageBuilder) buildSnippetCallV3(w *ast.WidgetV3) (*pages.SnippetCallWi
 	sc := &pages.SnippetCallWidget{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$SnippetCallWidget",
 			},
 			Name: w.Name,
@@ -775,7 +769,7 @@ func (pb *pageBuilder) buildSnippetCallV3(w *ast.WidgetV3) (*pages.SnippetCallWi
 	if snippetName := w.GetSnippet(); snippetName != "" {
 		snippetID, err := pb.resolveSnippetRef(snippetName)
 		if err != nil {
-			return nil, fmt.Errorf("failed to resolve snippet %s: %w", snippetName, err)
+			return nil, mdlerrors.NewBackend(fmt.Sprintf("resolve snippet %s", snippetName), err)
 		}
 		sc.SnippetID = snippetID
 		sc.SnippetName = snippetName // Store qualified name for BY_NAME_REFERENCE serialization
@@ -793,7 +787,7 @@ func (pb *pageBuilder) buildTemplateV3(w *ast.WidgetV3) (*pages.Container, error
 	container := &pages.Container{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$DivContainer",
 			},
 			Name: w.Name,
@@ -817,7 +811,7 @@ func (pb *pageBuilder) buildFilterV3(w *ast.WidgetV3) (*pages.Container, error) 
 	container := &pages.Container{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$DivContainer",
 			},
 			Name: w.Name,
@@ -840,7 +834,7 @@ func (pb *pageBuilder) buildStaticImageV3(w *ast.WidgetV3) (*pages.StaticImage, 
 	img := &pages.StaticImage{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$StaticImageViewer",
 			},
 			Name: w.Name,
@@ -866,7 +860,7 @@ func (pb *pageBuilder) buildDynamicImageV3(w *ast.WidgetV3) (*pages.DynamicImage
 	img := &pages.DynamicImage{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$ImageViewer",
 			},
 			Name: w.Name,
@@ -896,103 +890,4 @@ var dataGridPagingPropMap = map[string]string{
 	"ShowPagingButtons": "showPagingButtons",
 	// "ShowNumberOfRows" is defined in DataGrid2 type but not yet fully supported;
 	// setting it to a non-default value causes CE0463 "widget definition changed".
-}
-
-// applyDataGridPagingProps applies paging properties from the AST to the DataGrid2 BSON object.
-// It iterates through the object's Properties array, matching TypePointers to known paging
-// property keys, and replaces PrimitiveValue when a corresponding AST property is set.
-func (pb *pageBuilder) applyDataGridPagingProps(obj bson.D, propertyTypeIDs map[string]pages.PropertyTypeIDEntry, w *ast.WidgetV3) bson.D {
-	// Collect overrides: camelCase key -> string value
-	overrides := make(map[string]string)
-	for mdlKey, widgetKey := range dataGridPagingPropMap {
-		if v := w.GetStringProp(mdlKey); v != "" {
-			overrides[widgetKey] = v
-		} else if iv := w.GetIntProp(mdlKey); iv > 0 {
-			overrides[widgetKey] = fmt.Sprintf("%d", iv)
-		} else if bv, ok := w.Properties[mdlKey]; ok {
-			if boolVal, isBool := bv.(bool); isBool {
-				if boolVal {
-					overrides[widgetKey] = "yes"
-				} else {
-					overrides[widgetKey] = "no"
-				}
-			}
-		}
-	}
-	if len(overrides) == 0 {
-		return obj
-	}
-
-	// Build reverse map: TypePointer ID -> widget property key
-	typePointerToKey := make(map[string]string)
-	for widgetKey, entry := range propertyTypeIDs {
-		typePointerToKey[entry.PropertyTypeID] = widgetKey
-	}
-
-	// Walk the object and replace properties that have overrides
-	result := make(bson.D, 0, len(obj))
-	for _, elem := range obj {
-		if elem.Key == "Properties" {
-			if propsArr, ok := elem.Value.(bson.A); ok {
-				updatedProps := bson.A{propsArr[0]} // Keep version marker
-				for _, propVal := range propsArr[1:] {
-					propMap, ok := propVal.(bson.D)
-					if !ok {
-						updatedProps = append(updatedProps, propVal)
-						continue
-					}
-					tp := pb.getTypePointerFromProperty(propMap)
-					widgetKey := typePointerToKey[tp]
-					if newVal, hasOverride := overrides[widgetKey]; hasOverride {
-						updatedProps = append(updatedProps, pb.clonePropertyWithPrimitiveValue(propMap, newVal))
-					} else {
-						updatedProps = append(updatedProps, propMap)
-					}
-				}
-				result = append(result, bson.E{Key: "Properties", Value: updatedProps})
-			} else {
-				result = append(result, elem)
-			}
-		} else {
-			result = append(result, elem)
-		}
-	}
-	return result
-}
-
-// applyDataGridSelectionProp applies the Selection mode to a DataGrid2 object.
-// DataGrid2 uses the same "itemSelection" property key as Gallery.
-func (pb *pageBuilder) applyDataGridSelectionProp(obj bson.D, propertyTypeIDs map[string]pages.PropertyTypeIDEntry, selectionMode string) bson.D {
-	itemSelectionEntry, ok := propertyTypeIDs["itemSelection"]
-	if !ok {
-		return obj
-	}
-
-	result := make(bson.D, 0, len(obj))
-	for _, elem := range obj {
-		if elem.Key == "Properties" {
-			if propsArr, ok := elem.Value.(bson.A); ok {
-				updatedProps := bson.A{propsArr[0]} // Keep version marker
-				for _, propVal := range propsArr[1:] {
-					propMap, ok := propVal.(bson.D)
-					if !ok {
-						updatedProps = append(updatedProps, propVal)
-						continue
-					}
-					tp := pb.getTypePointerFromProperty(propMap)
-					if tp == itemSelectionEntry.PropertyTypeID {
-						updatedProps = append(updatedProps, pb.buildGallerySelectionProperty(propMap, selectionMode))
-					} else {
-						updatedProps = append(updatedProps, propMap)
-					}
-				}
-				result = append(result, bson.E{Key: "Properties", Value: updatedProps})
-			} else {
-				result = append(result, elem)
-			}
-		} else {
-			result = append(result, elem)
-		}
-	}
-	return result
 }

@@ -8,18 +8,19 @@ import (
 	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
 	"github.com/mendixlabs/mxcli/model"
 )
 
-// showSettings displays an overview table of all settings parts.
-func (e *Executor) showSettings() error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+// listSettings displays an overview table of all settings parts.
+func listSettings(ctx *ExecContext) error {
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
-	ps, err := e.reader.GetProjectSettings()
+	ps, err := ctx.Backend.GetProjectSettings()
 	if err != nil {
-		return fmt.Errorf("failed to read project settings: %w", err)
+		return mdlerrors.NewBackend("read project settings", err)
 	}
 
 	tr := &TableResult{
@@ -78,18 +79,18 @@ func (e *Executor) showSettings() error {
 		tr.Rows = append(tr.Rows, []any{"Web UI Settings", "OptimizedClient: " + ps.WebUI.UseOptimizedClient})
 	}
 
-	return e.writeResult(tr)
+	return writeResult(ctx, tr)
 }
 
 // describeSettings outputs the full MDL description of all settings.
-func (e *Executor) describeSettings() error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+func describeSettings(ctx *ExecContext) error {
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
-	ps, err := e.reader.GetProjectSettings()
+	ps, err := ctx.Backend.GetProjectSettings()
 	if err != nil {
-		return fmt.Errorf("failed to read project settings: %w", err)
+		return mdlerrors.NewBackend("read project settings", err)
 	}
 
 	// Model settings
@@ -113,7 +114,7 @@ func (e *Executor) describeSettings() error {
 		if ms.ScheduledEventTimeZoneCode != "" {
 			parts = append(parts, fmt.Sprintf("  ScheduledEventTimeZoneCode = '%s'", ms.ScheduledEventTimeZoneCode))
 		}
-		fmt.Fprintf(e.output, "ALTER SETTINGS MODEL\n%s;\n\n", strings.Join(parts, ",\n"))
+		fmt.Fprintf(ctx.Output, "alter settings model\n%s;\n\n", strings.Join(parts, ",\n"))
 	}
 
 	// Configuration settings
@@ -130,11 +131,11 @@ func (e *Executor) describeSettings() error {
 			if cfg.ApplicationRootUrl != "" {
 				parts = append(parts, fmt.Sprintf("  ApplicationRootUrl = '%s'", cfg.ApplicationRootUrl))
 			}
-			fmt.Fprintf(e.output, "ALTER SETTINGS CONFIGURATION '%s'\n%s;\n\n", cfg.Name, strings.Join(parts, ",\n"))
+			fmt.Fprintf(ctx.Output, "alter settings configuration '%s'\n%s;\n\n", cfg.Name, strings.Join(parts, ",\n"))
 
 			// Output constant overrides
 			for _, cv := range cfg.ConstantValues {
-				fmt.Fprintf(e.output, "ALTER SETTINGS CONSTANT '%s' VALUE '%s'\n  IN CONFIGURATION '%s';\n\n",
+				fmt.Fprintf(ctx.Output, "alter settings constant '%s' value '%s'\n  in configuration '%s';\n\n",
 					cv.ConstantId, cv.Value, cfg.Name)
 			}
 		}
@@ -142,7 +143,7 @@ func (e *Executor) describeSettings() error {
 
 	// Language settings
 	if ps.Language != nil {
-		fmt.Fprintf(e.output, "ALTER SETTINGS LANGUAGE\n  DefaultLanguageCode = '%s';\n\n", ps.Language.DefaultLanguageCode)
+		fmt.Fprintf(ctx.Output, "alter settings LANGUAGE\n  DefaultLanguageCode = '%s';\n\n", ps.Language.DefaultLanguageCode)
 	}
 
 	// Workflow settings
@@ -159,7 +160,7 @@ func (e *Executor) describeSettings() error {
 			parts = append(parts, fmt.Sprintf("  WorkflowEngineParallelism = %d", ws.WorkflowEngineParallelism))
 		}
 		if len(parts) > 0 {
-			fmt.Fprintf(e.output, "ALTER SETTINGS WORKFLOWS\n%s;\n\n", strings.Join(parts, ",\n"))
+			fmt.Fprintf(ctx.Output, "alter settings workflows\n%s;\n\n", strings.Join(parts, ",\n"))
 		}
 	}
 
@@ -167,21 +168,21 @@ func (e *Executor) describeSettings() error {
 }
 
 // alterSettings modifies project settings based on ALTER SETTINGS statement.
-func (e *Executor) alterSettings(stmt *ast.AlterSettingsStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project (read-only mode)")
+func alterSettings(ctx *ExecContext, stmt *ast.AlterSettingsStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	ps, err := e.reader.GetProjectSettings()
+	ps, err := ctx.Backend.GetProjectSettings()
 	if err != nil {
-		return fmt.Errorf("failed to read project settings: %w", err)
+		return mdlerrors.NewBackend("read project settings", err)
 	}
 
-	section := strings.ToUpper(stmt.Section)
+	section := strings.ToLower(stmt.Section)
 	switch section {
-	case "MODEL":
+	case "model":
 		if ps.Model == nil {
-			return fmt.Errorf("model settings not found in project")
+			return mdlerrors.NewNotFound("settings section", "model")
 		}
 		for key, val := range stmt.Properties {
 			valStr := settingsValueToString(val)
@@ -207,13 +208,13 @@ func (e *Executor) alterSettings(stmt *ast.AlterSettingsStmt) error {
 			case "ScheduledEventTimeZoneCode":
 				ps.Model.ScheduledEventTimeZoneCode = valStr
 			default:
-				return fmt.Errorf("unknown model setting: %s", key)
+				return mdlerrors.NewUnsupported("unknown model setting: " + key)
 			}
 		}
 
-	case "LANGUAGE":
+	case "language":
 		if ps.Language == nil {
-			return fmt.Errorf("language settings not found in project")
+			return mdlerrors.NewNotFound("settings section", "language")
 		}
 		for key, val := range stmt.Properties {
 			valStr := settingsValueToString(val)
@@ -221,13 +222,13 @@ func (e *Executor) alterSettings(stmt *ast.AlterSettingsStmt) error {
 			case "DefaultLanguageCode":
 				ps.Language.DefaultLanguageCode = valStr
 			default:
-				return fmt.Errorf("unknown language setting: %s", key)
+				return mdlerrors.NewUnsupported("unknown language setting: " + key)
 			}
 		}
 
-	case "WORKFLOWS":
+	case "workflows":
 		if ps.Workflows == nil {
-			return fmt.Errorf("workflow settings not found in project")
+			return mdlerrors.NewNotFound("settings section", "workflows")
 		}
 		for key, val := range stmt.Properties {
 			valStr := settingsValueToString(val)
@@ -243,32 +244,32 @@ func (e *Executor) alterSettings(stmt *ast.AlterSettingsStmt) error {
 					ps.Workflows.WorkflowEngineParallelism = v
 				}
 			default:
-				return fmt.Errorf("unknown workflow setting: %s", key)
+				return mdlerrors.NewUnsupported("unknown workflow setting: " + key)
 			}
 		}
 
-	case "CONFIGURATION":
-		return e.alterSettingsConfiguration(ps, stmt)
+	case "configuration":
+		return alterSettingsConfiguration(ctx, ps, stmt)
 
-	case "CONSTANT":
-		return e.alterSettingsConstant(ps, stmt)
+	case "constant":
+		return alterSettingsConstant(ctx, ps, stmt)
 
 	default:
-		return fmt.Errorf("unknown settings section: %s (expected MODEL, CONFIGURATION, CONSTANT, LANGUAGE, or WORKFLOWS)", section)
+		return mdlerrors.NewUnsupported(fmt.Sprintf("unknown settings section: %s (expected model, configuration, constant, LANGUAGE, or workflows)", section))
 	}
 
 	// Write updated settings
-	if err := e.writer.UpdateProjectSettings(ps); err != nil {
-		return fmt.Errorf("failed to update project settings: %w", err)
+	if err := ctx.Backend.UpdateProjectSettings(ps); err != nil {
+		return mdlerrors.NewBackend("update project settings", err)
 	}
 
-	fmt.Fprintf(e.output, "Updated %s settings\n", section)
+	fmt.Fprintf(ctx.Output, "Updated %s settings\n", section)
 	return nil
 }
 
-func (e *Executor) alterSettingsConfiguration(ps *model.ProjectSettings, stmt *ast.AlterSettingsStmt) error {
+func alterSettingsConfiguration(ctx *ExecContext, ps *model.ProjectSettings, stmt *ast.AlterSettingsStmt) error {
 	if ps.Configuration == nil {
-		return fmt.Errorf("configuration settings not found in project")
+		return mdlerrors.NewNotFound("settings section", "configuration")
 	}
 
 	// Find the named configuration
@@ -280,7 +281,7 @@ func (e *Executor) alterSettingsConfiguration(ps *model.ProjectSettings, stmt *a
 		}
 	}
 	if cfg == nil {
-		return fmt.Errorf("configuration not found: %s", stmt.ConfigName)
+		return mdlerrors.NewNotFound("configuration", stmt.ConfigName)
 	}
 
 	for key, val := range stmt.Properties {
@@ -307,21 +308,21 @@ func (e *Executor) alterSettingsConfiguration(ps *model.ProjectSettings, stmt *a
 		case "ApplicationRootUrl":
 			cfg.ApplicationRootUrl = valStr
 		default:
-			return fmt.Errorf("unknown configuration setting: %s", key)
+			return mdlerrors.NewUnsupported("unknown configuration setting: " + key)
 		}
 	}
 
-	if err := e.writer.UpdateProjectSettings(ps); err != nil {
-		return fmt.Errorf("failed to update project settings: %w", err)
+	if err := ctx.Backend.UpdateProjectSettings(ps); err != nil {
+		return mdlerrors.NewBackend("update project settings", err)
 	}
 
-	fmt.Fprintf(e.output, "Updated configuration '%s'\n", stmt.ConfigName)
+	fmt.Fprintf(ctx.Output, "Updated configuration '%s'\n", stmt.ConfigName)
 	return nil
 }
 
-func (e *Executor) alterSettingsConstant(ps *model.ProjectSettings, stmt *ast.AlterSettingsStmt) error {
+func alterSettingsConstant(ctx *ExecContext, ps *model.ProjectSettings, stmt *ast.AlterSettingsStmt) error {
 	if ps.Configuration == nil {
-		return fmt.Errorf("configuration settings not found in project")
+		return mdlerrors.NewNotFound("settings section", "configuration")
 	}
 
 	// Find the target configuration
@@ -331,7 +332,7 @@ func (e *Executor) alterSettingsConstant(ps *model.ProjectSettings, stmt *ast.Al
 		if len(ps.Configuration.Configurations) > 0 {
 			targetConfig = ps.Configuration.Configurations[0].Name
 		} else {
-			return fmt.Errorf("no configurations found")
+			return mdlerrors.NewValidation("no configurations found")
 		}
 	}
 
@@ -343,7 +344,7 @@ func (e *Executor) alterSettingsConstant(ps *model.ProjectSettings, stmt *ast.Al
 		}
 	}
 	if cfg == nil {
-		return fmt.Errorf("configuration not found: %s", targetConfig)
+		return mdlerrors.NewNotFound("configuration", targetConfig)
 	}
 
 	if stmt.DropConstant {
@@ -351,15 +352,15 @@ func (e *Executor) alterSettingsConstant(ps *model.ProjectSettings, stmt *ast.Al
 		for i, cv := range cfg.ConstantValues {
 			if cv.ConstantId == stmt.ConstantId {
 				cfg.ConstantValues = append(cfg.ConstantValues[:i], cfg.ConstantValues[i+1:]...)
-				if err := e.writer.UpdateProjectSettings(ps); err != nil {
-					return fmt.Errorf("failed to update project settings: %w", err)
+				if err := ctx.Backend.UpdateProjectSettings(ps); err != nil {
+					return mdlerrors.NewBackend("update project settings", err)
 				}
-				fmt.Fprintf(e.output, "Dropped constant '%s' from configuration '%s'\n",
+				fmt.Fprintf(ctx.Output, "Dropped constant '%s' from configuration '%s'\n",
 					stmt.ConstantId, targetConfig)
 				return nil
 			}
 		}
-		return fmt.Errorf("constant '%s' not found in configuration '%s'", stmt.ConstantId, targetConfig)
+		return mdlerrors.NewNotFoundMsg("constant", stmt.ConstantId, fmt.Sprintf("constant '%s' not found in configuration '%s'", stmt.ConstantId, targetConfig))
 	}
 
 	// Find or create the constant value
@@ -380,34 +381,34 @@ func (e *Executor) alterSettingsConstant(ps *model.ProjectSettings, stmt *ast.Al
 		cfg.ConstantValues = append(cfg.ConstantValues, cv)
 	}
 
-	if err := e.writer.UpdateProjectSettings(ps); err != nil {
-		return fmt.Errorf("failed to update project settings: %w", err)
+	if err := ctx.Backend.UpdateProjectSettings(ps); err != nil {
+		return mdlerrors.NewBackend("update project settings", err)
 	}
 
-	fmt.Fprintf(e.output, "Updated constant '%s' = '%s' in configuration '%s'\n",
+	fmt.Fprintf(ctx.Output, "Updated constant '%s' = '%s' in configuration '%s'\n",
 		stmt.ConstantId, stmt.Value, targetConfig)
 	return nil
 }
 
 // createConfiguration handles CREATE CONFIGURATION 'name' [properties...].
-func (e *Executor) createConfiguration(stmt *ast.CreateConfigurationStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected in write mode")
+func createConfiguration(ctx *ExecContext, stmt *ast.CreateConfigurationStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	ps, err := e.reader.GetProjectSettings()
+	ps, err := ctx.Backend.GetProjectSettings()
 	if err != nil {
-		return fmt.Errorf("failed to read project settings: %w", err)
+		return mdlerrors.NewBackend("read project settings", err)
 	}
 
 	if ps.Configuration == nil {
-		return fmt.Errorf("configuration settings not found in project")
+		return mdlerrors.NewNotFound("settings section", "configuration")
 	}
 
 	// Check if configuration already exists
 	for _, cfg := range ps.Configuration.Configurations {
 		if strings.EqualFold(cfg.Name, stmt.Name) {
-			return fmt.Errorf("configuration already exists: %s", stmt.Name)
+			return mdlerrors.NewAlreadyExists("configuration", stmt.Name)
 		}
 	}
 
@@ -444,33 +445,33 @@ func (e *Executor) createConfiguration(stmt *ast.CreateConfigurationStmt) error 
 		case "ApplicationRootUrl":
 			newCfg.ApplicationRootUrl = valStr
 		default:
-			return fmt.Errorf("unknown configuration property: %s", key)
+			return mdlerrors.NewUnsupported("unknown configuration property: " + key)
 		}
 	}
 
 	ps.Configuration.Configurations = append(ps.Configuration.Configurations, newCfg)
 
-	if err := e.writer.UpdateProjectSettings(ps); err != nil {
-		return fmt.Errorf("failed to update project settings: %w", err)
+	if err := ctx.Backend.UpdateProjectSettings(ps); err != nil {
+		return mdlerrors.NewBackend("update project settings", err)
 	}
 
-	fmt.Fprintf(e.output, "Created configuration: %s\n", stmt.Name)
+	fmt.Fprintf(ctx.Output, "Created configuration: %s\n", stmt.Name)
 	return nil
 }
 
 // dropConfiguration handles DROP CONFIGURATION 'name'.
-func (e *Executor) dropConfiguration(stmt *ast.DropConfigurationStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected in write mode")
+func dropConfiguration(ctx *ExecContext, stmt *ast.DropConfigurationStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	ps, err := e.reader.GetProjectSettings()
+	ps, err := ctx.Backend.GetProjectSettings()
 	if err != nil {
-		return fmt.Errorf("failed to read project settings: %w", err)
+		return mdlerrors.NewBackend("read project settings", err)
 	}
 
 	if ps.Configuration == nil {
-		return fmt.Errorf("configuration settings not found in project")
+		return mdlerrors.NewNotFound("settings section", "configuration")
 	}
 
 	for i, cfg := range ps.Configuration.Configurations {
@@ -479,15 +480,15 @@ func (e *Executor) dropConfiguration(stmt *ast.DropConfigurationStmt) error {
 				ps.Configuration.Configurations[:i],
 				ps.Configuration.Configurations[i+1:]...,
 			)
-			if err := e.writer.UpdateProjectSettings(ps); err != nil {
-				return fmt.Errorf("failed to update project settings: %w", err)
+			if err := ctx.Backend.UpdateProjectSettings(ps); err != nil {
+				return mdlerrors.NewBackend("update project settings", err)
 			}
-			fmt.Fprintf(e.output, "Dropped configuration: %s\n", stmt.Name)
+			fmt.Fprintf(ctx.Output, "Dropped configuration: %s\n", stmt.Name)
 			return nil
 		}
 	}
 
-	return fmt.Errorf("configuration not found: %s", stmt.Name)
+	return mdlerrors.NewNotFound("configuration", stmt.Name)
 }
 
 // settingsValueToString converts an AST settings value to string.

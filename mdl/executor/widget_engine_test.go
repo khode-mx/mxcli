@@ -8,15 +8,12 @@ import (
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
 	"github.com/mendixlabs/mxcli/model"
-	"github.com/mendixlabs/mxcli/sdk/mpr"
-	"github.com/mendixlabs/mxcli/sdk/pages"
-	"go.mongodb.org/mongo-driver/bson"
 )
 
 func TestWidgetDefinitionJSONRoundTrip(t *testing.T) {
 	original := WidgetDefinition{
 		WidgetID:        "com.mendix.widget.web.combobox.Combobox",
-		MDLName:         "COMBOBOX",
+		MDLName:         "combobox",
 		TemplateFile:    "combobox.json",
 		DefaultEditable: "Always",
 		PropertyMappings: []PropertyMapping{
@@ -24,7 +21,7 @@ func TestWidgetDefinitionJSONRoundTrip(t *testing.T) {
 			{PropertyKey: "optionsSourceType", Value: "enumeration", Operation: "primitive"},
 		},
 		ChildSlots: []ChildSlotMapping{
-			{PropertyKey: "content", MDLContainer: "TEMPLATE", Operation: "widgets"},
+			{PropertyKey: "content", MDLContainer: "template", Operation: "widgets"},
 		},
 		Modes: []WidgetMode{
 			{
@@ -36,7 +33,7 @@ func TestWidgetDefinitionJSONRoundTrip(t *testing.T) {
 					{PropertyKey: "optionsSourceType", Value: "association", Operation: "primitive"},
 				},
 				ChildSlots: []ChildSlotMapping{
-					{PropertyKey: "menuContent", MDLContainer: "MENU", Operation: "widgets"},
+					{PropertyKey: "menuContent", MDLContainer: "menu", Operation: "widgets"},
 				},
 			},
 		},
@@ -75,8 +72,8 @@ func TestWidgetDefinitionJSONRoundTrip(t *testing.T) {
 	if len(decoded.ChildSlots) != 1 {
 		t.Fatalf("ChildSlots count: got %d, want 1", len(decoded.ChildSlots))
 	}
-	if decoded.ChildSlots[0].MDLContainer != "TEMPLATE" {
-		t.Errorf("ChildSlots[0].MDLContainer: got %q, want %q", decoded.ChildSlots[0].MDLContainer, "TEMPLATE")
+	if decoded.ChildSlots[0].MDLContainer != "template" {
+		t.Errorf("ChildSlots[0].MDLContainer: got %q, want %q", decoded.ChildSlots[0].MDLContainer, "template")
 	}
 
 	// Verify modes
@@ -133,44 +130,20 @@ func TestWidgetDefinitionJSONOmitsEmptyOptionalFields(t *testing.T) {
 	}
 }
 
-func TestOperationRegistryLookupFound(t *testing.T) {
-	reg := NewOperationRegistry()
-
-	builtinOps := []string{"attribute", "association", "primitive", "selection", "datasource", "widgets"}
+func TestKnownOperationsSet(t *testing.T) {
+	reg, err := NewWidgetRegistry()
+	if err != nil {
+		t.Fatalf("NewWidgetRegistry() error: %v", err)
+	}
+	builtinOps := []string{"attribute", "association", "primitive", "selection", "datasource", "widgets", "expression", "texttemplate", "action", "attributeObjects"}
 	for _, name := range builtinOps {
-		fn := reg.Lookup(name)
-		if fn == nil {
-			t.Errorf("Lookup(%q) returned nil, want non-nil", name)
+		if !reg.knownOperations[name] {
+			t.Errorf("knownOperations[%q] = false, want true", name)
 		}
 	}
-}
 
-func TestOperationRegistryLookupNotFound(t *testing.T) {
-	reg := NewOperationRegistry()
-
-	fn := reg.Lookup("nonexistent")
-	if fn != nil {
-		t.Error("Lookup(\"nonexistent\") should return nil")
-	}
-}
-
-func TestOperationRegistryCustomRegistration(t *testing.T) {
-	reg := NewOperationRegistry()
-
-	called := false
-	reg.Register("custom", func(obj bson.D, propTypeIDs map[string]pages.PropertyTypeIDEntry, propertyKey string, ctx *BuildContext) bson.D {
-		called = true
-		return obj
-	})
-
-	fn := reg.Lookup("custom")
-	if fn == nil {
-		t.Fatal("Lookup(\"custom\") returned nil after Register")
-	}
-
-	fn(bson.D{}, nil, "test", &BuildContext{})
-	if !called {
-		t.Error("custom operation was not called")
+	if reg.knownOperations["nonexistent"] {
+		t.Error("knownOperations[\"nonexistent\"] should be false")
 	}
 }
 
@@ -179,9 +152,7 @@ func TestOperationRegistryCustomRegistration(t *testing.T) {
 // =============================================================================
 
 func TestEvaluateCondition(t *testing.T) {
-	engine := &PluggableWidgetEngine{
-		operations: NewOperationRegistry(),
-	}
+	engine := &PluggableWidgetEngine{}
 
 	tests := []struct {
 		name      string
@@ -247,28 +218,15 @@ func TestEvaluateCondition(t *testing.T) {
 	}
 }
 
-func TestEvaluateConditionUnknownReturnsFalse(t *testing.T) {
-	engine := &PluggableWidgetEngine{
-		operations: NewOperationRegistry(),
-	}
-
-	w := &ast.WidgetV3{Properties: map[string]any{}}
-	result := engine.evaluateCondition("typoCondition", w)
-
-	if result != false {
-		t.Errorf("expected false for unknown condition, got %v", result)
-	}
-}
-
 func TestSelectMappings_NoModes(t *testing.T) {
-	engine := &PluggableWidgetEngine{operations: NewOperationRegistry()}
+	engine := &PluggableWidgetEngine{}
 
 	def := &WidgetDefinition{
 		PropertyMappings: []PropertyMapping{
 			{PropertyKey: "attr", Source: "Attribute", Operation: "attribute"},
 		},
 		ChildSlots: []ChildSlotMapping{
-			{PropertyKey: "content", MDLContainer: "TEMPLATE", Operation: "widgets"},
+			{PropertyKey: "content", MDLContainer: "template", Operation: "widgets"},
 		},
 	}
 	w := &ast.WidgetV3{Properties: map[string]any{}}
@@ -286,7 +244,7 @@ func TestSelectMappings_NoModes(t *testing.T) {
 }
 
 func TestSelectMappings_WithModes(t *testing.T) {
-	engine := &PluggableWidgetEngine{operations: NewOperationRegistry()}
+	engine := &PluggableWidgetEngine{}
 
 	def := &WidgetDefinition{
 		Modes: []WidgetMode{
@@ -330,7 +288,7 @@ func TestSelectMappings_WithModes(t *testing.T) {
 }
 
 func TestResolveMapping_StaticValue(t *testing.T) {
-	engine := &PluggableWidgetEngine{operations: NewOperationRegistry()}
+	engine := &PluggableWidgetEngine{}
 
 	mapping := PropertyMapping{
 		PropertyKey: "optionsSourceType",
@@ -355,7 +313,6 @@ func TestResolveMapping_AttributeSource(t *testing.T) {
 		widgetScope:      map[string]model.ID{},
 	}
 	engine := &PluggableWidgetEngine{
-		operations:  NewOperationRegistry(),
 		pageBuilder: pb,
 	}
 
@@ -376,7 +333,7 @@ func TestResolveMapping_AttributeSource(t *testing.T) {
 }
 
 func TestResolveMapping_SelectionWithDefault(t *testing.T) {
-	engine := &PluggableWidgetEngine{operations: NewOperationRegistry()}
+	engine := &PluggableWidgetEngine{}
 
 	mapping := PropertyMapping{
 		PropertyKey: "itemSelection",
@@ -409,7 +366,7 @@ func TestResolveMapping_SelectionWithDefault(t *testing.T) {
 }
 
 func TestResolveMapping_GenericProp(t *testing.T) {
-	engine := &PluggableWidgetEngine{operations: NewOperationRegistry()}
+	engine := &PluggableWidgetEngine{}
 
 	mapping := PropertyMapping{
 		PropertyKey: "customProp",
@@ -428,7 +385,7 @@ func TestResolveMapping_GenericProp(t *testing.T) {
 }
 
 func TestResolveMapping_EmptySource(t *testing.T) {
-	engine := &PluggableWidgetEngine{operations: NewOperationRegistry()}
+	engine := &PluggableWidgetEngine{}
 
 	mapping := PropertyMapping{
 		PropertyKey: "someProp",
@@ -452,7 +409,6 @@ func TestResolveMapping_CaptionAttribute(t *testing.T) {
 		widgetScope:      map[string]model.ID{},
 	}
 	engine := &PluggableWidgetEngine{
-		operations:  NewOperationRegistry(),
 		pageBuilder: pb,
 	}
 
@@ -479,7 +435,6 @@ func TestResolveMapping_Association(t *testing.T) {
 		widgetScope:      map[string]model.ID{},
 	}
 	engine := &PluggableWidgetEngine{
-		operations:  NewOperationRegistry(),
 		pageBuilder: pb,
 	}
 
@@ -499,112 +454,5 @@ func TestResolveMapping_Association(t *testing.T) {
 	}
 	if ctx.EntityName != "Module.Order" {
 		t.Errorf("expected EntityName='Module.Order', got %q", ctx.EntityName)
-	}
-}
-
-func TestSetChildWidgets(t *testing.T) {
-	val := bson.D{
-		{Key: "PrimitiveValue", Value: ""},
-		{Key: "Widgets", Value: bson.A{int32(2)}},
-		{Key: "XPathConstraint", Value: ""},
-	}
-
-	childWidgets := []bson.D{
-		{{Key: "$Type", Value: "Forms$TextBox"}, {Key: "Name", Value: "textBox1"}},
-		{{Key: "$Type", Value: "Forms$TextBox"}, {Key: "Name", Value: "textBox2"}},
-	}
-
-	updated := setChildWidgets(val, childWidgets)
-
-	// Find Widgets field
-	for _, elem := range updated {
-		if elem.Key == "Widgets" {
-			arr, ok := elem.Value.(bson.A)
-			if !ok {
-				t.Fatal("Widgets value is not bson.A")
-			}
-			// Should have version marker + 2 widgets
-			if len(arr) != 3 {
-				t.Errorf("Widgets array length: got %d, want 3", len(arr))
-			}
-			// First element should be version marker
-			if marker, ok := arr[0].(int32); !ok || marker != 2 {
-				t.Errorf("Widgets[0]: got %v, want int32(2)", arr[0])
-			}
-			return
-		}
-	}
-	t.Error("Widgets field not found in result")
-}
-
-func TestOpSelection(t *testing.T) {
-	// Call the real opSelection function with a properly structured widget BSON.
-	typePointerBytes := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
-	typePointerUUID := mpr.BlobToUUID(typePointerBytes)
-
-	widgetObj := bson.D{
-		{Key: "Properties", Value: bson.A{
-			int32(2), // version marker
-			bson.D{
-				{Key: "TypePointer", Value: typePointerBytes},
-				{Key: "Value", Value: bson.D{
-					{Key: "PrimitiveValue", Value: ""},
-					{Key: "Selection", Value: "None"},
-				}},
-			},
-		}},
-	}
-
-	propTypeIDs := map[string]pages.PropertyTypeIDEntry{
-		"selectionType": {PropertyTypeID: typePointerUUID},
-	}
-
-	ctx := &BuildContext{PrimitiveVal: "Multi"}
-	result := opSelection(widgetObj, propTypeIDs, "selectionType", ctx)
-
-	// Extract the updated Value from Properties
-	var props bson.A
-	for _, elem := range result {
-		if elem.Key == "Properties" {
-			props = elem.Value.(bson.A)
-		}
-	}
-	prop := props[1].(bson.D) // skip version marker at index 0
-	var val bson.D
-	for _, elem := range prop {
-		if elem.Key == "Value" {
-			val = elem.Value.(bson.D)
-		}
-	}
-
-	selectionFound := false
-	for _, elem := range val {
-		if elem.Key == "Selection" {
-			selectionFound = true
-			if elem.Value != "Multi" {
-				t.Errorf("Selection: got %q, want %q", elem.Value, "Multi")
-			}
-		}
-		if elem.Key == "PrimitiveValue" {
-			if elem.Value != "" {
-				t.Errorf("PrimitiveValue should remain empty, got %q", elem.Value)
-			}
-		}
-	}
-	if !selectionFound {
-		t.Error("Selection field not found in result")
-	}
-}
-
-func TestOpSelectionEmptyValue(t *testing.T) {
-	widgetObj := bson.D{
-		{Key: "Properties", Value: bson.A{int32(2)}},
-	}
-	ctx := &BuildContext{PrimitiveVal: ""}
-	result := opSelection(widgetObj, nil, "any", ctx)
-
-	// With empty PrimitiveVal, opSelection returns obj unchanged
-	if len(result) != len(widgetObj) {
-		t.Errorf("expected unchanged obj, got different length: %d vs %d", len(result), len(widgetObj))
 	}
 }

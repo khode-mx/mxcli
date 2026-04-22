@@ -4,26 +4,29 @@ package executor
 
 import (
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	"github.com/mendixlabs/mxcli/mdl/backend"
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
+	"github.com/mendixlabs/mxcli/mdl/types"
 	"github.com/mendixlabs/mxcli/model"
-	"github.com/mendixlabs/mxcli/sdk/mpr"
 )
 
-// showExportMappings prints a table of all export mapping documents.
-func (e *Executor) showExportMappings(inModule string) error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+// listExportMappings prints a table of all export mapping documents.
+func listExportMappings(ctx *ExecContext, inModule string) error {
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
-	all, err := e.reader.ListExportMappings()
+	all, err := ctx.Backend.ListExportMappings()
 	if err != nil {
-		return fmt.Errorf("failed to list export mappings: %w", err)
+		return mdlerrors.NewBackend("list export mappings", err)
 	}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
 		return err
 	}
@@ -56,9 +59,9 @@ func (e *Executor) showExportMappings(inModule string) error {
 
 	if len(rows) == 0 {
 		if inModule != "" {
-			fmt.Fprintf(e.output, "No export mappings found in module %s\n", inModule)
+			fmt.Fprintf(ctx.Output, "No export mappings found in module %s\n", inModule)
 		} else {
-			fmt.Fprintln(e.output, "No export mappings found")
+			fmt.Fprintln(ctx.Output, "No export mappings found")
 		}
 		return nil
 	}
@@ -72,55 +75,58 @@ func (e *Executor) showExportMappings(inModule string) error {
 	for _, r := range rows {
 		result.Rows = append(result.Rows, []any{r.qualifiedName, r.name, r.schemaSource, r.elementCount})
 	}
-	return e.writeResult(result)
+	return writeResult(ctx, result)
 }
 
 // describeExportMapping prints the MDL representation of an export mapping.
-func (e *Executor) describeExportMapping(name ast.QualifiedName) error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+func describeExportMapping(ctx *ExecContext, name ast.QualifiedName) error {
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
-	em, err := e.reader.GetExportMappingByQualifiedName(name.Module, name.Name)
+	em, err := ctx.Backend.GetExportMappingByQualifiedName(name.Module, name.Name)
 	if err != nil {
-		return fmt.Errorf("export mapping %s not found", name)
+		if strings.Contains(err.Error(), "not found") {
+			return mdlerrors.NewNotFound("export mapping", name.String())
+		}
+		return mdlerrors.NewBackend("get export mapping", err)
 	}
 
 	if em.Documentation != "" {
-		fmt.Fprintf(e.output, "/**\n * %s\n */\n", strings.ReplaceAll(em.Documentation, "\n", "\n * "))
+		fmt.Fprintf(ctx.Output, "/**\n * %s\n */\n", strings.ReplaceAll(em.Documentation, "\n", "\n * "))
 	}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
 		return err
 	}
 	modID := h.FindModuleID(em.ContainerID)
 	moduleName := h.GetModuleName(modID)
 
-	fmt.Fprintf(e.output, "CREATE EXPORT MAPPING %s.%s\n", moduleName, em.Name)
+	fmt.Fprintf(ctx.Output, "create export mapping %s.%s\n", moduleName, em.Name)
 
 	if em.JsonStructure != "" {
-		fmt.Fprintf(e.output, "  WITH JSON STRUCTURE %s\n", em.JsonStructure)
+		fmt.Fprintf(ctx.Output, "  with json structure %s\n", em.JsonStructure)
 	} else if em.XmlSchema != "" {
-		fmt.Fprintf(e.output, "  WITH XML SCHEMA %s\n", em.XmlSchema)
+		fmt.Fprintf(ctx.Output, "  with xml schema %s\n", em.XmlSchema)
 	}
 
 	if em.NullValueOption != "" && em.NullValueOption != "LeaveOutElement" {
-		fmt.Fprintf(e.output, "  NULL VALUES %s\n", em.NullValueOption)
+		fmt.Fprintf(ctx.Output, "  null values %s\n", em.NullValueOption)
 	}
 
 	if len(em.Elements) > 0 {
-		fmt.Fprintln(e.output, "{")
+		fmt.Fprintln(ctx.Output, "{")
 		for _, elem := range em.Elements {
-			printExportMappingElement(e, elem, 1, true)
-			fmt.Fprintln(e.output)
+			printExportMappingElement(ctx.Output, elem, 1, true)
+			fmt.Fprintln(ctx.Output)
 		}
-		fmt.Fprintln(e.output, "};")
+		fmt.Fprintln(ctx.Output, "};")
 	}
 	return nil
 }
 
-func printExportMappingElement(e *Executor, elem *model.ExportMappingElement, depth int, isRoot bool) {
+func printExportMappingElement(w io.Writer, elem *model.ExportMappingElement, depth int, isRoot bool) {
 	indent := strings.Repeat("  ", depth)
 	if elem.Kind == "Object" {
 		if isRoot {
@@ -129,7 +135,7 @@ func printExportMappingElement(e *Executor, elem *model.ExportMappingElement, de
 			if entity == "" {
 				entity = "."
 			}
-			fmt.Fprintf(e.output, "%s%s {\n", indent, entity)
+			fmt.Fprintf(w, "%s%s {\n", indent, entity)
 		} else {
 			// Nested object element. Several cases:
 			//   Assoc/Entity AS jsonKey  — normal association path
@@ -138,26 +144,26 @@ func printExportMappingElement(e *Executor, elem *model.ExportMappingElement, de
 			assoc := elem.Association
 			entity := elem.Entity
 			if assoc == "" && entity == "" {
-				fmt.Fprintf(e.output, "%s. AS %s", indent, elem.ExposedName)
+				fmt.Fprintf(w, "%s. as %s", indent, elem.ExposedName)
 			} else if assoc == "" {
-				fmt.Fprintf(e.output, "%s./%s AS %s", indent, entity, elem.ExposedName)
+				fmt.Fprintf(w, "%s./%s as %s", indent, entity, elem.ExposedName)
 			} else {
-				fmt.Fprintf(e.output, "%s%s/%s AS %s", indent, assoc, entity, elem.ExposedName)
+				fmt.Fprintf(w, "%s%s/%s as %s", indent, assoc, entity, elem.ExposedName)
 			}
 			if len(elem.Children) > 0 {
-				fmt.Fprintln(e.output, " {")
+				fmt.Fprintln(w, " {")
 			}
 		}
 		if len(elem.Children) > 0 {
 			for i, child := range elem.Children {
-				printExportMappingElement(e, child, depth+1, false)
+				printExportMappingElement(w, child, depth+1, false)
 				if i < len(elem.Children)-1 {
-					fmt.Fprintln(e.output, ",")
+					fmt.Fprintln(w, ",")
 				} else {
-					fmt.Fprintln(e.output)
+					fmt.Fprintln(w)
 				}
 			}
-			fmt.Fprintf(e.output, "%s}", indent)
+			fmt.Fprintf(w, "%s}", indent)
 		}
 	} else {
 		// Value mapping: jsonField = Attr
@@ -166,19 +172,19 @@ func printExportMappingElement(e *Executor, elem *model.ExportMappingElement, de
 		if parts := strings.Split(attrName, "."); len(parts) == 3 {
 			attrName = parts[2]
 		}
-		fmt.Fprintf(e.output, "%s%s = %s", indent, elem.ExposedName, attrName)
+		fmt.Fprintf(w, "%s%s = %s", indent, elem.ExposedName, attrName)
 	}
 }
 
 // execCreateExportMapping creates a new export mapping.
-func (e *Executor) execCreateExportMapping(s *ast.CreateExportMappingStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project in write mode")
+func execCreateExportMapping(ctx *ExecContext, s *ast.CreateExportMappingStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	module, err := e.findModule(s.Name.Module)
+	module, err := findModule(ctx, s.Name.Module)
 	if err != nil {
-		return fmt.Errorf("module %s not found", s.Name.Module)
+		return mdlerrors.NewNotFound("module", s.Name.Module)
 	}
 	containerID := module.ID
 
@@ -201,35 +207,35 @@ func (e *Executor) execCreateExportMapping(s *ast.CreateExportMappingStmt) error
 	}
 
 	// Build a path→element info map from the JSON structure for schema alignment.
-	jsElems := map[string]*mpr.JsonElement{}
+	jsElems := map[string]*types.JsonElement{}
 	if s.SchemaKind == "JSON_STRUCTURE" && s.SchemaRef.Module != "" {
-		if js, err2 := e.reader.GetJsonStructureByQualifiedName(s.SchemaRef.Module, s.SchemaRef.Name); err2 == nil {
+		if js, err2 := ctx.Backend.GetJsonStructureByQualifiedName(s.SchemaRef.Module, s.SchemaRef.Name); err2 == nil {
 			buildJsonElementPathMap(js.Elements, jsElems)
 		}
 	}
 
 	// Build element tree from the AST definition, cloning JSON structure properties
 	if s.RootElement != nil {
-		root := buildExportMappingElementModel(s.Name.Module, s.RootElement, "", "(Object)", jsElems, e.reader, true)
+		root := buildExportMappingElementModel(s.Name.Module, s.RootElement, "", "(Object)", jsElems, ctx.Backend, true)
 		em.Elements = append(em.Elements, root)
 	}
 
-	if err := e.writer.CreateExportMapping(em); err != nil {
-		return fmt.Errorf("failed to create export mapping: %w", err)
+	if err := ctx.Backend.CreateExportMapping(em); err != nil {
+		return mdlerrors.NewBackend("create export mapping", err)
 	}
 
-	if !e.quiet {
-		fmt.Fprintf(e.output, "Created export mapping %s.%s\n", s.Name.Module, s.Name.Name)
+	if !ctx.Quiet {
+		fmt.Fprintf(ctx.Output, "Created export mapping %s.%s\n", s.Name.Module, s.Name.Name)
 	}
 	return nil
 }
 
 // buildExportMappingElementModel converts an AST element definition to a model element.
 // It clones properties from the matching JSON structure element and adds mapping bindings.
-func buildExportMappingElementModel(moduleName string, def *ast.ExportMappingElementDef, parentEntity, parentPath string, jsElems map[string]*mpr.JsonElement, reader *mpr.Reader, isRoot bool) *model.ExportMappingElement {
+func buildExportMappingElementModel(moduleName string, def *ast.ExportMappingElementDef, parentEntity, parentPath string, jsElems map[string]*types.JsonElement, b backend.FullBackend, isRoot bool) *model.ExportMappingElement {
 	elem := &model.ExportMappingElement{
 		BaseElement: model.BaseElement{
-			ID: model.ID(mpr.GenerateID()),
+			ID: model.ID(types.GenerateID()),
 		},
 	}
 
@@ -301,7 +307,7 @@ func buildExportMappingElementModel(moduleName string, def *ast.ExportMappingEle
 
 				itemElem := &model.ExportMappingElement{
 					BaseElement: model.BaseElement{
-						ID:       model.ID(mpr.GenerateID()),
+						ID:       model.ID(types.GenerateID()),
 						TypeName: "ExportMappings$ObjectMappingElement",
 					},
 					Kind:           "Object",
@@ -320,13 +326,13 @@ func buildExportMappingElementModel(moduleName string, def *ast.ExportMappingEle
 				}
 				// Item's children are the value elements
 				for _, valChild := range itemDef.Children {
-					itemElem.Children = append(itemElem.Children, buildExportMappingElementModel(moduleName, valChild, itemEntity, itemPath, jsElems, reader, false))
+					itemElem.Children = append(itemElem.Children, buildExportMappingElementModel(moduleName, valChild, itemEntity, itemPath, jsElems, b, false))
 				}
 				elem.Children = append(elem.Children, itemElem)
 			} else {
 				// Fallback: treat children as direct item children (no intermediate entity)
 				for _, child := range def.Children {
-					elem.Children = append(elem.Children, buildExportMappingElementModel(moduleName, child, entity, itemPath, jsElems, reader, false))
+					elem.Children = append(elem.Children, buildExportMappingElementModel(moduleName, child, entity, itemPath, jsElems, b, false))
 				}
 			}
 		} else {
@@ -335,14 +341,14 @@ func buildExportMappingElementModel(moduleName string, def *ast.ExportMappingEle
 			elem.Association = assoc
 			elem.ObjectHandling = handling
 			for _, child := range def.Children {
-				elem.Children = append(elem.Children, buildExportMappingElementModel(moduleName, child, entity, lookupPath, jsElems, reader, false))
+				elem.Children = append(elem.Children, buildExportMappingElementModel(moduleName, child, entity, lookupPath, jsElems, b, false))
 			}
 		}
 	} else {
 		// Value mapping — bind to attribute
 		elem.Kind = "Value"
 		elem.TypeName = "ExportMappings$ValueMappingElement"
-		elem.DataType = resolveAttributeType(parentEntity, def.Attribute, reader)
+		elem.DataType = resolveAttributeType(parentEntity, def.Attribute, b)
 		attr := def.Attribute
 		if parentEntity != "" && !strings.Contains(attr, ".") {
 			attr = parentEntity + "." + attr
@@ -355,22 +361,25 @@ func buildExportMappingElementModel(moduleName string, def *ast.ExportMappingEle
 }
 
 // execDropExportMapping deletes an export mapping.
-func (e *Executor) execDropExportMapping(s *ast.DropExportMappingStmt) error {
-	if e.writer == nil {
-		return fmt.Errorf("not connected to a project in write mode")
+func execDropExportMapping(ctx *ExecContext, s *ast.DropExportMappingStmt) error {
+	if !ctx.ConnectedForWrite() {
+		return mdlerrors.NewNotConnectedWrite()
 	}
 
-	em, err := e.reader.GetExportMappingByQualifiedName(s.Name.Module, s.Name.Name)
+	em, err := ctx.Backend.GetExportMappingByQualifiedName(s.Name.Module, s.Name.Name)
 	if err != nil {
-		return fmt.Errorf("export mapping %s not found", s.Name)
+		if strings.Contains(err.Error(), "not found") {
+			return mdlerrors.NewNotFound("export mapping", s.Name.String())
+		}
+		return mdlerrors.NewBackend("get export mapping", err)
 	}
 
-	if err := e.writer.DeleteExportMapping(em.ID); err != nil {
-		return fmt.Errorf("failed to drop export mapping: %w", err)
+	if err := ctx.Backend.DeleteExportMapping(em.ID); err != nil {
+		return mdlerrors.NewBackend("drop export mapping", err)
 	}
 
-	if !e.quiet {
-		fmt.Fprintf(e.output, "Dropped export mapping %s.%s\n", s.Name.Module, s.Name.Name)
+	if !ctx.Quiet {
+		fmt.Fprintf(ctx.Output, "Dropped export mapping %s.%s\n", s.Name.Module, s.Name.Name)
 	}
 	return nil
 }

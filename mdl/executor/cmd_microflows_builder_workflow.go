@@ -4,9 +4,9 @@ package executor
 
 import (
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	"github.com/mendixlabs/mxcli/mdl/types"
 	"github.com/mendixlabs/mxcli/model"
 	"github.com/mendixlabs/mxcli/sdk/microflows"
-	"github.com/mendixlabs/mxcli/sdk/mpr"
 )
 
 // wrapAction wraps a MicroflowAction in an ActionActivity with standard positioning.
@@ -15,7 +15,7 @@ func (fb *flowBuilder) wrapAction(action microflows.MicroflowAction, errorHandli
 	activity := &microflows.ActionActivity{
 		BaseActivity: microflows.BaseActivity{
 			BaseMicroflowObject: microflows.BaseMicroflowObject{
-				BaseElement: model.BaseElement{ID: model.ID(mpr.GenerateID())},
+				BaseElement: model.BaseElement{ID: model.ID(types.GenerateID())},
 				Position:    model.Point{X: fb.posX, Y: fb.posY},
 				Size:        model.Size{Width: ActivityWidth, Height: ActivityHeight},
 			},
@@ -46,7 +46,7 @@ func (fb *flowBuilder) addCallWorkflowAction(s *ast.CallWorkflowStmt) model.ID {
 	}
 
 	action := &microflows.WorkflowCallAction{
-		BaseElement:             model.BaseElement{ID: model.ID(mpr.GenerateID())},
+		BaseElement:             model.BaseElement{ID: model.ID(types.GenerateID())},
 		ErrorHandlingType:       convertErrorHandlingType(s.ErrorHandling),
 		Workflow:                wfQN,
 		WorkflowContextVariable: ctxVar,
@@ -58,7 +58,7 @@ func (fb *flowBuilder) addCallWorkflowAction(s *ast.CallWorkflowStmt) model.ID {
 
 func (fb *flowBuilder) addGetWorkflowDataAction(s *ast.GetWorkflowDataStmt) model.ID {
 	action := &microflows.GetWorkflowDataAction{
-		BaseElement:        model.BaseElement{ID: model.ID(mpr.GenerateID())},
+		BaseElement:        model.BaseElement{ID: model.ID(types.GenerateID())},
 		ErrorHandlingType:  convertErrorHandlingType(s.ErrorHandling),
 		OutputVariableName: s.OutputVariable,
 		Workflow:           s.Workflow.Module + "." + s.Workflow.Name,
@@ -69,7 +69,7 @@ func (fb *flowBuilder) addGetWorkflowDataAction(s *ast.GetWorkflowDataStmt) mode
 
 func (fb *flowBuilder) addGetWorkflowsAction(s *ast.GetWorkflowsStmt) model.ID {
 	action := &microflows.GetWorkflowsAction{
-		BaseElement:                 model.BaseElement{ID: model.ID(mpr.GenerateID())},
+		BaseElement:                 model.BaseElement{ID: model.ID(types.GenerateID())},
 		ErrorHandlingType:           convertErrorHandlingType(s.ErrorHandling),
 		OutputVariableName:          s.OutputVariable,
 		WorkflowContextVariableName: s.WorkflowContextVariableName,
@@ -79,7 +79,7 @@ func (fb *flowBuilder) addGetWorkflowsAction(s *ast.GetWorkflowsStmt) model.ID {
 
 func (fb *flowBuilder) addGetWorkflowActivityRecordsAction(s *ast.GetWorkflowActivityRecordsStmt) model.ID {
 	action := &microflows.GetWorkflowActivityRecordsAction{
-		BaseElement:        model.BaseElement{ID: model.ID(mpr.GenerateID())},
+		BaseElement:        model.BaseElement{ID: model.ID(types.GenerateID())},
 		ErrorHandlingType:  convertErrorHandlingType(s.ErrorHandling),
 		OutputVariableName: s.OutputVariable,
 		WorkflowVariable:   s.WorkflowVariable,
@@ -90,45 +90,45 @@ func (fb *flowBuilder) addGetWorkflowActivityRecordsAction(s *ast.GetWorkflowAct
 func (fb *flowBuilder) addWorkflowOperationAction(s *ast.WorkflowOperationStmt) model.ID {
 	var op microflows.WorkflowOperation
 	switch s.OperationType {
-	case "ABORT":
+	case "abort":
 		reason := ""
 		if s.Reason != nil {
 			reason = fb.exprToString(s.Reason)
 		}
 		op = &microflows.AbortOperation{
-			BaseElement:      model.BaseElement{ID: model.ID(mpr.GenerateID())},
+			BaseElement:      model.BaseElement{ID: model.ID(types.GenerateID())},
 			Reason:           reason,
 			WorkflowVariable: s.WorkflowVariable,
 		}
-	case "CONTINUE":
+	case "continue":
 		op = &microflows.ContinueOperation{
-			BaseElement:      model.BaseElement{ID: model.ID(mpr.GenerateID())},
+			BaseElement:      model.BaseElement{ID: model.ID(types.GenerateID())},
 			WorkflowVariable: s.WorkflowVariable,
 		}
-	case "PAUSE":
+	case "pause":
 		op = &microflows.PauseOperation{
-			BaseElement:      model.BaseElement{ID: model.ID(mpr.GenerateID())},
+			BaseElement:      model.BaseElement{ID: model.ID(types.GenerateID())},
 			WorkflowVariable: s.WorkflowVariable,
 		}
-	case "RESTART":
+	case "restart":
 		op = &microflows.RestartOperation{
-			BaseElement:      model.BaseElement{ID: model.ID(mpr.GenerateID())},
+			BaseElement:      model.BaseElement{ID: model.ID(types.GenerateID())},
 			WorkflowVariable: s.WorkflowVariable,
 		}
-	case "RETRY":
+	case "retry":
 		op = &microflows.RetryOperation{
-			BaseElement:      model.BaseElement{ID: model.ID(mpr.GenerateID())},
+			BaseElement:      model.BaseElement{ID: model.ID(types.GenerateID())},
 			WorkflowVariable: s.WorkflowVariable,
 		}
-	case "UNPAUSE":
+	case "unpause":
 		op = &microflows.UnpauseOperation{
-			BaseElement:      model.BaseElement{ID: model.ID(mpr.GenerateID())},
+			BaseElement:      model.BaseElement{ID: model.ID(types.GenerateID())},
 			WorkflowVariable: s.WorkflowVariable,
 		}
 	}
 
 	action := &microflows.WorkflowOperationAction{
-		BaseElement:       model.BaseElement{ID: model.ID(mpr.GenerateID())},
+		BaseElement:       model.BaseElement{ID: model.ID(types.GenerateID())},
 		ErrorHandlingType: convertErrorHandlingType(s.ErrorHandling),
 		Operation:         op,
 	}
@@ -137,7 +137,7 @@ func (fb *flowBuilder) addWorkflowOperationAction(s *ast.WorkflowOperationStmt) 
 
 func (fb *flowBuilder) addSetTaskOutcomeAction(s *ast.SetTaskOutcomeStmt) model.ID {
 	action := &microflows.SetTaskOutcomeAction{
-		BaseElement:          model.BaseElement{ID: model.ID(mpr.GenerateID())},
+		BaseElement:          model.BaseElement{ID: model.ID(types.GenerateID())},
 		ErrorHandlingType:    convertErrorHandlingType(s.ErrorHandling),
 		OutcomeValue:         s.OutcomeValue,
 		WorkflowTaskVariable: s.WorkflowTaskVariable,
@@ -147,7 +147,7 @@ func (fb *flowBuilder) addSetTaskOutcomeAction(s *ast.SetTaskOutcomeStmt) model.
 
 func (fb *flowBuilder) addOpenUserTaskAction(s *ast.OpenUserTaskStmt) model.ID {
 	action := &microflows.OpenUserTaskAction{
-		BaseElement:       model.BaseElement{ID: model.ID(mpr.GenerateID())},
+		BaseElement:       model.BaseElement{ID: model.ID(types.GenerateID())},
 		ErrorHandlingType: convertErrorHandlingType(s.ErrorHandling),
 		UserTaskVariable:  s.UserTaskVariable,
 	}
@@ -156,7 +156,7 @@ func (fb *flowBuilder) addOpenUserTaskAction(s *ast.OpenUserTaskStmt) model.ID {
 
 func (fb *flowBuilder) addNotifyWorkflowAction(s *ast.NotifyWorkflowStmt) model.ID {
 	action := &microflows.NotifyWorkflowAction{
-		BaseElement:        model.BaseElement{ID: model.ID(mpr.GenerateID())},
+		BaseElement:        model.BaseElement{ID: model.ID(types.GenerateID())},
 		ErrorHandlingType:  convertErrorHandlingType(s.ErrorHandling),
 		OutputVariableName: s.OutputVariable,
 		WorkflowVariable:   s.WorkflowVariable,
@@ -166,7 +166,7 @@ func (fb *flowBuilder) addNotifyWorkflowAction(s *ast.NotifyWorkflowStmt) model.
 
 func (fb *flowBuilder) addOpenWorkflowAction(s *ast.OpenWorkflowStmt) model.ID {
 	action := &microflows.OpenWorkflowAction{
-		BaseElement:       model.BaseElement{ID: model.ID(mpr.GenerateID())},
+		BaseElement:       model.BaseElement{ID: model.ID(types.GenerateID())},
 		ErrorHandlingType: convertErrorHandlingType(s.ErrorHandling),
 		WorkflowVariable:  s.WorkflowVariable,
 	}
@@ -175,7 +175,7 @@ func (fb *flowBuilder) addOpenWorkflowAction(s *ast.OpenWorkflowStmt) model.ID {
 
 func (fb *flowBuilder) addLockWorkflowAction(s *ast.LockWorkflowStmt) model.ID {
 	action := &microflows.LockWorkflowAction{
-		BaseElement:       model.BaseElement{ID: model.ID(mpr.GenerateID())},
+		BaseElement:       model.BaseElement{ID: model.ID(types.GenerateID())},
 		ErrorHandlingType: convertErrorHandlingType(s.ErrorHandling),
 		PauseAllWorkflows: s.PauseAllWorkflows,
 		WorkflowVariable:  s.WorkflowVariable,
@@ -185,7 +185,7 @@ func (fb *flowBuilder) addLockWorkflowAction(s *ast.LockWorkflowStmt) model.ID {
 
 func (fb *flowBuilder) addUnlockWorkflowAction(s *ast.UnlockWorkflowStmt) model.ID {
 	action := &microflows.UnlockWorkflowAction{
-		BaseElement:              model.BaseElement{ID: model.ID(mpr.GenerateID())},
+		BaseElement:              model.BaseElement{ID: model.ID(types.GenerateID())},
 		ErrorHandlingType:        convertErrorHandlingType(s.ErrorHandling),
 		ResumeAllPausedWorkflows: s.ResumeAllPausedWorkflows,
 		WorkflowVariable:         s.WorkflowVariable,

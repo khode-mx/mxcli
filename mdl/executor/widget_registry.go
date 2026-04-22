@@ -10,35 +10,67 @@ import (
 	"path/filepath"
 	"strings"
 
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
 	"github.com/mendixlabs/mxcli/sdk/widgets/definitions"
 )
 
 // WidgetRegistry holds loaded widget definitions keyed by uppercase MDL name.
 type WidgetRegistry struct {
-	byMDLName  map[string]*WidgetDefinition // keyed by uppercase MDLName
-	byWidgetID map[string]*WidgetDefinition // keyed by widgetId
-	opReg      *OperationRegistry           // used for validating definition operations
+	byMDLName       map[string]*WidgetDefinition // keyed by uppercase MDLName
+	byWidgetID      map[string]*WidgetDefinition // keyed by widgetId
+	knownOperations map[string]bool              // operations accepted during validation
+}
+
+// defaultKnownOperations is the set of operation names supported by the widget engine.
+var defaultKnownOperations = map[string]bool{
+	"attribute":        true,
+	"association":      true,
+	"primitive":        true,
+	"selection":        true,
+	"expression":       true,
+	"datasource":       true,
+	"widgets":          true,
+	"texttemplate":     true,
+	"action":           true,
+	"attributeObjects": true,
+}
+
+// knownOperations is the active set used for validation, initialized from
+// defaultKnownOperations and now stored per-registry to avoid global mutable state.
+
+func copyOps(src map[string]bool) map[string]bool {
+	dst := make(map[string]bool, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
 }
 
 // NewWidgetRegistry creates a registry pre-loaded with embedded definitions.
-// Uses a default OperationRegistry for validation. Use NewWidgetRegistryWithOps
-// to provide a custom registry with additional operations.
+// Uses the default set of known operations for validation.
 func NewWidgetRegistry() (*WidgetRegistry, error) {
-	return NewWidgetRegistryWithOps(NewOperationRegistry())
+	return NewWidgetRegistryWithOps(nil)
 }
 
 // NewWidgetRegistryWithOps creates a registry pre-loaded with embedded definitions,
-// validating operations against the provided OperationRegistry.
-func NewWidgetRegistryWithOps(opReg *OperationRegistry) (*WidgetRegistry, error) {
+// extending the default known operations with extraOps for validation.
+// This allows user-defined widgets to declare custom operations that would otherwise
+// fail validation. Pass nil for the default set.
+func NewWidgetRegistryWithOps(extraOps map[string]bool) (*WidgetRegistry, error) {
+	ops := copyOps(defaultKnownOperations)
+	for op := range extraOps {
+		ops[op] = true
+	}
+
 	reg := &WidgetRegistry{
-		byMDLName:  make(map[string]*WidgetDefinition),
-		byWidgetID: make(map[string]*WidgetDefinition),
-		opReg:      opReg,
+		byMDLName:       make(map[string]*WidgetDefinition),
+		byWidgetID:      make(map[string]*WidgetDefinition),
+		knownOperations: ops,
 	}
 
 	entries, err := definitions.EmbeddedFS.ReadDir(".")
 	if err != nil {
-		return nil, fmt.Errorf("read embedded definitions: %w", err)
+		return nil, mdlerrors.NewBackend("read embedded definitions", err)
 	}
 
 	for _, entry := range entries {
@@ -48,18 +80,22 @@ func NewWidgetRegistryWithOps(opReg *OperationRegistry) (*WidgetRegistry, error)
 
 		data, err := definitions.EmbeddedFS.ReadFile(entry.Name())
 		if err != nil {
-			return nil, fmt.Errorf("read definition %s: %w", entry.Name(), err)
+			return nil, mdlerrors.NewBackend(fmt.Sprintf("read definition %s", entry.Name()), err)
 		}
 
 		var def WidgetDefinition
 		if err := json.Unmarshal(data, &def); err != nil {
-			return nil, fmt.Errorf("parse definition %s: %w", entry.Name(), err)
+			return nil, mdlerrors.NewBackend(fmt.Sprintf("parse definition %s", entry.Name()), err)
 		}
 
-		if err := validateDefinitionOperations(&def, entry.Name(), opReg); err != nil {
+		if err := reg.validateDefinitionOperations(&def, entry.Name()); err != nil {
 			return nil, err
 		}
 
+		def.MDLName = strings.ToLower(def.MDLName)
+		for i := range def.ChildSlots {
+			def.ChildSlots[i].MDLContainer = strings.ToLower(def.ChildSlots[i].MDLContainer)
+		}
 		reg.byMDLName[strings.ToUpper(def.MDLName)] = &def
 		reg.byWidgetID[def.WidgetID] = &def
 	}
@@ -139,22 +175,26 @@ func (r *WidgetRegistry) loadDefinitionsFromDir(dir string) error {
 		filePath := filepath.Join(dir, entry.Name())
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			return fmt.Errorf("read %s: %w", filePath, err)
+			return mdlerrors.NewBackend(fmt.Sprintf("read %s", filePath), err)
 		}
 
 		var def WidgetDefinition
 		if err := json.Unmarshal(data, &def); err != nil {
-			return fmt.Errorf("parse %s: %w", filePath, err)
+			return mdlerrors.NewBackend(fmt.Sprintf("parse %s", filePath), err)
 		}
 
 		if def.WidgetID == "" || def.MDLName == "" {
-			return fmt.Errorf("invalid definition %s: widgetId and mdlName are required", entry.Name())
+			return mdlerrors.NewValidationf("invalid definition %s: widgetId and mdlName are required", entry.Name())
 		}
 
-		if err := validateDefinitionOperations(&def, entry.Name(), r.opReg); err != nil {
+		if err := r.validateDefinitionOperations(&def, entry.Name()); err != nil {
 			return err
 		}
 
+		def.MDLName = strings.ToLower(def.MDLName)
+		for i := range def.ChildSlots {
+			def.ChildSlots[i].MDLContainer = strings.ToLower(def.ChildSlots[i].MDLContainer)
+		}
 		upperName := strings.ToUpper(def.MDLName)
 		if existing, ok := r.byMDLName[upperName]; ok {
 			// Skip user skeleton definitions (no mappings/modes) when built-in has mappings
@@ -173,25 +213,25 @@ func (r *WidgetRegistry) loadDefinitionsFromDir(dir string) error {
 }
 
 // validateDefinitionOperations checks that all operation names in a definition
-// are recognized by the given OperationRegistry, and validates source/operation
+// are recognized by the known operations set, and validates source/operation
 // compatibility and mapping order dependencies.
-func validateDefinitionOperations(def *WidgetDefinition, source string, opReg *OperationRegistry) error {
-	if err := validateMappings(def.PropertyMappings, source, "", opReg); err != nil {
+func (r *WidgetRegistry) validateDefinitionOperations(def *WidgetDefinition, source string) error {
+	if err := r.validateMappings(def.PropertyMappings, source, ""); err != nil {
 		return err
 	}
 	for _, s := range def.ChildSlots {
-		if !opReg.Has(s.Operation) {
-			return fmt.Errorf("%s: unknown operation %q in childSlots for key %q", source, s.Operation, s.PropertyKey)
+		if !r.knownOperations[s.Operation] {
+			return mdlerrors.NewValidationf("%s: unknown operation %q in childSlots for key %q", source, s.Operation, s.PropertyKey)
 		}
 	}
 	for _, mode := range def.Modes {
 		ctx := fmt.Sprintf("mode %q ", mode.Name)
-		if err := validateMappings(mode.PropertyMappings, source, ctx, opReg); err != nil {
+		if err := r.validateMappings(mode.PropertyMappings, source, ctx); err != nil {
 			return err
 		}
 		for _, s := range mode.ChildSlots {
-			if !opReg.Has(s.Operation) {
-				return fmt.Errorf("%s: unknown operation %q in %schildSlots for key %q", source, s.Operation, ctx, s.PropertyKey)
+			if !r.knownOperations[s.Operation] {
+				return mdlerrors.NewValidationf("%s: unknown operation %q in %schildSlots for key %q", source, s.Operation, ctx, s.PropertyKey)
 			}
 		}
 	}
@@ -208,16 +248,16 @@ var incompatibleSourceOps = map[string]map[string]bool{
 
 // validateMappings validates a slice of property mappings for operation existence,
 // source/operation compatibility, and mapping order (Association requires prior DataSource).
-func validateMappings(mappings []PropertyMapping, source, modeCtx string, opReg *OperationRegistry) error {
+func (r *WidgetRegistry) validateMappings(mappings []PropertyMapping, source, modeCtx string) error {
 	hasDataSource := false
 	for _, m := range mappings {
-		if !opReg.Has(m.Operation) {
-			return fmt.Errorf("%s: unknown operation %q in %spropertyMappings for key %q", source, m.Operation, modeCtx, m.PropertyKey)
+		if !r.knownOperations[m.Operation] {
+			return mdlerrors.NewValidationf("%s: unknown operation %q in %spropertyMappings for key %q", source, m.Operation, modeCtx, m.PropertyKey)
 		}
 		// Check source/operation compatibility
 		if incompatible, ok := incompatibleSourceOps[m.Source]; ok {
 			if incompatible[m.Operation] {
-				return fmt.Errorf("%s: incompatible source %q with operation %q in %spropertyMappings for key %q",
+				return mdlerrors.NewValidationf("%s: incompatible source %q with operation %q in %spropertyMappings for key %q",
 					source, m.Source, m.Operation, modeCtx, m.PropertyKey)
 			}
 		}
@@ -227,7 +267,7 @@ func validateMappings(mappings []PropertyMapping, source, modeCtx string, opReg 
 		}
 		// Association depends on entityContext set by a prior DataSource mapping
 		if m.Source == "Association" && !hasDataSource {
-			return fmt.Errorf("%s: %spropertyMappings key %q uses source 'Association' before any 'DataSource' mapping — entityContext will be stale",
+			return mdlerrors.NewValidationf("%s: %spropertyMappings key %q uses source 'Association' before any 'DataSource' mapping — entityContext will be stale",
 				source, modeCtx, m.PropertyKey)
 		}
 	}

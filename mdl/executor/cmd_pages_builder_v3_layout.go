@@ -5,18 +5,17 @@ package executor
 import (
 	"strings"
 
-	"github.com/mendixlabs/mxcli/model"
-	"github.com/mendixlabs/mxcli/sdk/mpr"
-	"github.com/mendixlabs/mxcli/sdk/pages"
-
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	"github.com/mendixlabs/mxcli/mdl/types"
+	"github.com/mendixlabs/mxcli/model"
+	"github.com/mendixlabs/mxcli/sdk/pages"
 )
 
 func (pb *pageBuilder) buildLayoutGridV3(w *ast.WidgetV3) (*pages.LayoutGrid, error) {
 	lg := &pages.LayoutGrid{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$LayoutGrid",
 			},
 			Name: w.Name,
@@ -25,7 +24,7 @@ func (pb *pageBuilder) buildLayoutGridV3(w *ast.WidgetV3) (*pages.LayoutGrid, er
 
 	// Build rows from children
 	for _, child := range w.Children {
-		if strings.ToUpper(child.Type) == "ROW" {
+		if strings.ToLower(child.Type) == "row" {
 			row, err := pb.buildLayoutGridRowV3(child)
 			if err != nil {
 				return nil, err
@@ -40,14 +39,14 @@ func (pb *pageBuilder) buildLayoutGridV3(w *ast.WidgetV3) (*pages.LayoutGrid, er
 func (pb *pageBuilder) buildLayoutGridRowV3(w *ast.WidgetV3) (*pages.LayoutGridRow, error) {
 	row := &pages.LayoutGridRow{
 		BaseElement: model.BaseElement{
-			ID:       model.ID(mpr.GenerateID()),
+			ID:       model.ID(types.GenerateID()),
 			TypeName: "Forms$LayoutGridRow",
 		},
 	}
 
 	// Build columns from children
 	for _, child := range w.Children {
-		if strings.ToUpper(child.Type) == "COLUMN" {
+		if strings.ToLower(child.Type) == "column" {
 			col, err := pb.buildLayoutGridColumnV3(child)
 			if err != nil {
 				return nil, err
@@ -62,7 +61,7 @@ func (pb *pageBuilder) buildLayoutGridRowV3(w *ast.WidgetV3) (*pages.LayoutGridR
 func (pb *pageBuilder) buildLayoutGridColumnV3(w *ast.WidgetV3) (*pages.LayoutGridColumn, error) {
 	col := &pages.LayoutGridColumn{
 		BaseElement: model.BaseElement{
-			ID:       model.ID(mpr.GenerateID()),
+			ID:       model.ID(types.GenerateID()),
 			TypeName: "Forms$LayoutGridColumn",
 		},
 		Weight: 1,
@@ -74,7 +73,7 @@ func (pb *pageBuilder) buildLayoutGridColumnV3(w *ast.WidgetV3) (*pages.LayoutGr
 		case int:
 			col.Weight = v
 		case string:
-			if strings.ToUpper(v) == "AUTOFILL" {
+			if strings.ToUpper(v) == "autofill" {
 				col.Weight = -1 // Auto
 			}
 		}
@@ -86,7 +85,7 @@ func (pb *pageBuilder) buildLayoutGridColumnV3(w *ast.WidgetV3) (*pages.LayoutGr
 		case int:
 			col.TabletWeight = v
 		case string:
-			if strings.ToUpper(v) == "AUTOFILL" {
+			if strings.ToUpper(v) == "autofill" {
 				col.TabletWeight = -1
 			}
 		}
@@ -98,7 +97,7 @@ func (pb *pageBuilder) buildLayoutGridColumnV3(w *ast.WidgetV3) (*pages.LayoutGr
 		case int:
 			col.PhoneWeight = v
 		case string:
-			if strings.ToUpper(v) == "AUTOFILL" {
+			if strings.ToUpper(v) == "autofill" {
 				col.PhoneWeight = -1
 			}
 		}
@@ -121,7 +120,7 @@ func (pb *pageBuilder) buildContainerWithRowV3(w *ast.WidgetV3) (*pages.Containe
 	container := &pages.Container{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$DivContainer",
 			},
 			Name: w.Name,
@@ -131,7 +130,7 @@ func (pb *pageBuilder) buildContainerWithRowV3(w *ast.WidgetV3) (*pages.Containe
 	lg := &pages.LayoutGrid{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$LayoutGrid",
 			},
 			Name: w.Name + "_grid",
@@ -153,7 +152,7 @@ func (pb *pageBuilder) buildContainerWithColumnV3(w *ast.WidgetV3) (*pages.Conta
 	container := &pages.Container{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$DivContainer",
 			},
 			Name: w.Name,
@@ -163,7 +162,7 @@ func (pb *pageBuilder) buildContainerWithColumnV3(w *ast.WidgetV3) (*pages.Conta
 	lg := &pages.LayoutGrid{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$LayoutGrid",
 			},
 			Name: w.Name + "_grid",
@@ -172,7 +171,7 @@ func (pb *pageBuilder) buildContainerWithColumnV3(w *ast.WidgetV3) (*pages.Conta
 
 	row := &pages.LayoutGridRow{
 		BaseElement: model.BaseElement{
-			ID:       model.ID(mpr.GenerateID()),
+			ID:       model.ID(types.GenerateID()),
 			TypeName: "Forms$LayoutGridRow",
 		},
 	}
@@ -192,7 +191,7 @@ func (pb *pageBuilder) buildContainerV3(w *ast.WidgetV3) (*pages.Container, erro
 	container := &pages.Container{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$DivContainer",
 			},
 			Name: w.Name,
@@ -220,7 +219,7 @@ func (pb *pageBuilder) buildTabContainerV3(w *ast.WidgetV3) (*pages.TabContainer
 	tc := &pages.TabContainer{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$TabControl",
 			},
 			Name: w.Name,
@@ -229,7 +228,7 @@ func (pb *pageBuilder) buildTabContainerV3(w *ast.WidgetV3) (*pages.TabContainer
 
 	// Build tab pages from children
 	for _, child := range w.Children {
-		if strings.ToUpper(child.Type) == "TABPAGE" {
+		if strings.ToLower(child.Type) == "tabpage" {
 			tp, err := pb.buildTabPageV3(child)
 			if err != nil {
 				return nil, err
@@ -248,7 +247,7 @@ func (pb *pageBuilder) buildTabContainerV3(w *ast.WidgetV3) (*pages.TabContainer
 func (pb *pageBuilder) buildTabPageV3(w *ast.WidgetV3) (*pages.TabPage, error) {
 	tp := &pages.TabPage{
 		BaseElement: model.BaseElement{
-			ID:       model.ID(mpr.GenerateID()),
+			ID:       model.ID(types.GenerateID()),
 			TypeName: "Forms$TabPage",
 		},
 		Name: w.Name,
@@ -258,7 +257,7 @@ func (pb *pageBuilder) buildTabPageV3(w *ast.WidgetV3) (*pages.TabPage, error) {
 	if caption := w.GetCaption(); caption != "" {
 		tp.Caption = &model.Text{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Texts$Text",
 			},
 			Translations: map[string]string{"en_US": caption},
@@ -285,7 +284,7 @@ func (pb *pageBuilder) buildGroupBoxV3(w *ast.WidgetV3) (*pages.GroupBox, error)
 	gb := &pages.GroupBox{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$GroupBox",
 			},
 			Name: w.Name,
@@ -299,7 +298,7 @@ func (pb *pageBuilder) buildGroupBoxV3(w *ast.WidgetV3) (*pages.GroupBox, error)
 		gb.Caption = &pages.ClientTemplate{
 			Template: &model.Text{
 				BaseElement: model.BaseElement{
-					ID:       model.ID(mpr.GenerateID()),
+					ID:       model.ID(types.GenerateID()),
 					TypeName: "Texts$Text",
 				},
 				Translations: map[string]string{"en_US": caption},
@@ -347,7 +346,7 @@ func (pb *pageBuilder) buildFooterV3(w *ast.WidgetV3) (*pages.Container, error) 
 	footer := &pages.Container{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$DivContainer",
 			},
 			Name: w.Name,
@@ -375,7 +374,7 @@ func (pb *pageBuilder) buildHeaderV3(w *ast.WidgetV3) (*pages.Container, error) 
 	header := &pages.Container{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$DivContainer",
 			},
 			Name: w.Name,
@@ -403,7 +402,7 @@ func (pb *pageBuilder) buildControlBarV3(w *ast.WidgetV3) (*pages.Container, err
 	controlBar := &pages.Container{
 		BaseWidget: pages.BaseWidget{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "Forms$DivContainer",
 			},
 			Name: w.Name,

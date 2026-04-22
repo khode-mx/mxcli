@@ -400,7 +400,7 @@ func buildListOperationStatement(ctx parser.IListOperationStatementContext) *ast
 			if len(vars) >= 1 {
 				stmt.InputVariable = strings.TrimPrefix(vars[0].GetText(), "$")
 			}
-			if expr := op.Expression(); expr != nil {
+			if expr := op.Expression(0); expr != nil {
 				stmt.Condition = buildExpression(expr)
 			}
 		} else if op.FILTER() != nil {
@@ -408,7 +408,7 @@ func buildListOperationStatement(ctx parser.IListOperationStatementContext) *ast
 			if len(vars) >= 1 {
 				stmt.InputVariable = strings.TrimPrefix(vars[0].GetText(), "$")
 			}
-			if expr := op.Expression(); expr != nil {
+			if expr := op.Expression(0); expr != nil {
 				stmt.Condition = buildExpression(expr)
 			}
 		} else if op.SORT() != nil {
@@ -458,6 +458,18 @@ func buildListOperationStatement(ctx parser.IListOperationStatementContext) *ast
 			}
 			if len(vars) >= 2 {
 				stmt.SecondVariable = strings.TrimPrefix(vars[1].GetText(), "$")
+			}
+		} else if op.RANGE() != nil {
+			stmt.Operation = ast.ListOpRange
+			if len(vars) >= 1 {
+				stmt.InputVariable = strings.TrimPrefix(vars[0].GetText(), "$")
+			}
+			exprs := op.AllExpression()
+			if len(exprs) >= 1 {
+				stmt.OffsetExpr = buildExpression(exprs[0])
+			}
+			if len(exprs) >= 2 {
+				stmt.LimitExpr = buildExpression(exprs[1])
 			}
 		}
 	}

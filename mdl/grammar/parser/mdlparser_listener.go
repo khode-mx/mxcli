@@ -286,6 +286,33 @@ type MDLParserListener interface {
 	// EnterImageName is called when entering the imageName production.
 	EnterImageName(c *ImageNameContext)
 
+	// EnterCreateModelStatement is called when entering the createModelStatement production.
+	EnterCreateModelStatement(c *CreateModelStatementContext)
+
+	// EnterModelProperty is called when entering the modelProperty production.
+	EnterModelProperty(c *ModelPropertyContext)
+
+	// EnterVariableDefList is called when entering the variableDefList production.
+	EnterVariableDefList(c *VariableDefListContext)
+
+	// EnterVariableDef is called when entering the variableDef production.
+	EnterVariableDef(c *VariableDefContext)
+
+	// EnterCreateConsumedMCPServiceStatement is called when entering the createConsumedMCPServiceStatement production.
+	EnterCreateConsumedMCPServiceStatement(c *CreateConsumedMCPServiceStatementContext)
+
+	// EnterCreateKnowledgeBaseStatement is called when entering the createKnowledgeBaseStatement production.
+	EnterCreateKnowledgeBaseStatement(c *CreateKnowledgeBaseStatementContext)
+
+	// EnterCreateAgentStatement is called when entering the createAgentStatement production.
+	EnterCreateAgentStatement(c *CreateAgentStatementContext)
+
+	// EnterAgentBody is called when entering the agentBody production.
+	EnterAgentBody(c *AgentBodyContext)
+
+	// EnterAgentBodyBlock is called when entering the agentBodyBlock production.
+	EnterAgentBodyBlock(c *AgentBodyBlockContext)
+
 	// EnterCreateJsonStructureStatement is called when entering the createJsonStructureStatement production.
 	EnterCreateJsonStructureStatement(c *CreateJsonStructureStatementContext)
 
@@ -732,6 +759,9 @@ type MDLParserListener interface {
 
 	// EnterDataSourceExprV3 is called when entering the dataSourceExprV3 production.
 	EnterDataSourceExprV3(c *DataSourceExprV3Context)
+
+	// EnterAssociationPathV3 is called when entering the associationPathV3 production.
+	EnterAssociationPathV3(c *AssociationPathV3Context)
 
 	// EnterActionExprV3 is called when entering the actionExprV3 production.
 	EnterActionExprV3(c *ActionExprV3Context)
@@ -1555,6 +1585,33 @@ type MDLParserListener interface {
 	// ExitImageName is called when exiting the imageName production.
 	ExitImageName(c *ImageNameContext)
 
+	// ExitCreateModelStatement is called when exiting the createModelStatement production.
+	ExitCreateModelStatement(c *CreateModelStatementContext)
+
+	// ExitModelProperty is called when exiting the modelProperty production.
+	ExitModelProperty(c *ModelPropertyContext)
+
+	// ExitVariableDefList is called when exiting the variableDefList production.
+	ExitVariableDefList(c *VariableDefListContext)
+
+	// ExitVariableDef is called when exiting the variableDef production.
+	ExitVariableDef(c *VariableDefContext)
+
+	// ExitCreateConsumedMCPServiceStatement is called when exiting the createConsumedMCPServiceStatement production.
+	ExitCreateConsumedMCPServiceStatement(c *CreateConsumedMCPServiceStatementContext)
+
+	// ExitCreateKnowledgeBaseStatement is called when exiting the createKnowledgeBaseStatement production.
+	ExitCreateKnowledgeBaseStatement(c *CreateKnowledgeBaseStatementContext)
+
+	// ExitCreateAgentStatement is called when exiting the createAgentStatement production.
+	ExitCreateAgentStatement(c *CreateAgentStatementContext)
+
+	// ExitAgentBody is called when exiting the agentBody production.
+	ExitAgentBody(c *AgentBodyContext)
+
+	// ExitAgentBodyBlock is called when exiting the agentBodyBlock production.
+	ExitAgentBodyBlock(c *AgentBodyBlockContext)
+
 	// ExitCreateJsonStructureStatement is called when exiting the createJsonStructureStatement production.
 	ExitCreateJsonStructureStatement(c *CreateJsonStructureStatementContext)
 
@@ -2001,6 +2058,9 @@ type MDLParserListener interface {
 
 	// ExitDataSourceExprV3 is called when exiting the dataSourceExprV3 production.
 	ExitDataSourceExprV3(c *DataSourceExprV3Context)
+
+	// ExitAssociationPathV3 is called when exiting the associationPathV3 production.
+	ExitAssociationPathV3(c *AssociationPathV3Context)
 
 	// ExitActionExprV3 is called when exiting the actionExprV3 production.
 	ExitActionExprV3(c *ActionExprV3Context)

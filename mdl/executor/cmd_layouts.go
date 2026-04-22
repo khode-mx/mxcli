@@ -7,20 +7,22 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
 )
 
-// showLayouts handles SHOW LAYOUTS command.
-func (e *Executor) showLayouts(moduleName string) error {
+// listLayouts handles SHOW LAYOUTS command.
+func listLayouts(ctx *ExecContext, moduleName string) error {
 	// Get hierarchy for module/folder resolution
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to build hierarchy: %w", err)
+		return mdlerrors.NewBackend("build hierarchy", err)
 	}
 
 	// Get all layouts
-	layouts, err := e.reader.ListLayouts()
+	layouts, err := ctx.Backend.ListLayouts()
 	if err != nil {
-		return fmt.Errorf("failed to list layouts: %w", err)
+		return mdlerrors.NewBackend("list layouts", err)
 	}
 
 	// Collect rows
@@ -57,5 +59,5 @@ func (e *Executor) showLayouts(moduleName string) error {
 	for _, r := range rows {
 		result.Rows = append(result.Rows, []any{r.qualifiedName, r.module, r.name, r.folderPath, r.layoutType})
 	}
-	return e.writeResult(result)
+	return writeResult(ctx, result)
 }

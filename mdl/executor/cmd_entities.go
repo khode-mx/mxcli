@@ -8,29 +8,30 @@ import (
 	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
+	"github.com/mendixlabs/mxcli/mdl/types"
 	"github.com/mendixlabs/mxcli/model"
 	"github.com/mendixlabs/mxcli/sdk/domainmodel"
-	"github.com/mendixlabs/mxcli/sdk/mpr"
 )
 
 // execCreateEntity handles CREATE ENTITY statements.
 // buildEventHandlers converts a list of AST EventHandlerDef to domain model EventHandler.
 // Resolves the microflow qualified name to a microflow ID, but stores the qualified name
 // for BY_NAME serialization.
-func (e *Executor) buildEventHandlers(defs []ast.EventHandlerDef) ([]*domainmodel.EventHandler, error) {
+func buildEventHandlers(ctx *ExecContext, defs []ast.EventHandlerDef) ([]*domainmodel.EventHandler, error) {
 	if len(defs) == 0 {
 		return nil, nil
 	}
 	var handlers []*domainmodel.EventHandler
 	for _, d := range defs {
 		mfQN := d.Microflow.String()
-		mfID, err := e.resolveMicroflowByName(mfQN)
+		mfID, err := resolveMicroflowByName(ctx, mfQN)
 		if err != nil {
-			return nil, fmt.Errorf("event handler microflow not found: %s", mfQN)
+			return nil, mdlerrors.NewNotFound("microflow", mfQN)
 		}
 		handlers = append(handlers, &domainmodel.EventHandler{
 			BaseElement: model.BaseElement{
-				ID:       model.ID(mpr.GenerateID()),
+				ID:       model.ID(types.GenerateID()),
 				TypeName: "DomainModels$EventHandler",
 			},
 			Moment:            domainmodel.EventMoment(d.Moment),
@@ -44,21 +45,22 @@ func (e *Executor) buildEventHandlers(defs []ast.EventHandlerDef) ([]*domainmode
 	return handlers, nil
 }
 
-func (e *Executor) execCreateEntity(s *ast.CreateEntityStmt) error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+func execCreateEntity(ctx *ExecContext, s *ast.CreateEntityStmt) error {
+	e := ctx.executor
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
 	// Find or auto-create module
-	module, err := e.findOrCreateModule(s.Name.Module)
+	module, err := findOrCreateModule(ctx, s.Name.Module)
 	if err != nil {
 		return err
 	}
 
 	// Get domain model
-	dm, err := e.reader.GetDomainModel(module.ID)
+	dm, err := ctx.Backend.GetDomainModel(module.ID)
 	if err != nil {
-		return fmt.Errorf("failed to get domain model: %w", err)
+		return mdlerrors.NewBackend("get domain model", err)
 	}
 
 	// Check if entity already exists
@@ -72,7 +74,7 @@ func (e *Executor) execCreateEntity(s *ast.CreateEntityStmt) error {
 
 	// If entity exists and not using CREATE OR MODIFY, return error
 	if existingEntity != nil && !s.CreateOrModify {
-		return fmt.Errorf("entity already exists: %s.%s (use CREATE OR MODIFY to update)", s.Name.Module, s.Name.Name)
+		return mdlerrors.NewAlreadyExistsMsg("entity", s.Name.Module+"."+s.Name.Name, fmt.Sprintf("entity already exists: %s.%s (use create or modify to update)", s.Name.Module, s.Name.Name))
 	}
 
 	// Calculate position
@@ -122,7 +124,7 @@ func (e *Executor) execCreateEntity(s *ast.CreateEntityStmt) error {
 
 		// CALCULATED attributes are only supported on persistent entities
 		if a.Calculated && !persistable {
-			return fmt.Errorf("attribute '%s': CALCULATED attributes are only supported on persistent entities", a.Name)
+			return mdlerrors.NewValidationf("attribute '%s': calculated attributes are only supported on persistent entities", a.Name)
 		}
 
 		// Use Documentation if available, fall back to Comment
@@ -132,7 +134,7 @@ func (e *Executor) execCreateEntity(s *ast.CreateEntityStmt) error {
 		}
 
 		// Generate ID for the attribute so we can reference it in validation rules/indexes
-		attrID := model.ID(mpr.GenerateID())
+		attrID := model.ID(types.GenerateID())
 		attrNameToID[a.Name] = attrID
 
 		attr := &domainmodel.Attribute{
@@ -148,9 +150,9 @@ func (e *Executor) execCreateEntity(s *ast.CreateEntityStmt) error {
 				Type: "CalculatedValue",
 			}
 			if a.CalculatedMicroflow != nil {
-				mfID, err := e.resolveMicroflowByName(a.CalculatedMicroflow.String())
+				mfID, err := resolveMicroflowByName(ctx, a.CalculatedMicroflow.String())
 				if err != nil {
-					return fmt.Errorf("attribute '%s': %w", a.Name, err)
+					return mdlerrors.NewBackend(fmt.Sprintf("attribute '%s'", a.Name), err)
 				}
 				attrValue.MicroflowID = mfID
 				attrValue.MicroflowName = a.CalculatedMicroflow.String()
@@ -186,12 +188,12 @@ func (e *Executor) execCreateEntity(s *ast.CreateEntityStmt) error {
 				AttributeID: attrID,
 				Type:        "Required",
 			}
-			vr.ID = model.ID(mpr.GenerateID())
+			vr.ID = model.ID(types.GenerateID())
 			if a.NotNullError != "" {
 				vr.ErrorMessage = &model.Text{
 					Translations: map[string]string{"en_US": a.NotNullError},
 				}
-				vr.ErrorMessage.ID = model.ID(mpr.GenerateID())
+				vr.ErrorMessage.ID = model.ID(types.GenerateID())
 			}
 			validationRules = append(validationRules, vr)
 		}
@@ -202,12 +204,12 @@ func (e *Executor) execCreateEntity(s *ast.CreateEntityStmt) error {
 				AttributeID: attrID,
 				Type:        "Unique",
 			}
-			vr.ID = model.ID(mpr.GenerateID())
+			vr.ID = model.ID(types.GenerateID())
 			if a.UniqueError != "" {
 				vr.ErrorMessage = &model.Text{
 					Translations: map[string]string{"en_US": a.UniqueError},
 				}
-				vr.ErrorMessage.ID = model.ID(mpr.GenerateID())
+				vr.ErrorMessage.ID = model.ID(types.GenerateID())
 			}
 			validationRules = append(validationRules, vr)
 		}
@@ -216,11 +218,11 @@ func (e *Executor) execCreateEntity(s *ast.CreateEntityStmt) error {
 	// Create indexes
 	var indexes []*domainmodel.Index
 	for _, idx := range s.Indexes {
-		idxID := model.ID(mpr.GenerateID())
+		idxID := model.ID(types.GenerateID())
 		var indexAttrs []*domainmodel.IndexAttribute
 		for _, col := range idx.Columns {
 			if attrID, ok := attrNameToID[col.Name]; ok {
-				iaID := model.ID(mpr.GenerateID())
+				iaID := model.ID(types.GenerateID())
 				ia := &domainmodel.IndexAttribute{
 					AttributeID: attrID,
 					Ascending:   !col.Descending,
@@ -240,7 +242,7 @@ func (e *Executor) execCreateEntity(s *ast.CreateEntityStmt) error {
 
 	// Create entity
 	// Build event handlers
-	eventHandlers, err := e.buildEventHandlers(s.EventHandlers)
+	eventHandlers, err := buildEventHandlers(ctx, s.EventHandlers)
 	if err != nil {
 		return err
 	}
@@ -268,22 +270,22 @@ func (e *Executor) execCreateEntity(s *ast.CreateEntityStmt) error {
 	if s.CreateOrModify && existingEntity != nil {
 		// Update existing entity
 		entity.ID = existingEntity.ID
-		if err := e.writer.UpdateEntity(dm.ID, entity); err != nil {
-			return fmt.Errorf("failed to update entity: %w", err)
+		if err := ctx.Backend.UpdateEntity(dm.ID, entity); err != nil {
+			return mdlerrors.NewBackend("update entity", err)
 		}
 		// Invalidate caches so updated entity is visible
-		e.invalidateHierarchy()
-		e.invalidateDomainModelsCache()
-		fmt.Fprintf(e.output, "Modified entity: %s\n", s.Name)
+		invalidateHierarchy(ctx)
+		invalidateDomainModelsCache(ctx)
+		fmt.Fprintf(ctx.Output, "Modified entity: %s\n", s.Name)
 	} else {
 		// Create new entity
-		if err := e.writer.CreateEntity(dm.ID, entity); err != nil {
-			return fmt.Errorf("failed to create entity: %w", err)
+		if err := ctx.Backend.CreateEntity(dm.ID, entity); err != nil {
+			return mdlerrors.NewBackend("create entity", err)
 		}
 		// Invalidate caches so new entity is visible
-		e.invalidateHierarchy()
-		e.invalidateDomainModelsCache()
-		fmt.Fprintf(e.output, "Created entity: %s\n", s.Name)
+		invalidateHierarchy(ctx)
+		invalidateDomainModelsCache(ctx)
+		fmt.Fprintf(ctx.Output, "Created entity: %s\n", s.Name)
 	}
 
 	e.trackModifiedDomainModel(module.ID, module.Name)
@@ -291,14 +293,14 @@ func (e *Executor) execCreateEntity(s *ast.CreateEntityStmt) error {
 }
 
 // execCreateViewEntity handles CREATE VIEW ENTITY statements.
-func (e *Executor) execCreateViewEntity(s *ast.CreateViewEntityStmt) error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+func execCreateViewEntity(ctx *ExecContext, s *ast.CreateViewEntityStmt) error {
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
 	// Version pre-check
-	if err := e.checkFeature("domain_model", "view_entities",
-		"CREATE VIEW ENTITY",
+	if err := checkFeature(ctx, "domain_model", "view_entities",
+		"create view entity",
 		"upgrade your project to 10.18+ or use a regular entity with a microflow data source"); err != nil {
 		return err
 	}
@@ -311,21 +313,21 @@ func (e *Executor) execCreateViewEntity(s *ast.CreateViewEntityStmt) error {
 			for _, v := range oqlViolations {
 				msgs = append(msgs, v.Message)
 			}
-			return fmt.Errorf("invalid OQL in view entity '%s':\n  - %s",
+			return mdlerrors.NewValidationf("invalid OQL in view entity '%s':\n  - %s",
 				s.Name.String(), strings.Join(msgs, "\n  - "))
 		}
 	}
 
 	// Find module
-	module, err := e.findModule(s.Name.Module)
+	module, err := findModule(ctx, s.Name.Module)
 	if err != nil {
 		return err
 	}
 
 	// Get domain model
-	dm, err := e.reader.GetDomainModel(module.ID)
+	dm, err := ctx.Backend.GetDomainModel(module.ID)
 	if err != nil {
-		return fmt.Errorf("failed to get domain model: %w", err)
+		return mdlerrors.NewBackend("get domain model", err)
 	}
 
 	// Check if entity already exists
@@ -339,7 +341,7 @@ func (e *Executor) execCreateViewEntity(s *ast.CreateViewEntityStmt) error {
 
 	// If entity exists: REPLACE drops and recreates, MODIFY updates in place
 	if existingEntity != nil && !s.CreateOrModify && !s.CreateOrReplace {
-		return fmt.Errorf("entity already exists: %s.%s (use CREATE OR MODIFY to update, or CREATE OR REPLACE to drop and recreate)", s.Name.Module, s.Name.Name)
+		return mdlerrors.NewAlreadyExistsMsg("entity", s.Name.Module+"."+s.Name.Name, fmt.Sprintf("entity already exists: %s.%s (use create or modify to update, or create or replace to drop and recreate)", s.Name.Module, s.Name.Name))
 	}
 
 	// CREATE OR REPLACE: delete existing entity and source doc, then recreate
@@ -349,18 +351,18 @@ func (e *Executor) execCreateViewEntity(s *ast.CreateViewEntityStmt) error {
 			s.Position = &ast.Position{X: existingEntity.Location.X, Y: existingEntity.Location.Y}
 		}
 		// Delete ViewEntitySourceDocument
-		if err := e.writer.DeleteViewEntitySourceDocumentByName(s.Name.Module, s.Name.Name); err != nil {
-			return fmt.Errorf("failed to delete existing ViewEntitySourceDocument: %w", err)
+		if err := ctx.Backend.DeleteViewEntitySourceDocumentByName(s.Name.Module, s.Name.Name); err != nil {
+			return mdlerrors.NewBackend("delete existing ViewEntitySourceDocument", err)
 		}
 		// Delete the entity itself
-		if err := e.writer.DeleteEntity(dm.ID, existingEntity.ID); err != nil {
-			return fmt.Errorf("failed to delete existing entity for replace: %w", err)
+		if err := ctx.Backend.DeleteEntity(dm.ID, existingEntity.ID); err != nil {
+			return mdlerrors.NewBackend("delete existing entity for replace", err)
 		}
 		existingEntity = nil
 		// Re-fetch domain model after deletion so entity count is correct for positioning
-		dm, err = e.reader.GetDomainModel(module.ID)
+		dm, err = ctx.Backend.GetDomainModel(module.ID)
 		if err != nil {
-			return fmt.Errorf("failed to get domain model after delete: %w", err)
+			return mdlerrors.NewBackend("get domain model after delete", err)
 		}
 	}
 
@@ -379,10 +381,10 @@ func (e *Executor) execCreateViewEntity(s *ast.CreateViewEntityStmt) error {
 	// Always delete any existing ViewEntitySourceDocument before creating a new one.
 	// This prevents duplicate OQL documents from accumulating (e.g., from re-running
 	// scripts or after a previous DROP that didn't clean up properly).
-	if err := e.writer.DeleteViewEntitySourceDocumentByName(s.Name.Module, s.Name.Name); err != nil {
-		return fmt.Errorf("failed to delete existing ViewEntitySourceDocument: %w", err)
+	if err := ctx.Backend.DeleteViewEntitySourceDocumentByName(s.Name.Module, s.Name.Name); err != nil {
+		return mdlerrors.NewBackend("delete existing ViewEntitySourceDocument", err)
 	}
-	_, err = e.writer.CreateViewEntitySourceDocument(
+	_, err = ctx.Backend.CreateViewEntitySourceDocument(
 		module.ID,
 		s.Name.Module,
 		s.Name.Name,
@@ -390,7 +392,7 @@ func (e *Executor) execCreateViewEntity(s *ast.CreateViewEntityStmt) error {
 		s.Documentation,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to create ViewEntitySourceDocument: %w", err)
+		return mdlerrors.NewBackend("create ViewEntitySourceDocument", err)
 	}
 
 	// Create view attributes with OqlViewValue references.
@@ -438,43 +440,44 @@ func (e *Executor) execCreateViewEntity(s *ast.CreateViewEntityStmt) error {
 		// Update existing entity — preserve Source object ID to avoid CE-6770
 		entity.ID = existingEntity.ID
 		entity.SourceObjectID = existingEntity.SourceObjectID
-		if err := e.writer.UpdateEntity(dm.ID, entity); err != nil {
-			return fmt.Errorf("failed to update view entity: %w", err)
+		if err := ctx.Backend.UpdateEntity(dm.ID, entity); err != nil {
+			return mdlerrors.NewBackend("update view entity", err)
 		}
 		// Invalidate caches so updated entity is visible
-		e.invalidateHierarchy()
-		e.invalidateDomainModelsCache()
-		fmt.Fprintf(e.output, "Modified view entity: %s\n", s.Name)
+		invalidateHierarchy(ctx)
+		invalidateDomainModelsCache(ctx)
+		fmt.Fprintf(ctx.Output, "Modified view entity: %s\n", s.Name)
 	} else {
 		// Create new entity
-		if err := e.writer.CreateEntity(dm.ID, entity); err != nil {
-			return fmt.Errorf("failed to create view entity: %w", err)
+		if err := ctx.Backend.CreateEntity(dm.ID, entity); err != nil {
+			return mdlerrors.NewBackend("create view entity", err)
 		}
 		// Invalidate caches so new entity is visible
-		e.invalidateHierarchy()
-		e.invalidateDomainModelsCache()
-		fmt.Fprintf(e.output, "Created view entity: %s\n", s.Name)
+		invalidateHierarchy(ctx)
+		invalidateDomainModelsCache(ctx)
+		fmt.Fprintf(ctx.Output, "Created view entity: %s\n", s.Name)
 	}
 
 	return nil
 }
 
 // execAlterEntity handles ALTER ENTITY statements.
-func (e *Executor) execAlterEntity(s *ast.AlterEntityStmt) error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+func execAlterEntity(ctx *ExecContext, s *ast.AlterEntityStmt) error {
+	e := ctx.executor
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
 	// Find module
-	module, err := e.findModule(s.Name.Module)
+	module, err := findModule(ctx, s.Name.Module)
 	if err != nil {
 		return err
 	}
 
 	// Get domain model
-	dm, err := e.reader.GetDomainModel(module.ID)
+	dm, err := ctx.Backend.GetDomainModel(module.ID)
 	if err != nil {
-		return fmt.Errorf("failed to get domain model: %w", err)
+		return mdlerrors.NewBackend("get domain model", err)
 	}
 
 	// Find entity
@@ -486,33 +489,33 @@ func (e *Executor) execAlterEntity(s *ast.AlterEntityStmt) error {
 		}
 	}
 	if entity == nil {
-		return fmt.Errorf("entity not found: %s", s.Name)
+		return mdlerrors.NewNotFoundMsg("entity", fmt.Sprint(s.Name), fmt.Sprintf("entity not found: %s", s.Name))
 	}
 
 	switch s.Operation {
 	case ast.AlterEntityAddAttribute:
 		a := s.Attribute
 		if a == nil {
-			return fmt.Errorf("no attribute definition provided")
+			return mdlerrors.NewValidation("no attribute definition provided")
 		}
 		// Pseudo-types: set entity flags instead of adding real attributes
 		switch a.Type.Kind {
 		case ast.TypeAutoOwner:
 			entity.HasOwner = true
-			return e.writer.UpdateEntity(dm.ID, entity)
+			return ctx.Backend.UpdateEntity(dm.ID, entity)
 		case ast.TypeAutoChangedBy:
 			entity.HasChangedBy = true
-			return e.writer.UpdateEntity(dm.ID, entity)
+			return ctx.Backend.UpdateEntity(dm.ID, entity)
 		case ast.TypeAutoCreatedDate:
 			entity.HasCreatedDate = true
-			return e.writer.UpdateEntity(dm.ID, entity)
+			return ctx.Backend.UpdateEntity(dm.ID, entity)
 		case ast.TypeAutoChangedDate:
 			entity.HasChangedDate = true
-			return e.writer.UpdateEntity(dm.ID, entity)
+			return ctx.Backend.UpdateEntity(dm.ID, entity)
 		}
 		// CALCULATED attributes are only supported on persistent entities
 		if a.Calculated && !entity.Persistable {
-			return fmt.Errorf("attribute '%s': CALCULATED attributes are only supported on persistent entities", a.Name)
+			return mdlerrors.NewValidationf("attribute '%s': calculated attributes are only supported on persistent entities", a.Name)
 		}
 		// Auto-default Boolean attributes to false if no DEFAULT specified
 		if a.Type.Kind == ast.TypeBoolean && !a.HasDefault {
@@ -522,11 +525,11 @@ func (e *Executor) execAlterEntity(s *ast.AlterEntityStmt) error {
 		// Check for duplicate attribute name
 		for _, existing := range entity.Attributes {
 			if existing.Name == a.Name {
-				return fmt.Errorf("attribute '%s' already exists on entity %s", a.Name, s.Name)
+				return mdlerrors.NewAlreadyExistsMsg("attribute", a.Name, fmt.Sprintf("attribute '%s' already exists on entity %s", a.Name, s.Name))
 			}
 		}
 
-		attrID := model.ID(mpr.GenerateID())
+		attrID := model.ID(types.GenerateID())
 		attr := &domainmodel.Attribute{
 			Name:          a.Name,
 			Documentation: a.Documentation,
@@ -538,9 +541,9 @@ func (e *Executor) execAlterEntity(s *ast.AlterEntityStmt) error {
 				Type: "CalculatedValue",
 			}
 			if a.CalculatedMicroflow != nil {
-				mfID, err := e.resolveMicroflowByName(a.CalculatedMicroflow.String())
+				mfID, err := resolveMicroflowByName(ctx, a.CalculatedMicroflow.String())
 				if err != nil {
-					return fmt.Errorf("attribute '%s': %w", a.Name, err)
+					return mdlerrors.NewBackend(fmt.Sprintf("attribute '%s'", a.Name), err)
 				}
 				attrValue.MicroflowID = mfID
 				attrValue.MicroflowName = a.CalculatedMicroflow.String()
@@ -566,12 +569,12 @@ func (e *Executor) execAlterEntity(s *ast.AlterEntityStmt) error {
 				AttributeID: attrID,
 				Type:        "Required",
 			}
-			vr.ID = model.ID(mpr.GenerateID())
+			vr.ID = model.ID(types.GenerateID())
 			if a.NotNullError != "" {
 				vr.ErrorMessage = &model.Text{
 					Translations: map[string]string{"en_US": a.NotNullError},
 				}
-				vr.ErrorMessage.ID = model.ID(mpr.GenerateID())
+				vr.ErrorMessage.ID = model.ID(types.GenerateID())
 			}
 			entity.ValidationRules = append(entity.ValidationRules, vr)
 		}
@@ -580,22 +583,22 @@ func (e *Executor) execAlterEntity(s *ast.AlterEntityStmt) error {
 				AttributeID: attrID,
 				Type:        "Unique",
 			}
-			vr.ID = model.ID(mpr.GenerateID())
+			vr.ID = model.ID(types.GenerateID())
 			if a.UniqueError != "" {
 				vr.ErrorMessage = &model.Text{
 					Translations: map[string]string{"en_US": a.UniqueError},
 				}
-				vr.ErrorMessage.ID = model.ID(mpr.GenerateID())
+				vr.ErrorMessage.ID = model.ID(types.GenerateID())
 			}
 			entity.ValidationRules = append(entity.ValidationRules, vr)
 		}
 
-		if err := e.writer.UpdateEntity(dm.ID, entity); err != nil {
-			return fmt.Errorf("failed to add attribute: %w", err)
+		if err := ctx.Backend.UpdateEntity(dm.ID, entity); err != nil {
+			return mdlerrors.NewBackend("add attribute", err)
 		}
-		e.invalidateHierarchy()
-		e.invalidateDomainModelsCache()
-		fmt.Fprintf(e.output, "Added attribute '%s' to entity %s\n", a.Name, s.Name)
+		invalidateHierarchy(ctx)
+		invalidateDomainModelsCache(ctx)
+		fmt.Fprintf(ctx.Output, "Added attribute '%s' to entity %s\n", a.Name, s.Name)
 
 	case ast.AlterEntityRenameAttribute:
 		found := false
@@ -607,19 +610,19 @@ func (e *Executor) execAlterEntity(s *ast.AlterEntityStmt) error {
 			}
 		}
 		if !found {
-			return fmt.Errorf("attribute '%s' not found on entity %s", s.AttributeName, s.Name)
+			return mdlerrors.NewNotFoundMsg("attribute", s.AttributeName, fmt.Sprintf("attribute '%s' not found on entity %s", s.AttributeName, s.Name))
 		}
-		if err := e.writer.UpdateEntity(dm.ID, entity); err != nil {
-			return fmt.Errorf("failed to rename attribute: %w", err)
+		if err := ctx.Backend.UpdateEntity(dm.ID, entity); err != nil {
+			return mdlerrors.NewBackend("rename attribute", err)
 		}
-		e.invalidateHierarchy()
-		e.invalidateDomainModelsCache()
-		fmt.Fprintf(e.output, "Renamed attribute '%s' to '%s' on entity %s\n", s.AttributeName, s.NewName, s.Name)
+		invalidateHierarchy(ctx)
+		invalidateDomainModelsCache(ctx)
+		fmt.Fprintf(ctx.Output, "Renamed attribute '%s' to '%s' on entity %s\n", s.AttributeName, s.NewName, s.Name)
 
 	case ast.AlterEntityModifyAttribute:
 		// CALCULATED attributes are only supported on persistent entities
 		if s.Calculated && !entity.Persistable {
-			return fmt.Errorf("attribute '%s': CALCULATED attributes are only supported on persistent entities", s.AttributeName)
+			return mdlerrors.NewValidationf("attribute '%s': calculated attributes are only supported on persistent entities", s.AttributeName)
 		}
 		found := false
 		for _, attr := range entity.Attributes {
@@ -630,9 +633,9 @@ func (e *Executor) execAlterEntity(s *ast.AlterEntityStmt) error {
 						Type: "CalculatedValue",
 					}
 					if s.CalculatedMicroflow != nil {
-						mfID, err := e.resolveMicroflowByName(s.CalculatedMicroflow.String())
+						mfID, err := resolveMicroflowByName(ctx, s.CalculatedMicroflow.String())
 						if err != nil {
-							return fmt.Errorf("attribute '%s': %w", s.AttributeName, err)
+							return mdlerrors.NewBackend(fmt.Sprintf("attribute '%s'", s.AttributeName), err)
 						}
 						attrValue.MicroflowID = mfID
 						attrValue.MicroflowName = s.CalculatedMicroflow.String()
@@ -644,14 +647,14 @@ func (e *Executor) execAlterEntity(s *ast.AlterEntityStmt) error {
 			}
 		}
 		if !found {
-			return fmt.Errorf("attribute '%s' not found on entity %s", s.AttributeName, s.Name)
+			return mdlerrors.NewNotFoundMsg("attribute", s.AttributeName, fmt.Sprintf("attribute '%s' not found on entity %s", s.AttributeName, s.Name))
 		}
-		if err := e.writer.UpdateEntity(dm.ID, entity); err != nil {
-			return fmt.Errorf("failed to modify attribute: %w", err)
+		if err := ctx.Backend.UpdateEntity(dm.ID, entity); err != nil {
+			return mdlerrors.NewBackend("modify attribute", err)
 		}
-		e.invalidateHierarchy()
-		e.invalidateDomainModelsCache()
-		fmt.Fprintf(e.output, "Modified attribute '%s' on entity %s\n", s.AttributeName, s.Name)
+		invalidateHierarchy(ctx)
+		invalidateDomainModelsCache(ctx)
+		fmt.Fprintf(ctx.Output, "Modified attribute '%s' on entity %s\n", s.AttributeName, s.Name)
 
 	case ast.AlterEntityDropAttribute:
 		// System attribute pseudo-names: drop by clearing entity flags
@@ -659,22 +662,22 @@ func (e *Executor) execAlterEntity(s *ast.AlterEntityStmt) error {
 		case "owner":
 			if entity.HasOwner {
 				entity.HasOwner = false
-				return e.writer.UpdateEntity(dm.ID, entity)
+				return ctx.Backend.UpdateEntity(dm.ID, entity)
 			}
 		case "changedby":
 			if entity.HasChangedBy {
 				entity.HasChangedBy = false
-				return e.writer.UpdateEntity(dm.ID, entity)
+				return ctx.Backend.UpdateEntity(dm.ID, entity)
 			}
 		case "createddate":
 			if entity.HasCreatedDate {
 				entity.HasCreatedDate = false
-				return e.writer.UpdateEntity(dm.ID, entity)
+				return ctx.Backend.UpdateEntity(dm.ID, entity)
 			}
 		case "changeddate":
 			if entity.HasChangedDate {
 				entity.HasChangedDate = false
-				return e.writer.UpdateEntity(dm.ID, entity)
+				return ctx.Backend.UpdateEntity(dm.ID, entity)
 			}
 		}
 
@@ -686,7 +689,7 @@ func (e *Executor) execAlterEntity(s *ast.AlterEntityStmt) error {
 			}
 		}
 		if idx < 0 {
-			return fmt.Errorf("attribute '%s' not found on entity %s", s.AttributeName, s.Name)
+			return mdlerrors.NewNotFoundMsg("attribute", s.AttributeName, fmt.Sprintf("attribute '%s' not found on entity %s", s.AttributeName, s.Name))
 		}
 		// Clean up entity-level references to the dropped attribute
 		droppedID := entity.Attributes[idx].ID
@@ -745,67 +748,67 @@ func (e *Executor) execAlterEntity(s *ast.AlterEntityStmt) error {
 
 		// Remove the attribute
 		entity.Attributes = append(entity.Attributes[:idx], entity.Attributes[idx+1:]...)
-		if err := e.writer.UpdateEntity(dm.ID, entity); err != nil {
-			return fmt.Errorf("failed to drop attribute: %w", err)
+		if err := ctx.Backend.UpdateEntity(dm.ID, entity); err != nil {
+			return mdlerrors.NewBackend("drop attribute", err)
 		}
-		e.invalidateHierarchy()
-		e.invalidateDomainModelsCache()
-		fmt.Fprintf(e.output, "Dropped attribute '%s' from entity %s\n", s.AttributeName, s.Name)
+		invalidateHierarchy(ctx)
+		invalidateDomainModelsCache(ctx)
+		fmt.Fprintf(ctx.Output, "Dropped attribute '%s' from entity %s\n", s.AttributeName, s.Name)
 
 		// Report what was cleaned up on the entity itself
 		if n := origValidationCount - len(keepRules); n > 0 {
-			fmt.Fprintf(e.output, "  Removed %d validation rule(s)\n", n)
+			fmt.Fprintf(ctx.Output, "  Removed %d validation rule(s)\n", n)
 		}
 		if removedMemberAccess > 0 {
-			fmt.Fprintf(e.output, "  Removed %d access rule member reference(s)\n", removedMemberAccess)
+			fmt.Fprintf(ctx.Output, "  Removed %d access rule member reference(s)\n", removedMemberAccess)
 		}
 		if n := origIndexCount - len(keepIndexes); n > 0 {
-			fmt.Fprintf(e.output, "  Removed %d index(es)\n", n)
+			fmt.Fprintf(ctx.Output, "  Removed %d index(es)\n", n)
 		}
 
 		// Warn about references in other documents that are NOT auto-cleaned
 		entityQName := s.Name.String()
-		fmt.Fprintf(e.output, "  Warning: pages, microflows, and other documents may still reference '%s'. Update them manually.\n", s.AttributeName)
-		fmt.Fprintf(e.output, "  Use SHOW REFERENCES TO %s to find usages (requires REFRESH CATALOG FULL).\n", entityQName)
+		fmt.Fprintf(ctx.Output, "  Warning: pages, microflows, and other documents may still reference '%s'. Update them manually.\n", s.AttributeName)
+		fmt.Fprintf(ctx.Output, "  Use show references to %s to find usages (requires refresh catalog full).\n", entityQName)
 
 	case ast.AlterEntitySetDocumentation:
 		entity.Documentation = s.Documentation
-		if err := e.writer.UpdateEntity(dm.ID, entity); err != nil {
-			return fmt.Errorf("failed to set documentation: %w", err)
+		if err := ctx.Backend.UpdateEntity(dm.ID, entity); err != nil {
+			return mdlerrors.NewBackend("set documentation", err)
 		}
-		e.invalidateDomainModelsCache()
-		fmt.Fprintf(e.output, "Set documentation on entity %s\n", s.Name)
+		invalidateDomainModelsCache(ctx)
+		fmt.Fprintf(ctx.Output, "Set documentation on entity %s\n", s.Name)
 
 	case ast.AlterEntitySetComment:
 		// Comments are stored as documentation in the Mendix model
 		entity.Documentation = s.Comment
-		if err := e.writer.UpdateEntity(dm.ID, entity); err != nil {
-			return fmt.Errorf("failed to set comment: %w", err)
+		if err := ctx.Backend.UpdateEntity(dm.ID, entity); err != nil {
+			return mdlerrors.NewBackend("set comment", err)
 		}
-		e.invalidateDomainModelsCache()
-		fmt.Fprintf(e.output, "Set comment on entity %s\n", s.Name)
+		invalidateDomainModelsCache(ctx)
+		fmt.Fprintf(ctx.Output, "Set comment on entity %s\n", s.Name)
 
 	case ast.AlterEntitySetPosition:
 		if s.Position == nil {
-			return fmt.Errorf("no position provided")
+			return mdlerrors.NewValidation("no position provided")
 		}
 		entity.Location = model.Point{X: s.Position.X, Y: s.Position.Y}
-		if err := e.writer.UpdateEntity(dm.ID, entity); err != nil {
-			return fmt.Errorf("failed to set position: %w", err)
+		if err := ctx.Backend.UpdateEntity(dm.ID, entity); err != nil {
+			return mdlerrors.NewBackend("set position", err)
 		}
-		e.invalidateDomainModelsCache()
-		fmt.Fprintf(e.output, "Set position of entity %s to (%d, %d)\n", s.Name, s.Position.X, s.Position.Y)
+		invalidateDomainModelsCache(ctx)
+		fmt.Fprintf(ctx.Output, "Set position of entity %s to (%d, %d)\n", s.Name, s.Position.X, s.Position.Y)
 
 	case ast.AlterEntityAddIndex:
 		if s.Index == nil {
-			return fmt.Errorf("no index definition provided")
+			return mdlerrors.NewValidation("no index definition provided")
 		}
 		// Build name-to-ID map for attribute lookup
 		attrNameToID := make(map[string]model.ID)
 		for _, attr := range entity.Attributes {
 			attrNameToID[attr.Name] = attr.ID
 		}
-		idxID := model.ID(mpr.GenerateID())
+		idxID := model.ID(types.GenerateID())
 		var indexAttrs []*domainmodel.IndexAttribute
 		for _, col := range s.Index.Columns {
 			if attrID, ok := attrNameToID[col.Name]; ok {
@@ -813,10 +816,10 @@ func (e *Executor) execAlterEntity(s *ast.AlterEntityStmt) error {
 					AttributeID: attrID,
 					Ascending:   !col.Descending,
 				}
-				ia.ID = model.ID(mpr.GenerateID())
+				ia.ID = model.ID(types.GenerateID())
 				indexAttrs = append(indexAttrs, ia)
 			} else {
-				return fmt.Errorf("attribute '%s' not found for index on entity %s", col.Name, s.Name)
+				return mdlerrors.NewNotFoundMsg("attribute", col.Name, fmt.Sprintf("attribute '%s' not found for index on entity %s", col.Name, s.Name))
 			}
 		}
 		index := &domainmodel.Index{
@@ -824,16 +827,16 @@ func (e *Executor) execAlterEntity(s *ast.AlterEntityStmt) error {
 		}
 		index.ID = idxID
 		entity.Indexes = append(entity.Indexes, index)
-		if err := e.writer.UpdateEntity(dm.ID, entity); err != nil {
-			return fmt.Errorf("failed to add index: %w", err)
+		if err := ctx.Backend.UpdateEntity(dm.ID, entity); err != nil {
+			return mdlerrors.NewBackend("add index", err)
 		}
-		e.invalidateDomainModelsCache()
-		fmt.Fprintf(e.output, "Added index to entity %s\n", s.Name)
+		invalidateDomainModelsCache(ctx)
+		fmt.Fprintf(ctx.Output, "Added index to entity %s\n", s.Name)
 
 	case ast.AlterEntityDropIndex:
 		// Find and remove the index by position (Mendix indexes don't have user-visible names)
 		if len(entity.Indexes) == 0 {
-			return fmt.Errorf("no indexes on entity %s", s.Name)
+			return mdlerrors.NewValidationf("no indexes on entity %s", s.Name)
 		}
 		// For now, drop by ordinal name ("idx1", "idx2", etc.) or drop all
 		idx := -1
@@ -845,41 +848,42 @@ func (e *Executor) execAlterEntity(s *ast.AlterEntityStmt) error {
 			}
 		}
 		if idx < 0 {
-			return fmt.Errorf("index '%s' not found on entity %s", s.IndexName, s.Name)
+			return mdlerrors.NewNotFoundMsg("index", s.IndexName, fmt.Sprintf("index '%s' not found on entity %s", s.IndexName, s.Name))
 		}
 		entity.Indexes = append(entity.Indexes[:idx], entity.Indexes[idx+1:]...)
-		if err := e.writer.UpdateEntity(dm.ID, entity); err != nil {
-			return fmt.Errorf("failed to drop index: %w", err)
+		if err := ctx.Backend.UpdateEntity(dm.ID, entity); err != nil {
+			return mdlerrors.NewBackend("drop index", err)
 		}
-		e.invalidateDomainModelsCache()
-		fmt.Fprintf(e.output, "Dropped index '%s' from entity %s\n", s.IndexName, s.Name)
+		invalidateDomainModelsCache(ctx)
+		fmt.Fprintf(ctx.Output, "Dropped index '%s' from entity %s\n", s.IndexName, s.Name)
 
 	case ast.AlterEntityAddEventHandler:
 		if s.EventHandler == nil {
-			return fmt.Errorf("missing event handler definition")
+			return mdlerrors.NewValidation("missing event handler definition")
 		}
-		ehs, err := e.buildEventHandlers([]ast.EventHandlerDef{*s.EventHandler})
+		ehs, err := buildEventHandlers(ctx, []ast.EventHandlerDef{*s.EventHandler})
 		if err != nil {
 			return err
 		}
 		// Reject duplicate (same Moment + Event)
 		for _, existing := range entity.EventHandlers {
 			if existing.Moment == ehs[0].Moment && existing.Event == ehs[0].Event {
-				return fmt.Errorf("event handler already exists for %s %s on %s",
-					s.EventHandler.Moment, s.EventHandler.Event, s.Name)
+				return mdlerrors.NewAlreadyExistsMsg("event handler",
+					fmt.Sprintf("%s %s", s.EventHandler.Moment, s.EventHandler.Event),
+					fmt.Sprintf("event handler already exists for %s %s on %s", s.EventHandler.Moment, s.EventHandler.Event, s.Name))
 			}
 		}
 		entity.EventHandlers = append(entity.EventHandlers, ehs[0])
-		if err := e.writer.UpdateEntity(dm.ID, entity); err != nil {
-			return fmt.Errorf("failed to add event handler: %w", err)
+		if err := ctx.Backend.UpdateEntity(dm.ID, entity); err != nil {
+			return mdlerrors.NewBackend("add event handler", err)
 		}
-		e.invalidateDomainModelsCache()
-		fmt.Fprintf(e.output, "Added event handler %s %s on %s\n",
+		invalidateDomainModelsCache(ctx)
+		fmt.Fprintf(ctx.Output, "Added event handler %s %s on %s\n",
 			s.EventHandler.Moment, s.EventHandler.Event, s.Name)
 
 	case ast.AlterEntityDropEventHandler:
 		if s.EventHandler == nil {
-			return fmt.Errorf("missing event handler reference")
+			return mdlerrors.NewValidation("missing event handler reference")
 		}
 		moment := domainmodel.EventMoment(s.EventHandler.Moment)
 		event := domainmodel.EventType(s.EventHandler.Event)
@@ -891,19 +895,20 @@ func (e *Executor) execAlterEntity(s *ast.AlterEntityStmt) error {
 			}
 		}
 		if idx < 0 {
-			return fmt.Errorf("event handler %s %s not found on %s",
-				s.EventHandler.Moment, s.EventHandler.Event, s.Name)
+			return mdlerrors.NewNotFoundMsg("event handler",
+				fmt.Sprintf("%s %s", s.EventHandler.Moment, s.EventHandler.Event),
+				fmt.Sprintf("event handler %s %s not found on %s", s.EventHandler.Moment, s.EventHandler.Event, s.Name))
 		}
 		entity.EventHandlers = append(entity.EventHandlers[:idx], entity.EventHandlers[idx+1:]...)
-		if err := e.writer.UpdateEntity(dm.ID, entity); err != nil {
-			return fmt.Errorf("failed to drop event handler: %w", err)
+		if err := ctx.Backend.UpdateEntity(dm.ID, entity); err != nil {
+			return mdlerrors.NewBackend("drop event handler", err)
 		}
-		e.invalidateDomainModelsCache()
-		fmt.Fprintf(e.output, "Dropped event handler %s %s from %s\n",
+		invalidateDomainModelsCache(ctx)
+		fmt.Fprintf(ctx.Output, "Dropped event handler %s %s from %s\n",
 			s.EventHandler.Moment, s.EventHandler.Event, s.Name)
 
 	default:
-		return fmt.Errorf("unsupported ALTER ENTITY operation")
+		return mdlerrors.NewUnsupported("unsupported alter entity operation")
 	}
 
 	e.trackModifiedDomainModel(module.ID, module.Name)
@@ -911,66 +916,68 @@ func (e *Executor) execAlterEntity(s *ast.AlterEntityStmt) error {
 }
 
 // execDropEntity handles DROP ENTITY statements.
-func (e *Executor) execDropEntity(s *ast.DropEntityStmt) error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+func execDropEntity(ctx *ExecContext, s *ast.DropEntityStmt) error {
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
 	// Find module and entity
-	module, err := e.findModule(s.Name.Module)
+	module, err := findModule(ctx, s.Name.Module)
 	if err != nil {
 		return err
 	}
 
-	dm, err := e.reader.GetDomainModel(module.ID)
+	dm, err := ctx.Backend.GetDomainModel(module.ID)
 	if err != nil {
-		return fmt.Errorf("failed to get domain model: %w", err)
+		return mdlerrors.NewBackend("get domain model", err)
 	}
 
 	for _, entity := range dm.Entities {
 		if entity.Name == s.Name.Name {
 			// Warn about references before deleting (best-effort)
-			e.warnEntityReferences(s.Name.String())
+			warnEntityReferences(ctx, s.Name.String())
 
 			// If this is a view entity, also delete the associated ViewEntitySourceDocument
 			if entity.Source == "DomainModels$OqlViewEntitySource" {
-				if err := e.writer.DeleteViewEntitySourceDocumentByName(s.Name.Module, s.Name.Name); err != nil {
-					return fmt.Errorf("failed to delete view entity source document: %w", err)
+				if err := ctx.Backend.DeleteViewEntitySourceDocumentByName(s.Name.Module, s.Name.Name); err != nil {
+					return mdlerrors.NewBackend("delete view entity source document", err)
 				}
 			}
-			if err := e.writer.DeleteEntity(dm.ID, entity.ID); err != nil {
-				return fmt.Errorf("failed to delete entity: %w", err)
+			if err := ctx.Backend.DeleteEntity(dm.ID, entity.ID); err != nil {
+				return mdlerrors.NewBackend("delete entity", err)
 			}
-			e.invalidateDomainModelsCache()
-			fmt.Fprintf(e.output, "Dropped entity: %s\n", s.Name)
+			invalidateDomainModelsCache(ctx)
+			fmt.Fprintf(ctx.Output, "Dropped entity: %s\n", s.Name)
 			return nil
 		}
 	}
 
-	return fmt.Errorf("entity not found: %s", s.Name)
+	return mdlerrors.NewNotFoundMsg("entity", fmt.Sprint(s.Name), fmt.Sprintf("entity not found: %s", s.Name))
 }
 
 // warnEntityReferences prints a warning if the entity is referenced by other elements.
 // Uses the catalog if available; silently skips if catalog is not built.
-func (e *Executor) warnEntityReferences(entityName string) {
-	if e.catalog == nil || !e.catalog.IsBuilt() {
+func warnEntityReferences(ctx *ExecContext, entityName string) {
+	if ctx.Catalog == nil || !ctx.Catalog.IsBuilt() {
 		return
 	}
 
 	query := fmt.Sprintf(
-		"SELECT SourceType, SourceName, RefKind FROM refs WHERE TargetName = '%s'",
+		"select SourceType, SourceName, RefKind from refs where TargetName = '%s'",
 		strings.ReplaceAll(entityName, "'", "''"),
 	)
-	result, err := e.catalog.Query(query)
+	result, err := ctx.Catalog.Query(query)
 	if err != nil || result.Count == 0 {
 		return
 	}
 
-	fmt.Fprintf(e.output, "WARNING: %s is referenced by %d element(s):\n", entityName, result.Count)
+	fmt.Fprintf(ctx.Output, "warning: %s is referenced by %d element(s):\n", entityName, result.Count)
 	for _, row := range result.Rows {
 		sourceType, _ := row[0].(string)
 		sourceName, _ := row[1].(string)
 		refKind, _ := row[2].(string)
-		fmt.Fprintf(e.output, "  - %s %s (%s)\n", sourceType, sourceName, refKind)
+		fmt.Fprintf(ctx.Output, "  - %s %s (%s)\n", sourceType, sourceName, refKind)
 	}
 }
+
+// --- Executor method wrappers for callers not yet migrated ---

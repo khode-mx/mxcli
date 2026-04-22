@@ -7,20 +7,22 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
 )
 
-// showSnippets handles SHOW SNIPPETS command.
-func (e *Executor) showSnippets(moduleName string) error {
+// listSnippets handles SHOW SNIPPETS command.
+func listSnippets(ctx *ExecContext, moduleName string) error {
 	// Get hierarchy for module/folder resolution
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to build hierarchy: %w", err)
+		return mdlerrors.NewBackend("build hierarchy", err)
 	}
 
 	// Get all snippets
-	snippets, err := e.reader.ListSnippets()
+	snippets, err := ctx.Backend.ListSnippets()
 	if err != nil {
-		return fmt.Errorf("failed to list snippets: %w", err)
+		return mdlerrors.NewBackend("list snippets", err)
 	}
 
 	// Collect rows
@@ -56,5 +58,5 @@ func (e *Executor) showSnippets(moduleName string) error {
 	for _, r := range rows {
 		result.Rows = append(result.Rows, []any{r.qualifiedName, r.module, r.name, r.folderPath, r.params})
 	}
-	return e.writeResult(result)
+	return writeResult(ctx, result)
 }

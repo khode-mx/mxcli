@@ -4,14 +4,17 @@
 package executor
 
 import (
+	"context"
 	"fmt"
 	"io"
-	"path/filepath"
 	"time"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	"github.com/mendixlabs/mxcli/mdl/backend"
 	"github.com/mendixlabs/mxcli/mdl/catalog"
 	"github.com/mendixlabs/mxcli/mdl/diaglog"
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
+	"github.com/mendixlabs/mxcli/mdl/types"
 	"github.com/mendixlabs/mxcli/model"
 	"github.com/mendixlabs/mxcli/sdk/domainmodel"
 	"github.com/mendixlabs/mxcli/sdk/mpr"
@@ -21,8 +24,8 @@ import (
 // executorCache holds cached data for performance across multiple operations.
 type executorCache struct {
 	modules      []*model.Module
-	units        []*mpr.UnitInfo
-	folders      []*mpr.FolderInfo
+	units        []*types.UnitInfo
+	folders      []*types.FolderInfo
 	domainModels []*domainmodel.DomainModel
 	hierarchy    *ContainerHierarchy
 	// pages, layouts, microflows are cached separately as they may change during execution
@@ -67,43 +70,70 @@ type createdSnippetInfo struct {
 }
 
 // getEntityNames returns the entity name lookup map, using the pre-warmed cache if available.
-func (e *Executor) getEntityNames(h *ContainerHierarchy) map[model.ID]string {
-	if e.cache != nil && len(e.cache.entityNames) > 0 {
-		return e.cache.entityNames
+func getEntityNames(ctx *ExecContext, h *ContainerHierarchy) map[model.ID]string {
+	if ctx.Cache != nil && len(ctx.Cache.entityNames) > 0 {
+		return ctx.Cache.entityNames
 	}
 	entityNames := make(map[model.ID]string)
-	dms, _ := e.reader.ListDomainModels()
+	dms, err := ctx.Backend.ListDomainModels()
+	if err != nil {
+		if ctx.Logger != nil {
+			ctx.Logger.Warn("getEntityNames: ListDomainModels failed", "error", err)
+		}
+		return entityNames
+	}
 	for _, dm := range dms {
 		modName := h.GetModuleName(dm.ContainerID)
 		for _, ent := range dm.Entities {
 			entityNames[ent.ID] = modName + "." + ent.Name
 		}
 	}
+	if ctx.Cache != nil {
+		ctx.Cache.entityNames = entityNames
+	}
 	return entityNames
 }
 
 // getMicroflowNames returns the microflow name lookup map, using the pre-warmed cache if available.
-func (e *Executor) getMicroflowNames(h *ContainerHierarchy) map[model.ID]string {
-	if e.cache != nil && len(e.cache.microflowNames) > 0 {
-		return e.cache.microflowNames
+func getMicroflowNames(ctx *ExecContext, h *ContainerHierarchy) map[model.ID]string {
+	if ctx.Cache != nil && len(ctx.Cache.microflowNames) > 0 {
+		return ctx.Cache.microflowNames
 	}
 	microflowNames := make(map[model.ID]string)
-	mfs, _ := e.reader.ListMicroflows()
+	mfs, err := ctx.Backend.ListMicroflows()
+	if err != nil {
+		if ctx.Logger != nil {
+			ctx.Logger.Warn("getMicroflowNames: ListMicroflows failed", "error", err)
+		}
+		return microflowNames
+	}
 	for _, mf := range mfs {
 		microflowNames[mf.ID] = h.GetQualifiedName(mf.ContainerID, mf.Name)
+	}
+	if ctx.Cache != nil {
+		ctx.Cache.microflowNames = microflowNames
 	}
 	return microflowNames
 }
 
 // getPageNames returns the page name lookup map, using the pre-warmed cache if available.
-func (e *Executor) getPageNames(h *ContainerHierarchy) map[model.ID]string {
-	if e.cache != nil && len(e.cache.pageNames) > 0 {
-		return e.cache.pageNames
+func getPageNames(ctx *ExecContext, h *ContainerHierarchy) map[model.ID]string {
+	if ctx.Cache != nil && len(ctx.Cache.pageNames) > 0 {
+		return ctx.Cache.pageNames
 	}
 	pageNames := make(map[model.ID]string)
-	pgs, _ := e.reader.ListPages()
+	pgs, err := ctx.Backend.ListPages()
+	if err != nil {
+		if ctx.Logger != nil {
+			ctx.Logger.Warn("getPageNames: ListPages failed", "error", err)
+		}
+		return pageNames
+	}
 	for _, pg := range pgs {
 		pageNames[pg.ID] = h.GetQualifiedName(pg.ContainerID, pg.Name)
+	}
+	if ctx.Cache != nil {
+		ctx.Cache.pageNames = pageNames
 	}
 	return pageNames
 }
@@ -116,22 +146,26 @@ const (
 	executeTimeout = 5 * time.Minute
 )
 
+// BackendFactory creates a new backend instance for connecting to a project.
+type BackendFactory func() backend.FullBackend
+
 // Executor executes MDL statements against a Mendix project.
 type Executor struct {
-	writer        *mpr.Writer
-	reader        *mpr.Reader
-	output        io.Writer
-	guard         *outputGuard // line-limit wrapper around output
-	mprPath       string
-	settings      map[string]any
-	cache         *executorCache
-	catalog       *catalog.Catalog
-	quiet         bool                               // suppress connection and status messages
-	format        OutputFormat                       // output format (table, json)
-	logger        *diaglog.Logger                    // session diagnostics logger (nil = no logging)
-	fragments     map[string]*ast.DefineFragmentStmt // script-scoped fragment definitions
-	sqlMgr        *sqllib.Manager                    // external SQL connection manager (lazy init)
-	themeRegistry *ThemeRegistry                     // cached theme design property definitions (lazy init)
+	backend        backend.FullBackend // domain backend (populated on Connect)
+	backendFactory BackendFactory      // factory for creating new backend instances
+	output         io.Writer
+	guard          *outputGuard // line-limit wrapper around output
+	mprPath        string
+	settings       map[string]any
+	cache          *executorCache
+	catalog        *catalog.Catalog
+	quiet          bool                               // suppress connection and status messages
+	format         OutputFormat                       // output format (table, json)
+	logger         *diaglog.Logger                    // session diagnostics logger (nil = no logging)
+	fragments      map[string]*ast.DefineFragmentStmt // script-scoped fragment definitions
+	sqlMgr         *sqllib.Manager                    // external SQL connection manager (lazy init)
+	themeRegistry  *ThemeRegistry                     // cached theme design property definitions (lazy init)
+	registry       *Registry                          // statement dispatch registry
 }
 
 // New creates a new executor with the given output writer.
@@ -141,23 +175,13 @@ func New(output io.Writer) *Executor {
 		output:   guard,
 		guard:    guard,
 		settings: make(map[string]any),
+		registry: NewRegistry(),
 	}
 }
 
-// getThemeRegistry returns the cached theme registry, loading it lazily from the project's theme sources.
-func (e *Executor) getThemeRegistry() *ThemeRegistry {
-	if e.themeRegistry != nil {
-		return e.themeRegistry
-	}
-	if e.mprPath == "" {
-		return nil
-	}
-	projectDir := filepath.Dir(e.mprPath)
-	registry, err := loadThemeRegistry(projectDir)
-	if err == nil {
-		e.themeRegistry = registry
-	}
-	return e.themeRegistry
+// SetBackendFactory sets the factory function used to create backend instances on Connect.
+func (e *Executor) SetBackendFactory(f BackendFactory) {
+	e.backendFactory = f
 }
 
 // SetQuiet enables or disables quiet mode (suppresses connection/status messages).
@@ -186,20 +210,24 @@ func (e *Executor) Execute(stmt ast.Statement) error {
 		e.guard.reset()
 	}
 
-	// Run statement in a goroutine so we can enforce a wall-clock timeout.
-	// The outputGuard handles race-safe writes if the goroutine outlives the timeout.
+	// Enforce wall-clock timeout via context.WithTimeout.
+	// The goroutine pattern is retained because handlers are not yet
+	// context-aware; threading context through handlers is a follow-up.
+	ctx, cancel := context.WithTimeout(context.Background(), executeTimeout)
+	defer cancel()
+
 	type result struct{ err error }
 	ch := make(chan result, 1)
 	go func() {
-		ch <- result{e.executeInner(stmt)}
+		ch <- result{e.executeInner(ctx, stmt)}
 	}()
 
 	var err error
 	select {
 	case r := <-ch:
 		err = r.err
-	case <-time.After(executeTimeout):
-		err = fmt.Errorf("statement timed out after %v", executeTimeout)
+	case <-ctx.Done():
+		err = mdlerrors.NewValidationf("statement timed out after %v", executeTimeout)
 	}
 
 	if e.logger != nil {
@@ -229,7 +257,7 @@ func (e *Executor) ExecuteProgram(prog *ast.Program) error {
 // trackModifiedDomainModel records a domain model that was modified during execution,
 // so it can be reconciled at the end of the program.
 func (e *Executor) trackModifiedDomainModel(moduleID model.ID, moduleName string) {
-	if e.writer == nil {
+	if e.backend == nil || !e.backend.IsConnected() {
 		return
 	}
 	if e.cache == nil {
@@ -244,19 +272,19 @@ func (e *Executor) trackModifiedDomainModel(moduleID model.ID, moduleName string
 
 // finalizeProgramExecution runs post-execution reconciliation on modified domain models.
 func (e *Executor) finalizeProgramExecution() error {
-	if e.writer == nil || e.cache == nil || len(e.cache.modifiedDomainModels) == 0 {
+	if e.backend == nil || !e.backend.IsConnected() || e.cache == nil || len(e.cache.modifiedDomainModels) == 0 {
 		return nil
 	}
 
 	for moduleID, moduleName := range e.cache.modifiedDomainModels {
-		dm, err := e.reader.GetDomainModel(moduleID)
+		dm, err := e.backend.GetDomainModel(moduleID)
 		if err != nil {
 			continue // module may not have a domain model
 		}
 
-		count, err := e.writer.ReconcileMemberAccesses(dm.ID, moduleName)
+		count, err := e.backend.ReconcileMemberAccesses(dm.ID, moduleName)
 		if err != nil {
-			return fmt.Errorf("finalization: failed to reconcile security for module %s: %w", moduleName, err)
+			return mdlerrors.NewBackend(fmt.Sprintf("reconcile security for module %s", moduleName), err)
 		}
 		if count > 0 && !e.quiet {
 			fmt.Fprintf(e.output, "Reconciled %d access rule(s) in module %s\n", count, moduleName)
@@ -274,27 +302,38 @@ func (e *Executor) Catalog() *catalog.Catalog {
 }
 
 // Reader returns the MPR reader, or nil if not connected.
+// Deprecated: External callers should migrate to using Backend methods directly.
+// TODO(shared-types): remove once all callers use Backend — target: v0.next milestone.
 func (e *Executor) Reader() *mpr.Reader {
-	return e.reader
+	if e.backend == nil {
+		return nil
+	}
+	type readerProvider interface {
+		MprReader() *mpr.Reader
+	}
+	if rp, ok := e.backend.(readerProvider); ok {
+		return rp.MprReader()
+	}
+	return nil
 }
 
 // IsConnected returns true if connected to a project.
 func (e *Executor) IsConnected() bool {
-	return e.writer != nil
+	return e.backend != nil && e.backend.IsConnected()
 }
 
 // Close closes the connection to the project and all SQL connections.
 func (e *Executor) Close() error {
-	if e.writer != nil {
-		e.writer.Close()
-		e.writer = nil
-		e.reader = nil
+	var closeErr error
+	if e.backend != nil && e.backend.IsConnected() {
+		closeErr = e.backend.Disconnect()
+		e.backend = nil
 	}
 	if e.sqlMgr != nil {
 		e.sqlMgr.CloseAll()
 		e.sqlMgr = nil
 	}
-	return nil
+	return closeErr
 }
 
 // ----------------------------------------------------------------------------
@@ -303,7 +342,7 @@ func (e *Executor) Close() error {
 
 // trackCreatedMicroflow registers a microflow that was created during this session.
 // This allows subsequent page creations to resolve references to the microflow
-// even though the reader cache hasn't been updated.
+// even though the backend cache hasn't been updated.
 func (e *Executor) trackCreatedMicroflow(moduleName, mfName string, id, containerID model.ID, returnEntityName string) {
 	e.ensureCache()
 	if e.cache.createdMicroflows == nil {
@@ -321,7 +360,7 @@ func (e *Executor) trackCreatedMicroflow(moduleName, mfName string, id, containe
 
 // trackCreatedPage registers a page that was created during this session.
 // This allows subsequent page creations to resolve SHOW_PAGE references
-// even though the reader cache hasn't been updated.
+// even though the backend cache hasn't been updated.
 func (e *Executor) trackCreatedPage(moduleName, pageName string, id, containerID model.ID) {
 	e.ensureCache()
 	if e.cache.createdPages == nil {
@@ -338,7 +377,7 @@ func (e *Executor) trackCreatedPage(moduleName, pageName string, id, containerID
 
 // trackCreatedSnippet registers a snippet that was created during this session.
 // This allows subsequent creations to resolve snippet references
-// even though the reader cache hasn't been updated.
+// even though the backend cache hasn't been updated.
 func (e *Executor) trackCreatedSnippet(moduleName, snippetName string, id, containerID model.ID) {
 	e.ensureCache()
 	if e.cache.createdSnippets == nil {

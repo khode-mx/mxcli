@@ -4,6 +4,7 @@ package executor
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -13,20 +14,21 @@ import (
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
 	"github.com/mendixlabs/mxcli/mdl/catalog"
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
 	"github.com/mendixlabs/mxcli/model"
 )
 
 // execShowCatalogTables handles SHOW CATALOG TABLES.
-func (e *Executor) execShowCatalogTables() error {
+func execShowCatalogTables(ctx *ExecContext) error {
 	// Build catalog if not already built (fast mode by default)
-	if e.catalog == nil || !e.catalog.IsBuilt() {
-		if err := e.ensureCatalog(false); err != nil {
+	if ctx.Catalog == nil || !ctx.Catalog.IsBuilt() {
+		if err := ensureCatalog(ctx, false); err != nil {
 			return err
 		}
 	}
 
-	tables := e.catalog.Tables()
-	fmt.Fprintf(e.output, "\nFound %d catalog table(s)\n", len(tables))
+	tables := ctx.Catalog.Tables()
+	fmt.Fprintf(ctx.Output, "\nFound %d catalog table(s)\n", len(tables))
 
 	// Get row counts for each table
 	type tableInfo struct {
@@ -38,7 +40,7 @@ func (e *Executor) execShowCatalogTables() error {
 	for _, t := range tables {
 		// Get count for this table
 		actualTable := strings.TrimPrefix(strings.ToLower(t), "catalog.")
-		result, err := e.catalog.Query(fmt.Sprintf("SELECT COUNT(*) FROM %s", actualTable))
+		result, err := ctx.Catalog.Query(fmt.Sprintf("select count(*) from %s", actualTable))
 		count := 0
 		if err == nil && len(result.Rows) > 0 {
 			if v, ok := result.Rows[0][0].(int64); ok {
@@ -54,7 +56,7 @@ func (e *Executor) execShowCatalogTables() error {
 	for _, info := range infos {
 		tr.Rows = append(tr.Rows, []any{info.name, info.count})
 	}
-	return e.writeResult(tr)
+	return writeResult(ctx, tr)
 }
 
 // fullOnlyTables are catalog tables only populated by REFRESH CATALOG FULL.
@@ -89,7 +91,7 @@ func extractTableFromQuery(query string) string {
 
 // warnIfCatalogModeInsufficient checks if the query targets a table that requires
 // a higher catalog build mode than what's currently cached, and prints a warning.
-func (e *Executor) warnIfCatalogModeInsufficient(query string) {
+func warnIfCatalogModeInsufficient(ctx *ExecContext, query string) {
 	table := extractTableFromQuery(query)
 	if table == "" {
 		return
@@ -97,8 +99,8 @@ func (e *Executor) warnIfCatalogModeInsufficient(query string) {
 
 	// Determine current build mode
 	buildMode := "fast"
-	if e.catalog != nil {
-		if info, err := e.catalog.GetCacheInfo(); err == nil && info.BuildMode != "" {
+	if ctx.Catalog != nil {
+		if info, err := ctx.Catalog.GetCacheInfo(); err == nil && info.BuildMode != "" {
 			buildMode = info.BuildMode
 		}
 	}
@@ -107,17 +109,17 @@ func (e *Executor) warnIfCatalogModeInsufficient(query string) {
 	currentRank := modeRank[buildMode]
 
 	if sourceOnlyTables[table] && currentRank < modeRank["source"] {
-		fmt.Fprintf(e.output, "Warning: CATALOG.%s requires REFRESH CATALOG FULL SOURCE (current mode: %s)\n", strings.ToUpper(table), buildMode)
+		fmt.Fprintf(ctx.Output, "Warning: CATALOG.%s requires refresh catalog full source (current mode: %s)\n", strings.ToUpper(table), buildMode)
 	} else if fullOnlyTables[table] && currentRank < modeRank["full"] {
-		fmt.Fprintf(e.output, "Warning: CATALOG.%s requires REFRESH CATALOG FULL (current mode: %s)\n", strings.ToUpper(table), buildMode)
+		fmt.Fprintf(ctx.Output, "Warning: CATALOG.%s requires refresh catalog full (current mode: %s)\n", strings.ToUpper(table), buildMode)
 	}
 }
 
 // execCatalogQuery handles SELECT ... FROM CATALOG.xxx queries.
-func (e *Executor) execCatalogQuery(query string) error {
+func execCatalogQuery(ctx *ExecContext, query string) error {
 	// Build catalog if not already built (fast mode by default)
-	if e.catalog == nil || !e.catalog.IsBuilt() {
-		if err := e.ensureCatalog(false); err != nil {
+	if ctx.Catalog == nil || !ctx.Catalog.IsBuilt() {
+		if err := ensureCatalog(ctx, false); err != nil {
 			return err
 		}
 	}
@@ -126,41 +128,41 @@ func (e *Executor) execCatalogQuery(query string) error {
 	query = convertCatalogTableNames(query)
 
 	// Warn if querying a table that requires a higher build mode
-	e.warnIfCatalogModeInsufficient(query)
+	warnIfCatalogModeInsufficient(ctx, query)
 
 	// Execute query
-	result, err := e.catalog.Query(query)
+	result, err := ctx.Catalog.Query(query)
 	if err != nil {
-		return fmt.Errorf("failed to execute catalog query\n%v", err)
+		return mdlerrors.NewBackend("execute catalog query", err)
 	}
 
 	// Output results
-	fmt.Fprintf(e.output, "Found %d result(s)\n", result.Count)
+	fmt.Fprintf(ctx.Output, "Found %d result(s)\n", result.Count)
 	if result.Count == 0 {
-		fmt.Fprintln(e.output, "(no results)")
+		fmt.Fprintln(ctx.Output, "(no results)")
 		return nil
 	}
 
-	e.outputCatalogResults(result)
+	outputCatalogResults(ctx, result)
 	return nil
 }
 
 // tableRequiredMode returns the minimum catalog build mode for a table.
 func tableRequiredMode(table string) string {
 	if sourceOnlyTables[table] {
-		return "REFRESH CATALOG FULL SOURCE"
+		return "refresh catalog full source"
 	}
 	if fullOnlyTables[table] {
-		return "REFRESH CATALOG FULL"
+		return "refresh catalog full"
 	}
-	return "REFRESH CATALOG"
+	return "refresh catalog"
 }
 
 // execDescribeCatalogTable handles DESCRIBE CATALOG.tablename.
-func (e *Executor) execDescribeCatalogTable(stmt *ast.DescribeCatalogTableStmt) error {
+func execDescribeCatalogTable(ctx *ExecContext, stmt *ast.DescribeCatalogTableStmt) error {
 	// Build catalog if not already built (fast mode by default)
-	if e.catalog == nil || !e.catalog.IsBuilt() {
-		if err := e.ensureCatalog(false); err != nil {
+	if ctx.Catalog == nil || !ctx.Catalog.IsBuilt() {
+		if err := ensureCatalog(ctx, false); err != nil {
 			return err
 		}
 	}
@@ -168,14 +170,14 @@ func (e *Executor) execDescribeCatalogTable(stmt *ast.DescribeCatalogTableStmt) 
 	tableName := stmt.TableName
 
 	// Query column info using PRAGMA
-	result, err := e.catalog.Query(fmt.Sprintf("PRAGMA table_info(%s)", tableName))
+	result, err := ctx.Catalog.Query(fmt.Sprintf("PRAGMA table_info(%s)", tableName))
 	if err != nil || result.Count == 0 {
-		return fmt.Errorf("unknown catalog table: CATALOG.%s", strings.ToUpper(tableName))
+		return mdlerrors.NewNotFoundMsg("catalog table", strings.ToUpper(tableName), "unknown catalog table: CATALOG."+strings.ToUpper(tableName))
 	}
 
 	// Print table header
-	fmt.Fprintf(e.output, "\nCATALOG.%s\n", strings.ToUpper(tableName))
-	fmt.Fprintf(e.output, "Requires: %s\n\n", tableRequiredMode(tableName))
+	fmt.Fprintf(ctx.Output, "\nCATALOG.%s\n", strings.ToUpper(tableName))
+	fmt.Fprintf(ctx.Output, "Requires: %s\n\n", tableRequiredMode(tableName))
 
 	// PRAGMA table_info returns: cid, name, type, notnull, dflt_value, pk
 	tr := &TableResult{
@@ -190,45 +192,50 @@ func (e *Executor) execDescribeCatalogTable(stmt *ast.DescribeCatalogTableStmt) 
 		}
 		tr.Rows = append(tr.Rows, []any{name, typ, pkMark})
 	}
-	return e.writeResult(tr)
+	return writeResult(ctx, tr)
 }
 
 // ensureCatalog ensures a catalog is available, using cache if possible.
-func (e *Executor) ensureCatalog(full bool) error {
+func ensureCatalog(ctx *ExecContext, full bool) error {
 	requiredMode := "fast"
 	if full {
 		requiredMode = "full"
 	}
 
 	// Try to load from cache first
-	cachePath := e.getCachePath()
+	cachePath := getCachePath(ctx)
 	if cachePath != "" {
-		valid, _ := e.isCacheValid(cachePath, requiredMode)
+		valid, _ := isCacheValid(ctx, cachePath, requiredMode)
 		if valid {
-			return e.loadCachedCatalog(cachePath)
+			return loadCachedCatalog(ctx, cachePath)
 		}
 	}
 
+	// Guard against building without a connection.
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
+	}
+
 	// Build fresh catalog
-	return e.buildCatalog(full)
+	return buildCatalog(ctx, full)
 }
 
 // getCachePath returns the path to the catalog cache file for the current project.
-func (e *Executor) getCachePath() string {
-	if e.mprPath == "" {
+func getCachePath(ctx *ExecContext) string {
+	if ctx.MprPath == "" {
 		return ""
 	}
-	dir := filepath.Dir(e.mprPath)
+	dir := filepath.Dir(ctx.MprPath)
 	cacheDir := filepath.Join(dir, ".mxcli")
 	return filepath.Join(cacheDir, "catalog.db")
 }
 
 // getMprModTime returns the modification time of the current MPR file.
-func (e *Executor) getMprModTime() time.Time {
-	if e.mprPath == "" {
+func getMprModTime(ctx *ExecContext) time.Time {
+	if ctx.MprPath == "" {
 		return time.Time{}
 	}
-	info, err := os.Stat(e.mprPath)
+	info, err := os.Stat(ctx.MprPath)
 	if err != nil {
 		return time.Time{}
 	}
@@ -236,7 +243,7 @@ func (e *Executor) getMprModTime() time.Time {
 }
 
 // isCacheValid checks if the cached catalog is still valid.
-func (e *Executor) isCacheValid(cachePath string, requiredMode string) (bool, string) {
+func isCacheValid(ctx *ExecContext, cachePath string, requiredMode string) (bool, string) {
 	// Check if cache file exists
 	if _, err := os.Stat(cachePath); os.IsNotExist(err) {
 		return false, "cache file does not exist"
@@ -255,12 +262,12 @@ func (e *Executor) isCacheValid(cachePath string, requiredMode string) (bool, st
 	}
 
 	// Check MPR path matches
-	if info.MprPath != e.mprPath {
+	if info.MprPath != ctx.MprPath {
 		return false, "MPR path changed"
 	}
 
 	// Check MPR modification time (compare Unix seconds to handle timezone/precision issues)
-	currentModTime := e.getMprModTime()
+	currentModTime := getMprModTime(ctx)
 	if info.MprModTime.Unix() != currentModTime.Unix() {
 		return false, "project file modified"
 	}
@@ -277,7 +284,8 @@ func (e *Executor) isCacheValid(cachePath string, requiredMode string) (bool, st
 }
 
 // loadCachedCatalog loads a catalog from the cache file.
-func (e *Executor) loadCachedCatalog(cachePath string) error {
+func loadCachedCatalog(ctx *ExecContext, cachePath string) error {
+	e := ctx.executor
 	cat, err := catalog.NewFromFile(cachePath)
 	if err != nil {
 		return err
@@ -289,12 +297,13 @@ func (e *Executor) loadCachedCatalog(cachePath string) error {
 		return err
 	}
 
+	ctx.Catalog = cat
 	e.catalog = cat
-	if !e.quiet {
+	if !ctx.Quiet {
 		age := time.Since(info.BuildTime)
-		fmt.Fprintf(e.output, "Loading cached catalog (built %s ago, %s mode)...\n",
+		fmt.Fprintf(ctx.Output, "Loading cached catalog (built %s ago, %s mode)...\n",
 			formatDuration(age), info.BuildMode)
-		fmt.Fprintf(e.output, "✓ Catalog ready (from cache)\n")
+		fmt.Fprintf(ctx.Output, "✓ Catalog ready (from cache)\n")
 	}
 	return nil
 }
@@ -314,19 +323,20 @@ func formatDuration(d time.Duration) string {
 }
 
 // buildCatalog builds the catalog from the project.
-func (e *Executor) buildCatalog(full bool, source ...bool) error {
+func buildCatalog(ctx *ExecContext, full bool, source ...bool) error {
+	e := ctx.executor
 	isSource := len(source) > 0 && source[0]
 	if isSource {
 		full = true // source implies full
 	}
 
-	if !e.quiet {
+	if !ctx.Quiet {
 		if isSource {
-			fmt.Fprintln(e.output, "Building catalog (source mode - includes MDL source)...")
+			fmt.Fprintln(ctx.Output, "Building catalog (source mode - includes MDL source)...")
 		} else if full {
-			fmt.Fprintln(e.output, "Building catalog (full mode - includes activities/widgets)...")
+			fmt.Fprintln(ctx.Output, "Building catalog (full mode - includes activities/widgets)...")
 		} else {
-			fmt.Fprintln(e.output, "Building catalog (fast mode)...")
+			fmt.Fprintln(ctx.Output, "Building catalog (fast mode)...")
 		}
 	}
 	start := time.Now()
@@ -334,27 +344,29 @@ func (e *Executor) buildCatalog(full bool, source ...bool) error {
 	// Create new catalog
 	cat, err := catalog.New()
 	if err != nil {
-		return fmt.Errorf("failed to create catalog: %w", err)
+		return mdlerrors.NewBackend("create catalog", err)
 	}
 
 	// Set project metadata
-	version, _ := e.reader.GetMendixVersion()
+	version, _ := ctx.Backend.GetMendixVersion()
 	cat.SetProject("default", "Current Project", version)
 
 	// Build catalog
-	builder := catalog.NewBuilder(cat, e.reader)
+	builder := catalog.NewBuilder(cat, ctx.Backend)
 	builder.SetFullMode(full)
 	if isSource {
 		builder.SetSourceMode(true)
-		e.PreWarmCache()
-		builder.SetDescribeFunc(e.captureDescribeParallel)
+		preWarmCache(ctx)
+		builder.SetDescribeFunc(func(objectType string, qualifiedName string) (string, error) {
+			return captureDescribeParallel(ctx, objectType, qualifiedName)
+		})
 	}
 	err = builder.Build(func(table string, count int) {
-		fmt.Fprintf(e.output, "✓ %s: %d\n", table, count)
+		fmt.Fprintf(ctx.Output, "✓ %s: %d\n", table, count)
 	})
 	if err != nil {
 		cat.Close()
-		return fmt.Errorf("failed to build catalog: %w", err)
+		return mdlerrors.NewBackend("build catalog", err)
 	}
 
 	elapsed := time.Since(start)
@@ -366,26 +378,27 @@ func (e *Executor) buildCatalog(full bool, source ...bool) error {
 	} else if full {
 		buildMode = "full"
 	}
-	cat.SetCacheInfo(e.mprPath, e.getMprModTime(), version, buildMode, elapsed)
+	cat.SetCacheInfo(ctx.MprPath, getMprModTime(ctx), version, buildMode, elapsed)
 
 	cat.SetBuilt(true)
+	ctx.Catalog = cat
 	e.catalog = cat
 
-	if !e.quiet {
-		fmt.Fprintf(e.output, "✓ Catalog ready (%.1fs)\n", elapsed.Seconds())
+	if !ctx.Quiet {
+		fmt.Fprintf(ctx.Output, "✓ Catalog ready (%.1fs)\n", elapsed.Seconds())
 	}
 
 	// Save to cache file
-	cachePath := e.getCachePath()
+	cachePath := getCachePath(ctx)
 	if cachePath != "" {
 		cacheDir := filepath.Dir(cachePath)
 		if err := os.MkdirAll(cacheDir, 0755); err == nil {
 			// Remove existing cache file first
 			os.Remove(cachePath)
 			if err := cat.SaveToFile(cachePath); err != nil {
-				fmt.Fprintf(e.output, "Warning: failed to save catalog cache: %v\n", err)
+				fmt.Fprintf(ctx.Output, "Warning: failed to save catalog cache: %v\n", err)
 			} else {
-				fmt.Fprintf(e.output, "✓ Catalog cached to %s\n", cachePath)
+				fmt.Fprintf(ctx.Output, "✓ Catalog cached to %s\n", cachePath)
 			}
 		}
 	}
@@ -394,9 +407,10 @@ func (e *Executor) buildCatalog(full bool, source ...bool) error {
 }
 
 // execRefreshCatalogStmt handles REFRESH CATALOG [FULL] [SOURCE] [FORCE] [BACKGROUND] command.
-func (e *Executor) execRefreshCatalogStmt(stmt *ast.RefreshCatalogStmt) error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+func execRefreshCatalogStmt(ctx *ExecContext, stmt *ast.RefreshCatalogStmt) error {
+	e := ctx.executor
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
 	requiredMode := "fast"
@@ -409,23 +423,24 @@ func (e *Executor) execRefreshCatalogStmt(stmt *ast.RefreshCatalogStmt) error {
 
 	// Check cache unless FORCE is specified
 	if !stmt.Force {
-		cachePath := e.getCachePath()
+		cachePath := getCachePath(ctx)
 		if cachePath != "" {
-			valid, reason := e.isCacheValid(cachePath, requiredMode)
+			valid, reason := isCacheValid(ctx, cachePath, requiredMode)
 			if valid {
 				// Close existing catalog if any
-				if e.catalog != nil {
-					e.catalog.Close()
+				if ctx.Catalog != nil {
+					ctx.Catalog.Close()
+					ctx.Catalog = nil
 					e.catalog = nil
 				}
-				return e.loadCachedCatalog(cachePath)
+				return loadCachedCatalog(ctx, cachePath)
 			}
 			if reason != "cache file does not exist" {
-				fmt.Fprintf(e.output, "Cache invalid: %s\n", reason)
+				fmt.Fprintf(ctx.Output, "Cache invalid: %s\n", reason)
 				// If project file was modified, reconnect to get fresh database connection
 				if reason == "project file modified" {
-					if err := e.reconnect(); err != nil {
-						return fmt.Errorf("failed to reconnect after project modification: %w", err)
+					if err := reconnect(ctx); err != nil {
+						return mdlerrors.NewBackend("reconnect after project modification", err)
 					}
 				}
 			}
@@ -433,87 +448,88 @@ func (e *Executor) execRefreshCatalogStmt(stmt *ast.RefreshCatalogStmt) error {
 	}
 
 	// Close existing catalog if any
-	if e.catalog != nil {
-		e.catalog.Close()
+	if ctx.Catalog != nil {
+		ctx.Catalog.Close()
+		ctx.Catalog = nil
 		e.catalog = nil
 	}
 
 	// Handle background mode
 	if stmt.Background {
 		go func() {
-			if err := e.buildCatalog(stmt.Full, stmt.Source); err != nil {
-				fmt.Fprintf(e.output, "Background catalog build failed: %v\n", err)
+			if err := buildCatalog(ctx, stmt.Full, stmt.Source); err != nil {
+				fmt.Fprintf(ctx.Output, "Background catalog build failed: %v\n", err)
 			}
 		}()
-		fmt.Fprintln(e.output, "Catalog build started in background...")
+		fmt.Fprintln(ctx.Output, "Catalog build started in background...")
 		return nil
 	}
 
 	// Rebuild the catalog
-	return e.buildCatalog(stmt.Full, stmt.Source)
+	return buildCatalog(ctx, stmt.Full, stmt.Source)
 }
 
 // execRefreshCatalog handles REFRESH CATALOG [FULL] command (legacy signature).
-func (e *Executor) execRefreshCatalog(full bool) error {
-	return e.execRefreshCatalogStmt(&ast.RefreshCatalogStmt{Full: full, Source: false})
+func execRefreshCatalog(ctx *ExecContext, full bool) error {
+	return execRefreshCatalogStmt(ctx, &ast.RefreshCatalogStmt{Full: full, Source: false})
 }
 
 // execShowCatalogStatus handles SHOW CATALOG STATUS command.
-func (e *Executor) execShowCatalogStatus() error {
-	cachePath := e.getCachePath()
+func execShowCatalogStatus(ctx *ExecContext) error {
+	cachePath := getCachePath(ctx)
 	if cachePath == "" {
-		fmt.Fprintln(e.output, "No project connected")
+		fmt.Fprintln(ctx.Output, "No project connected")
 		return nil
 	}
 
-	fmt.Fprintf(e.output, "\nCatalog Cache Status\n")
-	fmt.Fprintf(e.output, "────────────────────\n")
-	fmt.Fprintf(e.output, "Cache path: %s\n", cachePath)
+	fmt.Fprintf(ctx.Output, "\nCatalog Cache Status\n")
+	fmt.Fprintf(ctx.Output, "────────────────────\n")
+	fmt.Fprintf(ctx.Output, "Cache path: %s\n", cachePath)
 
 	// Check if cache exists
 	if _, err := os.Stat(cachePath); os.IsNotExist(err) {
-		fmt.Fprintln(e.output, "Status: No cache file")
+		fmt.Fprintln(ctx.Output, "Status: No cache file")
 		return nil
 	}
 
 	// Load cache info
 	cat, err := catalog.NewFromFile(cachePath)
 	if err != nil {
-		fmt.Fprintf(e.output, "Status: Cache file corrupt (%v)\n", err)
+		fmt.Fprintf(ctx.Output, "Status: Cache file corrupt (%v)\n", err)
 		return nil
 	}
 	defer cat.Close()
 
 	info, err := cat.GetCacheInfo()
 	if err != nil {
-		fmt.Fprintf(e.output, "Status: Cannot read cache info (%v)\n", err)
+		fmt.Fprintf(ctx.Output, "Status: Cannot read cache info (%v)\n", err)
 		return nil
 	}
 
 	// Display cache info
-	fmt.Fprintf(e.output, "Build mode: %s\n", info.BuildMode)
-	fmt.Fprintf(e.output, "Build time: %s\n", info.BuildTime.Format("2006-01-02 15:04:05"))
-	fmt.Fprintf(e.output, "Build duration: %s\n", info.BuildDuration)
-	fmt.Fprintf(e.output, "Mendix version: %s\n", info.MendixVersion)
+	fmt.Fprintf(ctx.Output, "Build mode: %s\n", info.BuildMode)
+	fmt.Fprintf(ctx.Output, "Build time: %s\n", info.BuildTime.Format("2006-01-02 15:04:05"))
+	fmt.Fprintf(ctx.Output, "Build duration: %s\n", info.BuildDuration)
+	fmt.Fprintf(ctx.Output, "Mendix version: %s\n", info.MendixVersion)
 
 	// Check validity
-	valid, reason := e.isCacheValid(cachePath, "fast")
+	valid, reason := isCacheValid(ctx, cachePath, "fast")
 	if valid {
-		fmt.Fprintln(e.output, "Status: ✓ Valid")
+		fmt.Fprintln(ctx.Output, "Status: ✓ Valid")
 	} else {
-		fmt.Fprintf(e.output, "Status: ✗ Invalid (%s)\n", reason)
+		fmt.Fprintf(ctx.Output, "Status: ✗ Invalid (%s)\n", reason)
 	}
 
 	// Also check full mode validity
 	if info.BuildMode == "full" || info.BuildMode == "source" {
-		fmt.Fprintln(e.output, "Full mode: ✓ Available")
+		fmt.Fprintln(ctx.Output, "Full mode: ✓ Available")
 	} else {
-		fmt.Fprintln(e.output, "Full mode: ✗ Not cached (use REFRESH CATALOG FULL)")
+		fmt.Fprintln(ctx.Output, "Full mode: ✗ Not cached (use refresh catalog full)")
 	}
 	if info.BuildMode == "source" {
-		fmt.Fprintln(e.output, "Source mode: ✓ Available")
+		fmt.Fprintln(ctx.Output, "Source mode: ✓ Available")
 	} else {
-		fmt.Fprintln(e.output, "Source mode: ✗ Not cached (use REFRESH CATALOG SOURCE)")
+		fmt.Fprintln(ctx.Output, "Source mode: ✗ Not cached (use refresh catalog source)")
 	}
 
 	return nil
@@ -591,7 +607,7 @@ func replaceIgnoreCase(s, old, new string) string {
 }
 
 // outputCatalogResults outputs query results in table or JSON format.
-func (e *Executor) outputCatalogResults(result *catalog.QueryResult) {
+func outputCatalogResults(ctx *ExecContext, result *catalog.QueryResult) {
 	tr := &TableResult{
 		Columns: result.Columns,
 	}
@@ -602,7 +618,7 @@ func (e *Executor) outputCatalogResults(result *catalog.QueryResult) {
 		}
 		tr.Rows = append(tr.Rows, outRow)
 	}
-	_ = e.writeResult(tr)
+	_ = writeResult(ctx, tr)
 }
 
 // formatValue formats a value for display.
@@ -622,38 +638,38 @@ func formatValue(val any) string {
 }
 
 // captureDescribe generates MDL source for a given object type and qualified name.
-// It temporarily redirects e.output to capture the describe output.
+// It temporarily redirects ctx.Output to capture the describe output.
 // NOT safe for concurrent use — use captureDescribeParallel instead.
-func (e *Executor) captureDescribe(objectType string, qualifiedName string) (string, error) {
+func captureDescribe(ctx *ExecContext, objectType string, qualifiedName string) (string, error) {
 	// Parse qualified name into ast.QualifiedName
 	parts := strings.SplitN(qualifiedName, ".", 2)
 	if len(parts) != 2 {
-		return "", fmt.Errorf("invalid qualified name: %s", qualifiedName)
+		return "", mdlerrors.NewValidationf("invalid qualified name: %s", qualifiedName)
 	}
 	qn := ast.QualifiedName{Module: parts[0], Name: parts[1]}
 
 	// Save original output and redirect to buffer
-	origOutput := e.output
+	origOutput := ctx.Output
 	var buf bytes.Buffer
-	e.output = &buf
-	defer func() { e.output = origOutput }()
+	ctx.Output = &buf
+	defer func() { ctx.Output = origOutput }()
 
 	var err error
-	switch strings.ToUpper(objectType) {
-	case "ENTITY":
-		err = e.describeEntity(qn)
-	case "MICROFLOW", "NANOFLOW":
-		err = e.describeMicroflow(qn)
-	case "PAGE":
-		err = e.describePage(qn)
-	case "SNIPPET":
-		err = e.describeSnippet(qn)
-	case "ENUMERATION":
-		err = e.describeEnumeration(qn)
-	case "WORKFLOW":
-		err = e.describeWorkflow(qn)
+	switch strings.ToLower(objectType) {
+	case "entity":
+		err = describeEntity(ctx, qn)
+	case "microflow", "nanoflow":
+		err = describeMicroflow(ctx, qn)
+	case "page":
+		err = describePage(ctx, qn)
+	case "snippet":
+		err = describeSnippet(ctx, qn)
+	case "enumeration":
+		err = describeEnumeration(ctx, qn)
+	case "workflow":
+		err = describeWorkflow(ctx, qn)
 	default:
-		return "", fmt.Errorf("unsupported object type for describe: %s", objectType)
+		return "", mdlerrors.NewUnsupported("object type for describe: " + objectType)
 	}
 
 	if err != nil {
@@ -663,40 +679,55 @@ func (e *Executor) captureDescribe(objectType string, qualifiedName string) (str
 }
 
 // captureDescribeParallel is a goroutine-safe version of captureDescribe.
-// It creates a lightweight executor clone per call with its own output buffer,
-// sharing the reader and pre-warmed cache. Call PreWarmCache() before using
+// It creates a lightweight ExecContext clone per call with its own output buffer,
+// sharing the backend and pre-warmed cache. Call preWarmCache() before using
 // this from multiple goroutines.
-func (e *Executor) captureDescribeParallel(objectType string, qualifiedName string) (string, error) {
+func captureDescribeParallel(ctx *ExecContext, objectType string, qualifiedName string) (string, error) {
 	parts := strings.SplitN(qualifiedName, ".", 2)
 	if len(parts) != 2 {
-		return "", fmt.Errorf("invalid qualified name: %s", qualifiedName)
+		return "", mdlerrors.NewValidationf("invalid qualified name: %s", qualifiedName)
 	}
 	qn := ast.QualifiedName{Module: parts[0], Name: parts[1]}
 
-	// Create a goroutine-local executor: shared reader + cache, own output buffer
+	// Create a goroutine-local context: shared backend + cache, own output buffer.
 	var buf bytes.Buffer
-	local := &Executor{
-		reader: e.reader,
-		output: &buf,
-		cache:  e.cache,
+	localCtx := &ExecContext{
+		Context: ctx.Context,
+		Output:  &buf,
+		Format:  ctx.Format,
+		Quiet:   ctx.Quiet,
+		Logger:  ctx.Logger,
+		Backend: ctx.Backend,
+		Cache:   ctx.Cache,
+		MprPath: ctx.MprPath,
+	}
+	// If a backing Executor exists, create a local one for handlers that still
+	// need e.backend/e.output (e.g., describeMicroflow via writeDescribeJSON).
+	if ctx.executor != nil {
+		local := &Executor{
+			backend: ctx.executor.backend,
+			output:  &buf,
+			cache:   ctx.Cache,
+		}
+		localCtx.executor = local
 	}
 
 	var err error
-	switch strings.ToUpper(objectType) {
-	case "ENTITY":
-		err = local.describeEntity(qn)
-	case "MICROFLOW", "NANOFLOW":
-		err = local.describeMicroflow(qn)
-	case "PAGE":
-		err = local.describePage(qn)
-	case "SNIPPET":
-		err = local.describeSnippet(qn)
-	case "ENUMERATION":
-		err = local.describeEnumeration(qn)
-	case "WORKFLOW":
-		err = local.describeWorkflow(qn)
+	switch strings.ToLower(objectType) {
+	case "entity":
+		err = describeEntity(localCtx, qn)
+	case "microflow", "nanoflow":
+		err = describeMicroflow(localCtx, qn)
+	case "page":
+		err = describePage(localCtx, qn)
+	case "snippet":
+		err = describeSnippet(localCtx, qn)
+	case "enumeration":
+		err = describeEnumeration(localCtx, qn)
+	case "workflow":
+		err = describeWorkflow(localCtx, qn)
 	default:
-		return "", fmt.Errorf("unsupported object type for describe: %s", objectType)
+		return "", mdlerrors.NewUnsupported("object type for describe: " + objectType)
 	}
 
 	if err != nil {
@@ -705,49 +736,49 @@ func (e *Executor) captureDescribeParallel(objectType string, qualifiedName stri
 	return buf.String(), nil
 }
 
-// PreWarmCache ensures all caches are populated before parallel operations.
+// preWarmCache ensures all caches are populated before parallel operations.
 // Must be called from the main goroutine before using captureDescribeParallel.
 // This avoids O(n²) re-parsing in describe functions by building name lookup
 // maps once and sharing them across all goroutines.
-func (e *Executor) PreWarmCache() {
-	h, _ := e.getHierarchy()
-	if h == nil || e.cache == nil {
+func preWarmCache(ctx *ExecContext) {
+	h, _ := getHierarchy(ctx)
+	if h == nil || ctx.Cache == nil {
 		return
 	}
 
 	// Build entity name lookup
-	e.cache.entityNames = make(map[model.ID]string)
-	dms, _ := e.reader.ListDomainModels()
+	ctx.Cache.entityNames = make(map[model.ID]string)
+	dms, _ := ctx.Backend.ListDomainModels()
 	for _, dm := range dms {
 		modName := h.GetModuleName(dm.ContainerID)
 		for _, ent := range dm.Entities {
-			e.cache.entityNames[ent.ID] = modName + "." + ent.Name
+			ctx.Cache.entityNames[ent.ID] = modName + "." + ent.Name
 		}
 	}
 
 	// Build microflow name lookup
-	e.cache.microflowNames = make(map[model.ID]string)
-	mfs, _ := e.reader.ListMicroflows()
+	ctx.Cache.microflowNames = make(map[model.ID]string)
+	mfs, _ := ctx.Backend.ListMicroflows()
 	for _, mf := range mfs {
-		e.cache.microflowNames[mf.ID] = h.GetQualifiedName(mf.ContainerID, mf.Name)
+		ctx.Cache.microflowNames[mf.ID] = h.GetQualifiedName(mf.ContainerID, mf.Name)
 	}
 
 	// Build page name lookup
-	e.cache.pageNames = make(map[model.ID]string)
-	pgs, _ := e.reader.ListPages()
+	ctx.Cache.pageNames = make(map[model.ID]string)
+	pgs, _ := ctx.Backend.ListPages()
 	for _, pg := range pgs {
-		e.cache.pageNames[pg.ID] = h.GetQualifiedName(pg.ContainerID, pg.Name)
+		ctx.Cache.pageNames[pg.ID] = h.GetQualifiedName(pg.ContainerID, pg.Name)
 	}
 }
 
 // execSearch handles SEARCH 'query' command.
-func (e *Executor) execSearch(stmt *ast.SearchStmt) error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+func execSearch(ctx *ExecContext, stmt *ast.SearchStmt) error {
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
 	// Ensure catalog is built (at least full mode for strings table)
-	if err := e.ensureCatalog(true); err != nil {
+	if err := ensureCatalog(ctx, true); err != nil {
 		return err
 	}
 
@@ -756,31 +787,31 @@ func (e *Executor) execSearch(stmt *ast.SearchStmt) error {
 
 	// Search strings table
 	stringsQuery := fmt.Sprintf(
-		"SELECT QualifiedName, ObjectType, snippet(strings, 2, '>>>', '<<<', '...', 32) AS Match, StringContext, ModuleName FROM strings WHERE strings MATCH '%s' LIMIT 50",
+		"select QualifiedName, ObjectType, snippet(strings, 2, '>>>', '<<<', '...', 32) as Match, StringContext, ModuleName from strings where strings match '%s' limit 50",
 		escapeFTSQuery(query))
-	strResult, err := e.catalog.Query(stringsQuery)
+	strResult, err := ctx.Catalog.Query(stringsQuery)
 	if err == nil && strResult.Count > 0 {
 		found = true
-		fmt.Fprintf(e.output, "\nString Matches (%d)\n", strResult.Count)
-		fmt.Fprintln(e.output, strings.Repeat("─", 40))
-		e.outputCatalogResults(strResult)
+		fmt.Fprintf(ctx.Output, "\nString Matches (%d)\n", strResult.Count)
+		fmt.Fprintln(ctx.Output, strings.Repeat("─", 40))
+		outputCatalogResults(ctx, strResult)
 	}
 
 	// Search source table (if available)
 	sourceQuery := fmt.Sprintf(
-		"SELECT QualifiedName, ObjectType, snippet(source, 2, '>>>', '<<<', '...', 48) AS Match, ModuleName FROM source WHERE source MATCH '%s' LIMIT 50",
+		"select QualifiedName, ObjectType, snippet(source, 2, '>>>', '<<<', '...', 48) as Match, ModuleName from source where source match '%s' limit 50",
 		escapeFTSQuery(query))
-	srcResult, err := e.catalog.Query(sourceQuery)
+	srcResult, err := ctx.Catalog.Query(sourceQuery)
 	if err == nil && srcResult.Count > 0 {
 		found = true
-		fmt.Fprintf(e.output, "\nSource Matches (%d)\n", srcResult.Count)
-		fmt.Fprintln(e.output, strings.Repeat("─", 40))
-		e.outputCatalogResults(srcResult)
+		fmt.Fprintf(ctx.Output, "\nSource Matches (%d)\n", srcResult.Count)
+		fmt.Fprintln(ctx.Output, strings.Repeat("─", 40))
+		outputCatalogResults(ctx, srcResult)
 	}
 
 	if !found {
-		fmt.Fprintln(e.output, "No matches found.")
-		fmt.Fprintln(e.output, "Tip: Use REFRESH CATALOG SOURCE to enable source-level search.")
+		fmt.Fprintln(ctx.Output, "No matches found.")
+		fmt.Fprintln(ctx.Output, "Tip: Use refresh catalog source to enable source-level search.")
 	}
 
 	return nil
@@ -801,15 +832,15 @@ func escapeFTSQuery(q string) string {
 	return q
 }
 
-// Search performs a full-text search with the specified output format.
+// search performs a full-text search with the specified output format.
 // Format can be: "table" (default), "names" (just qualified names), "json"
-func (e *Executor) Search(query, format string) error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+func search(ctx *ExecContext, query, format string) error {
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
 	// Ensure catalog is built (at least full mode for strings table)
-	if err := e.ensureCatalog(true); err != nil {
+	if err := ensureCatalog(ctx, true); err != nil {
 		return err
 	}
 
@@ -827,9 +858,9 @@ func (e *Executor) Search(query, format string) error {
 
 	// Search strings table
 	stringsQuery := fmt.Sprintf(
-		"SELECT QualifiedName, ObjectType, snippet(strings, 2, '>>>', '<<<', '...', 32) AS Match, StringContext, ModuleName FROM strings WHERE strings MATCH '%s' LIMIT 50",
+		"select QualifiedName, ObjectType, snippet(strings, 2, '>>>', '<<<', '...', 32) as Match, StringContext, ModuleName from strings where strings match '%s' limit 50",
 		escapeFTSQuery(query))
-	strResult, err := e.catalog.Query(stringsQuery)
+	strResult, err := ctx.Catalog.Query(stringsQuery)
 	if err == nil && strResult.Count > 0 {
 		for _, row := range strResult.Rows {
 			r := searchResult{
@@ -846,9 +877,9 @@ func (e *Executor) Search(query, format string) error {
 
 	// Search source table (if available)
 	sourceQuery := fmt.Sprintf(
-		"SELECT QualifiedName, ObjectType, snippet(source, 2, '>>>', '<<<', '...', 48) AS Match, ModuleName FROM source WHERE source MATCH '%s' LIMIT 50",
+		"select QualifiedName, ObjectType, snippet(source, 2, '>>>', '<<<', '...', 48) as Match, ModuleName from source where source match '%s' limit 50",
 		escapeFTSQuery(query))
-	srcResult, err := e.catalog.Query(sourceQuery)
+	srcResult, err := ctx.Catalog.Query(sourceQuery)
 	if err == nil && srcResult.Count > 0 {
 		for _, row := range srcResult.Rows {
 			r := searchResult{
@@ -864,10 +895,10 @@ func (e *Executor) Search(query, format string) error {
 
 	if len(allResults) == 0 {
 		if format != "json" {
-			fmt.Fprintln(e.output, "No matches found.")
-			fmt.Fprintln(e.output, "Tip: Use REFRESH CATALOG SOURCE to enable source-level search.")
+			fmt.Fprintln(ctx.Output, "No matches found.")
+			fmt.Fprintln(ctx.Output, "Tip: Use refresh catalog source to enable source-level search.")
 		} else {
-			fmt.Fprintln(e.output, "[]")
+			fmt.Fprintln(ctx.Output, "[]")
 		}
 		return nil
 	}
@@ -879,7 +910,7 @@ func (e *Executor) Search(query, format string) error {
 			key := r.ObjectType + ":" + r.QualifiedName
 			if !seen[key] {
 				seen[key] = true
-				fmt.Fprintf(e.output, "%s\t%s\n", strings.ToLower(r.ObjectType), r.QualifiedName)
+				fmt.Fprintf(ctx.Output, "%s\t%s\n", strings.ToLower(r.ObjectType), r.QualifiedName)
 			}
 		}
 	case "json":
@@ -887,10 +918,15 @@ func (e *Executor) Search(query, format string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintln(e.output, string(jsonBytes))
+		fmt.Fprintln(ctx.Output, string(jsonBytes))
 	default: // "table"
-		return e.execSearch(&ast.SearchStmt{Query: query})
+		return execSearch(ctx, &ast.SearchStmt{Query: query})
 	}
 
 	return nil
+}
+
+// Search performs a full-text search with the specified output format.
+func (e *Executor) Search(query, format string) error {
+	return search(e.newExecContext(context.Background()), query, format)
 }

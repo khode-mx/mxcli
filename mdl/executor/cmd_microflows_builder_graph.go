@@ -5,9 +5,9 @@ package executor
 
 import (
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	"github.com/mendixlabs/mxcli/mdl/types"
 	"github.com/mendixlabs/mxcli/model"
 	"github.com/mendixlabs/mxcli/sdk/microflows"
-	"github.com/mendixlabs/mxcli/sdk/mpr"
 )
 
 // buildFlowGraph converts AST statements to a Microflow flow graph.
@@ -42,7 +42,7 @@ func (fb *flowBuilder) buildFlowGraph(stmts []ast.MicroflowStatement, returns *a
 	// Create StartEvent - Position is the CENTER point (RelativeMiddlePoint in Mendix)
 	startEvent := &microflows.StartEvent{
 		BaseMicroflowObject: microflows.BaseMicroflowObject{
-			BaseElement: model.BaseElement{ID: model.ID(mpr.GenerateID())},
+			BaseElement: model.BaseElement{ID: model.ID(types.GenerateID())},
 			Position:    model.Point{X: fb.posX, Y: fb.posY},
 			Size:        model.Size{Width: EventSize, Height: EventSize},
 		},
@@ -53,6 +53,8 @@ func (fb *flowBuilder) buildFlowGraph(stmts []ast.MicroflowStatement, returns *a
 	fb.posX += fb.spacing
 
 	// Process each statement
+	// pendingCase holds the case value for the NEXT flow (set by merge-less splits)
+	pendingCase := ""
 	for _, stmt := range stmts {
 		activityID := fb.addStatement(stmt)
 		if activityID != "" {
@@ -62,11 +64,19 @@ func (fb *flowBuilder) buildFlowGraph(stmts []ast.MicroflowStatement, returns *a
 				fb.pendingAnnotations = nil
 			}
 			// Connect to previous object with horizontal SequenceFlow
-			fb.flows = append(fb.flows, newHorizontalFlow(lastID, activityID))
+			if pendingCase != "" {
+				fb.flows = append(fb.flows, newHorizontalFlowWithCase(lastID, activityID, pendingCase))
+				pendingCase = ""
+			} else {
+				fb.flows = append(fb.flows, newHorizontalFlow(lastID, activityID))
+			}
 			// For compound statements (IF, LOOP), the exit point differs from entry point
 			if fb.nextConnectionPoint != "" {
 				lastID = fb.nextConnectionPoint
 				fb.nextConnectionPoint = ""
+				// Save nextFlowCase for the NEXT iteration's flow creation
+				pendingCase = fb.nextFlowCase
+				fb.nextFlowCase = ""
 			} else {
 				lastID = activityID
 			}
@@ -88,7 +98,7 @@ func (fb *flowBuilder) buildFlowGraph(stmts []ast.MicroflowStatement, returns *a
 		fb.posY = fb.baseY // Ensure end event is on the happy path center line
 		endEvent := &microflows.EndEvent{
 			BaseMicroflowObject: microflows.BaseMicroflowObject{
-				BaseElement: model.BaseElement{ID: model.ID(mpr.GenerateID())},
+				BaseElement: model.BaseElement{ID: model.ID(types.GenerateID())},
 				Position:    model.Point{X: fb.posX, Y: fb.posY},
 				Size:        model.Size{Width: EventSize, Height: EventSize},
 			},
@@ -98,11 +108,15 @@ func (fb *flowBuilder) buildFlowGraph(stmts []ast.MicroflowStatement, returns *a
 		fb.objects = append(fb.objects, endEvent)
 
 		// Connect last activity to end event
-		fb.flows = append(fb.flows, newHorizontalFlow(lastID, endEvent.ID))
+		if pendingCase != "" {
+			fb.flows = append(fb.flows, newHorizontalFlowWithCase(lastID, endEvent.ID, pendingCase))
+		} else {
+			fb.flows = append(fb.flows, newHorizontalFlow(lastID, endEvent.ID))
+		}
 	}
 
 	return &microflows.MicroflowObjectCollection{
-		BaseElement:     model.BaseElement{ID: model.ID(mpr.GenerateID())},
+		BaseElement:     model.BaseElement{ID: model.ID(types.GenerateID())},
 		Objects:         fb.objects,
 		Flows:           fb.flows,
 		AnnotationFlows: fb.annotationFlows,

@@ -4,6 +4,7 @@
 package executor
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
 	"github.com/mendixlabs/mxcli/model"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -20,25 +22,25 @@ import (
 // Local Git Diff Functions
 // ============================================================================
 
-// DiffLocal compares local changes in mxunit files against a git reference.
+// diffLocal compares local changes in mxunit files against a git reference.
 // This only works with MPR v2 format (Mendix 10.18+) which stores units in mprcontents/.
 //
 // The ref parameter can be:
 //   - A single ref (e.g., "HEAD", "main") — compares working tree vs ref
 //   - A range "base..target" — compares two revisions (no working tree)
-func (e *Executor) DiffLocal(ref string, opts DiffOptions) error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+func diffLocal(ctx *ExecContext, ref string, opts DiffOptions) error {
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
 	// Check MPR version
-	if e.reader.Version() != 2 {
-		return fmt.Errorf("diff-local only supports MPR v2 format (Mendix 10.18+)")
+	if ctx.Backend.Version() != 2 {
+		return mdlerrors.NewUnsupported("diff-local only supports MPR v2 format (Mendix 10.18+)")
 	}
 
-	contentsDir := e.reader.ContentsDir()
+	contentsDir := ctx.Backend.ContentsDir()
 	if contentsDir == "" {
-		return fmt.Errorf("mprcontents directory not found")
+		return mdlerrors.NewValidation("mprcontents directory not found")
 	}
 
 	// Set defaults
@@ -50,13 +52,13 @@ func (e *Executor) DiffLocal(ref string, opts DiffOptions) error {
 	}
 
 	// Find changed mxunit files using git
-	changedFiles, err := e.findChangedMxunitFiles(contentsDir, ref)
+	changedFiles, err := findChangedMxunitFiles(ctx, contentsDir, ref)
 	if err != nil {
-		return fmt.Errorf("failed to find changed files: %w", err)
+		return mdlerrors.NewBackend("find changed files", err)
 	}
 
 	if len(changedFiles) == 0 {
-		fmt.Fprintln(e.output, "No local changes found in mxunit files.")
+		fmt.Fprintln(ctx.Output, "No local changes found in mxunit files.")
 		return nil
 	}
 
@@ -64,10 +66,10 @@ func (e *Executor) DiffLocal(ref string, opts DiffOptions) error {
 	var newCount, modifiedCount, deletedCount int
 
 	for _, change := range changedFiles {
-		result, err := e.diffMxunitFile(change, contentsDir, ref)
+		result, err := diffMxunitFile(ctx, change, contentsDir, ref)
 		if err != nil {
 			// Log error but continue with other files
-			fmt.Fprintf(e.output, "Warning: %v\n", err)
+			fmt.Fprintf(ctx.Output, "Warning: %v\n", err)
 			continue
 		}
 		if result != nil {
@@ -86,19 +88,24 @@ func (e *Executor) DiffLocal(ref string, opts DiffOptions) error {
 	for _, result := range results {
 		switch opts.Format {
 		case DiffFormatUnified:
-			e.outputUnifiedDiff(result, opts.UseColor)
+			outputUnifiedDiff(ctx, result, opts.UseColor)
 		case DiffFormatSideBySide:
-			e.outputSideBySideDiff(result, opts.Width, opts.UseColor)
+			outputSideBySideDiff(ctx, result, opts.Width, opts.UseColor)
 		case DiffFormatStructural:
-			e.outputStructuralDiff(result, opts.UseColor)
+			outputStructuralDiff(ctx, result, opts.UseColor)
 		}
 	}
 
 	// Output summary
-	fmt.Fprintf(e.output, "\nSummary: %d new, %d modified, %d deleted\n",
+	fmt.Fprintf(ctx.Output, "\nSummary: %d new, %d modified, %d deleted\n",
 		newCount, modifiedCount, deletedCount)
 
 	return nil
+}
+
+// DiffLocal is a method wrapper for external callers.
+func (e *Executor) DiffLocal(ref string, opts DiffOptions) error {
+	return diffLocal(e.newExecContext(context.Background()), ref, opts)
 }
 
 // gitChange represents a file change from git
@@ -108,12 +115,12 @@ type gitChange struct {
 }
 
 // findChangedMxunitFiles uses git to find changed mxunit files
-func (e *Executor) findChangedMxunitFiles(contentsDir, ref string) ([]gitChange, error) {
+func findChangedMxunitFiles(_ *ExecContext, contentsDir, ref string) ([]gitChange, error) {
 	// Run git diff to find changed files in mprcontents
 	cmd := execCommand("git", "diff", "--name-status", ref, "--", contentsDir)
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("git diff failed: %w", err)
+		return nil, mdlerrors.NewBackend("git diff", err)
 	}
 
 	var changes []gitChange
@@ -149,7 +156,7 @@ func (e *Executor) findChangedMxunitFiles(contentsDir, ref string) ([]gitChange,
 // diffMxunitFile generates a diff for a single mxunit file.
 // For two-revision diffs (ref contains ".."), both sides are read from git.
 // For single-ref diffs, the "current" side is read from the working tree.
-func (e *Executor) diffMxunitFile(change gitChange, contentsDir, ref string) (*DiffResult, error) {
+func diffMxunitFile(ctx *ExecContext, change gitChange, contentsDir, ref string) (*DiffResult, error) {
 	var currentContent, gitContent []byte
 	var err error
 
@@ -162,14 +169,14 @@ func (e *Executor) diffMxunitFile(change gitChange, contentsDir, ref string) (*D
 			cmd := execCommand("git", "show", targetRef+":"+change.FilePath)
 			currentContent, err = cmd.Output()
 			if err != nil {
-				return nil, fmt.Errorf("failed to read %s version of %s: %w", targetRef, change.FilePath, err)
+				return nil, mdlerrors.NewBackend(fmt.Sprintf("read %s version of %s", targetRef, change.FilePath), err)
 			}
 		}
 		if change.Status != "A" {
 			cmd := execCommand("git", "show", baseRef+":"+change.FilePath)
 			gitContent, err = cmd.Output()
 			if err != nil {
-				return nil, fmt.Errorf("failed to read %s version of %s: %w", baseRef, change.FilePath, err)
+				return nil, mdlerrors.NewBackend(fmt.Sprintf("read %s version of %s", baseRef, change.FilePath), err)
 			}
 		}
 	} else {
@@ -177,14 +184,14 @@ func (e *Executor) diffMxunitFile(change gitChange, contentsDir, ref string) (*D
 		if change.Status != "D" {
 			currentContent, err = readFile(change.FilePath)
 			if err != nil {
-				return nil, fmt.Errorf("failed to read current file %s: %w", change.FilePath, err)
+				return nil, mdlerrors.NewBackend(fmt.Sprintf("read current file %s", change.FilePath), err)
 			}
 		}
 		if change.Status != "A" {
 			cmd := execCommand("git", "show", ref+":"+change.FilePath)
 			gitContent, err = cmd.Output()
 			if err != nil {
-				return nil, fmt.Errorf("failed to read git version of %s: %w", change.FilePath, err)
+				return nil, mdlerrors.NewBackend(fmt.Sprintf("read git version of %s", change.FilePath), err)
 			}
 		}
 	}
@@ -211,15 +218,15 @@ func (e *Executor) diffMxunitFile(change gitChange, contentsDir, ref string) (*D
 
 	// Generate MDL for both versions based on type
 	if len(currentContent) > 0 {
-		result.Proposed = e.bsonToMDL(unitType, unitID, currentContent)
+		result.Proposed = bsonToMDL(ctx, unitType, unitID, currentContent)
 	}
 	if len(gitContent) > 0 {
-		result.Current = e.bsonToMDL(unitType, unitID, gitContent)
+		result.Current = bsonToMDL(ctx, unitType, unitID, gitContent)
 	}
 
 	// Generate structural changes
 	if !result.IsNew && !result.IsDeleted && result.Current != result.Proposed {
-		result.Changes = e.compareGeneric(result.Current, result.Proposed)
+		result.Changes = compareGeneric(ctx, result.Current, result.Proposed)
 	}
 
 	return &result, nil
@@ -257,7 +264,7 @@ func extractUUIDFromPath(path string) string {
 }
 
 // bsonToMDL converts BSON content to MDL representation based on type
-func (e *Executor) bsonToMDL(unitType, unitID string, content []byte) string {
+func bsonToMDL(ctx *ExecContext, unitType, unitID string, content []byte) string {
 	var raw map[string]any
 	if err := bson.Unmarshal(content, &raw); err != nil {
 		return fmt.Sprintf("-- Error parsing BSON: %v", err)
@@ -273,7 +280,7 @@ func (e *Executor) bsonToMDL(unitType, unitID string, content []byte) string {
 	qualifiedName := name
 	if containerID := extractBsonID(raw["$Container"]); containerID != "" {
 		// Try to resolve module name from container
-		if h, err := e.getHierarchy(); err == nil {
+		if h, err := getHierarchy(ctx); err == nil {
 			if modName := h.GetModuleName(model.ID(containerID)); modName != "" {
 				qualifiedName = modName + "." + name
 			} else if modName := h.GetModuleName(h.FindModuleID(model.ID(containerID))); modName != "" {
@@ -284,23 +291,23 @@ func (e *Executor) bsonToMDL(unitType, unitID string, content []byte) string {
 
 	switch {
 	case strings.Contains(unitType, "DomainModel"):
-		return e.domainModelBsonToMDL(raw, qualifiedName)
+		return domainModelBsonToMDL(ctx, raw, qualifiedName)
 	case strings.Contains(unitType, "Entity"):
-		return e.entityBsonToMDL(raw, qualifiedName)
+		return entityBsonToMDL(ctx, raw, qualifiedName)
 	case strings.Contains(unitType, "Microflow"):
-		return e.microflowBsonToMDL(raw, qualifiedName)
+		return microflowBsonToMDL(ctx, raw, qualifiedName)
 	case strings.Contains(unitType, "Nanoflow"):
-		return e.nanoflowBsonToMDL(raw, qualifiedName)
+		return nanoflowBsonToMDL(ctx, raw, qualifiedName)
 	case strings.Contains(unitType, "Enumeration"):
-		return e.enumerationBsonToMDL(raw, qualifiedName)
+		return enumerationBsonToMDL(ctx, raw, qualifiedName)
 	case strings.Contains(unitType, "Page"):
-		return e.pageBsonToMDL(raw, qualifiedName)
+		return pageBsonToMDL(ctx, raw, qualifiedName)
 	case strings.Contains(unitType, "Snippet"):
-		return e.snippetBsonToMDL(raw, qualifiedName)
+		return snippetBsonToMDL(ctx, raw, qualifiedName)
 	case strings.Contains(unitType, "Layout"):
-		return e.layoutBsonToMDL(raw, qualifiedName)
+		return layoutBsonToMDL(ctx, raw, qualifiedName)
 	case strings.Contains(unitType, "Module"):
-		return e.moduleBsonToMDL(raw)
+		return moduleBsonToMDL(ctx, raw)
 	default:
 		// Generic representation
 		return fmt.Sprintf("-- %s: %s\n-- Type: %s", simplifyTypeName(unitType), qualifiedName, unitType)
@@ -309,7 +316,7 @@ func (e *Executor) bsonToMDL(unitType, unitID string, content []byte) string {
 
 // domainModelBsonToMDL converts a domain model BSON to MDL.
 // Includes full entity definitions (attributes) so diffs show schema changes.
-func (e *Executor) domainModelBsonToMDL(raw map[string]any, name string) string {
+func domainModelBsonToMDL(ctx *ExecContext, raw map[string]any, name string) string {
 	var lines []string
 	lines = append(lines, fmt.Sprintf("-- Domain Model: %s", name))
 	lines = append(lines, "")
@@ -323,7 +330,7 @@ func (e *Executor) domainModelBsonToMDL(raw map[string]any, name string) string 
 				continue
 			}
 			qn := name + "." + entName
-			lines = append(lines, e.entityBsonToMDL(entMap, qn))
+			lines = append(lines, entityBsonToMDL(ctx, entMap, qn))
 			lines = append(lines, "")
 		}
 	}
@@ -354,7 +361,7 @@ func (e *Executor) domainModelBsonToMDL(raw map[string]any, name string) string 
 }
 
 // entityBsonToMDL converts an entity BSON to MDL
-func (e *Executor) entityBsonToMDL(raw map[string]any, qualifiedName string) string {
+func entityBsonToMDL(ctx *ExecContext, raw map[string]any, qualifiedName string) string {
 	var lines []string
 
 	// Documentation
@@ -365,18 +372,18 @@ func (e *Executor) entityBsonToMDL(raw map[string]any, qualifiedName string) str
 	}
 
 	// Determine entity type
-	entityType := "PERSISTENT"
+	entityType := "persistent"
 	if persistable, ok := raw["Persistable"].(bool); ok && !persistable {
-		entityType = "NON-PERSISTENT"
+		entityType = "non-persistent"
 	}
 
-	lines = append(lines, fmt.Sprintf("CREATE %s ENTITY %s (", entityType, qualifiedName))
+	lines = append(lines, fmt.Sprintf("create %s entity %s (", entityType, qualifiedName))
 
 	// Attributes
 	attributes := extractBsonArray(raw["Attributes"])
 	for i, attr := range attributes {
 		if attrMap, ok := attr.(map[string]any); ok {
-			attrLine := e.attributeBsonToMDL(attrMap)
+			attrLine := attributeBsonToMDL(ctx, attrMap)
 			comma := ","
 			if i == len(attributes)-1 {
 				comma = ""
@@ -392,7 +399,7 @@ func (e *Executor) entityBsonToMDL(raw map[string]any, qualifiedName string) str
 }
 
 // attributeBsonToMDL converts an attribute BSON to MDL line
-func (e *Executor) attributeBsonToMDL(raw map[string]any) string {
+func attributeBsonToMDL(_ *ExecContext, raw map[string]any) string {
 	name := extractString(raw["Name"])
 	typeStr := "Unknown"
 
@@ -474,7 +481,7 @@ func (e *Executor) attributeBsonToMDL(raw map[string]any) string {
 		for _, rule := range rules {
 			if ruleMap, ok := rule.(map[string]any); ok {
 				if ruleType := extractString(ruleMap["$Type"]); strings.Contains(ruleType, "RequiredRule") {
-					result.WriteString(" NOT NULL")
+					result.WriteString(" not null")
 					break
 				}
 			}
@@ -484,59 +491,61 @@ func (e *Executor) attributeBsonToMDL(raw map[string]any) string {
 	return result.String()
 }
 
-// microflowBsonToMDL converts a microflow BSON to MDL
-func (e *Executor) microflowBsonToMDL(raw map[string]any, qualifiedName string) string {
-	var lines []string
-
-	// Documentation
-	if doc := extractString(raw["Documentation"]); doc != "" {
-		lines = append(lines, "/**")
-		lines = append(lines, " * "+doc)
-		lines = append(lines, " */")
+// microflowBsonToMDL converts a microflow BSON to MDL using the same
+// renderer as DESCRIBE MICROFLOW, so diffs include activity bodies.
+// Falls back to a header-only stub if parsing fails.
+func microflowBsonToMDL(ctx *ExecContext, raw map[string]any, qualifiedName string) string {
+	qn := splitQualifiedName(qualifiedName)
+	mf := ctx.Backend.ParseMicroflowFromRaw(raw, model.ID(qn.Name), "")
+	if mf == nil {
+		return fmt.Sprintf("microflow %s\n  -- parse failed --\nend microflow\n", qualifiedName)
 	}
 
-	lines = append(lines, fmt.Sprintf("CREATE MICROFLOW %s (", qualifiedName))
+	entityNames, microflowNames := buildNameLookups(ctx)
+	return renderMicroflowMDL(ctx, mf, qn, entityNames, microflowNames, nil)
+}
 
-	// Parameters - look in ObjectCollection
-	if objCollection, ok := raw["ObjectCollection"].(map[string]any); ok {
-		objects := extractBsonArray(objCollection["Objects"])
-		for i, obj := range objects {
-			if objMap, ok := obj.(map[string]any); ok {
-				if objType := extractString(objMap["$Type"]); strings.Contains(objType, "MicroflowParameterObject") {
-					paramName := extractString(objMap["Name"])
-					paramType := "Object"
-					if typeStr := extractString(objMap["VariableType"]); typeStr != "" {
-						paramType = typeStr
-					}
-					comma := ","
-					if i == len(objects)-1 {
-						comma = ""
-					}
-					lines = append(lines, fmt.Sprintf("  $%s: %s%s", paramName, paramType, comma))
-				}
+// splitQualifiedName parses "Module.Name" into an ast.QualifiedName.
+// If no module prefix is present, Module is empty.
+func splitQualifiedName(qualifiedName string) ast.QualifiedName {
+	if idx := strings.LastIndex(qualifiedName, "."); idx > 0 {
+		return ast.QualifiedName{Module: qualifiedName[:idx], Name: qualifiedName[idx+1:]}
+	}
+	return ast.QualifiedName{Name: qualifiedName}
+}
+
+// buildNameLookups builds ID → qualified-name maps for entities and
+// microflows from the current project. Used by BSON-driven renderers that
+// receive IDs (e.g. entity references) and want to resolve them against
+// the working-tree model. Returns empty maps if the reader is unavailable.
+func buildNameLookups(ctx *ExecContext) (map[model.ID]string, map[model.ID]string) {
+	entityNames := make(map[model.ID]string)
+	microflowNames := make(map[model.ID]string)
+	if !ctx.Connected() {
+		return entityNames, microflowNames
+	}
+	h, err := getHierarchy(ctx)
+	if err != nil {
+		return entityNames, microflowNames
+	}
+	if domainModels, err := ctx.Backend.ListDomainModels(); err == nil {
+		for _, dm := range domainModels {
+			modName := h.GetModuleName(dm.ContainerID)
+			for _, entity := range dm.Entities {
+				entityNames[entity.ID] = modName + "." + entity.Name
 			}
 		}
 	}
-
-	lines = append(lines, ")")
-
-	// Return type
-	returnType := "Void"
-	if rt := extractString(raw["ReturnType"]); rt != "" {
-		returnType = rt
+	if microflows, err := ctx.Backend.ListMicroflows(); err == nil {
+		for _, mf := range microflows {
+			microflowNames[mf.ID] = h.GetQualifiedName(mf.ContainerID, mf.Name)
+		}
 	}
-	lines = append(lines, fmt.Sprintf("RETURNS %s", returnType))
-
-	lines = append(lines, "BEGIN")
-	lines = append(lines, "  -- (microflow body)")
-	lines = append(lines, "END;")
-	lines = append(lines, "/")
-
-	return strings.Join(lines, "\n")
+	return entityNames, microflowNames
 }
 
 // nanoflowBsonToMDL converts a nanoflow BSON to MDL
-func (e *Executor) nanoflowBsonToMDL(raw map[string]any, qualifiedName string) string {
+func nanoflowBsonToMDL(_ *ExecContext, raw map[string]any, qualifiedName string) string {
 	var lines []string
 
 	if doc := extractString(raw["Documentation"]); doc != "" {
@@ -545,24 +554,24 @@ func (e *Executor) nanoflowBsonToMDL(raw map[string]any, qualifiedName string) s
 		lines = append(lines, " */")
 	}
 
-	lines = append(lines, fmt.Sprintf("CREATE NANOFLOW %s ()", qualifiedName))
+	lines = append(lines, fmt.Sprintf("create nanoflow %s ()", qualifiedName))
 
 	returnType := "Void"
 	if rt := extractString(raw["ReturnType"]); rt != "" {
 		returnType = rt
 	}
-	lines = append(lines, fmt.Sprintf("RETURNS %s", returnType))
+	lines = append(lines, fmt.Sprintf("returns %s", returnType))
 
-	lines = append(lines, "BEGIN")
+	lines = append(lines, "begin")
 	lines = append(lines, "  -- (nanoflow body)")
-	lines = append(lines, "END;")
+	lines = append(lines, "end;")
 	lines = append(lines, "/")
 
 	return strings.Join(lines, "\n")
 }
 
 // enumerationBsonToMDL converts an enumeration BSON to MDL
-func (e *Executor) enumerationBsonToMDL(raw map[string]any, qualifiedName string) string {
+func enumerationBsonToMDL(_ *ExecContext, raw map[string]any, qualifiedName string) string {
 	var lines []string
 
 	if doc := extractString(raw["Documentation"]); doc != "" {
@@ -571,7 +580,7 @@ func (e *Executor) enumerationBsonToMDL(raw map[string]any, qualifiedName string
 		lines = append(lines, " */")
 	}
 
-	lines = append(lines, fmt.Sprintf("CREATE ENUMERATION %s (", qualifiedName))
+	lines = append(lines, fmt.Sprintf("create enumeration %s (", qualifiedName))
 
 	values := extractBsonArray(raw["Values"])
 	for i, val := range values {
@@ -596,7 +605,7 @@ func (e *Executor) enumerationBsonToMDL(raw map[string]any, qualifiedName string
 }
 
 // pageBsonToMDL converts a page BSON to MDL
-func (e *Executor) pageBsonToMDL(raw map[string]any, qualifiedName string) string {
+func pageBsonToMDL(_ *ExecContext, raw map[string]any, qualifiedName string) string {
 	var lines []string
 
 	if doc := extractString(raw["Documentation"]); doc != "" {
@@ -605,29 +614,29 @@ func (e *Executor) pageBsonToMDL(raw map[string]any, qualifiedName string) strin
 		lines = append(lines, " */")
 	}
 
-	lines = append(lines, fmt.Sprintf("CREATE PAGE %s ()", qualifiedName))
+	lines = append(lines, fmt.Sprintf("create page %s ()", qualifiedName))
 
 	if title := extractString(raw["Title"]); title != "" {
-		lines = append(lines, fmt.Sprintf("TITLE '%s'", title))
+		lines = append(lines, fmt.Sprintf("title '%s'", title))
 	}
 
 	// Layout reference
 	if layoutCall, ok := raw["LayoutCall"].(map[string]any); ok {
 		if layout := extractString(layoutCall["Layout"]); layout != "" {
-			lines = append(lines, fmt.Sprintf("LAYOUT %s", layout))
+			lines = append(lines, fmt.Sprintf("layout %s", layout))
 		}
 	}
 
-	lines = append(lines, "BEGIN")
+	lines = append(lines, "begin")
 	lines = append(lines, "  -- (page widgets)")
-	lines = append(lines, "END;")
+	lines = append(lines, "end;")
 	lines = append(lines, "/")
 
 	return strings.Join(lines, "\n")
 }
 
 // snippetBsonToMDL converts a snippet BSON to MDL
-func (e *Executor) snippetBsonToMDL(raw map[string]any, qualifiedName string) string {
+func snippetBsonToMDL(_ *ExecContext, raw map[string]any, qualifiedName string) string {
 	var lines []string
 
 	if doc := extractString(raw["Documentation"]); doc != "" {
@@ -636,17 +645,17 @@ func (e *Executor) snippetBsonToMDL(raw map[string]any, qualifiedName string) st
 		lines = append(lines, " */")
 	}
 
-	lines = append(lines, fmt.Sprintf("CREATE SNIPPET %s ()", qualifiedName))
-	lines = append(lines, "BEGIN")
+	lines = append(lines, fmt.Sprintf("create snippet %s ()", qualifiedName))
+	lines = append(lines, "begin")
 	lines = append(lines, "  -- (snippet widgets)")
-	lines = append(lines, "END;")
+	lines = append(lines, "end;")
 	lines = append(lines, "/")
 
 	return strings.Join(lines, "\n")
 }
 
 // layoutBsonToMDL converts a layout BSON to MDL
-func (e *Executor) layoutBsonToMDL(raw map[string]any, qualifiedName string) string {
+func layoutBsonToMDL(_ *ExecContext, raw map[string]any, qualifiedName string) string {
 	var lines []string
 
 	if doc := extractString(raw["Documentation"]); doc != "" {
@@ -655,17 +664,17 @@ func (e *Executor) layoutBsonToMDL(raw map[string]any, qualifiedName string) str
 		lines = append(lines, " */")
 	}
 
-	lines = append(lines, fmt.Sprintf("CREATE LAYOUT %s ()", qualifiedName))
-	lines = append(lines, "BEGIN")
+	lines = append(lines, fmt.Sprintf("create layout %s ()", qualifiedName))
+	lines = append(lines, "begin")
 	lines = append(lines, "  -- (layout structure)")
-	lines = append(lines, "END;")
+	lines = append(lines, "end;")
 	lines = append(lines, "/")
 
 	return strings.Join(lines, "\n")
 }
 
 // moduleBsonToMDL converts a module BSON to MDL
-func (e *Executor) moduleBsonToMDL(raw map[string]any) string {
+func moduleBsonToMDL(_ *ExecContext, raw map[string]any) string {
 	name := extractString(raw["Name"])
 	var lines []string
 
@@ -675,14 +684,14 @@ func (e *Executor) moduleBsonToMDL(raw map[string]any) string {
 		lines = append(lines, " */")
 	}
 
-	lines = append(lines, fmt.Sprintf("CREATE MODULE %s;", name))
+	lines = append(lines, fmt.Sprintf("create module %s;", name))
 	lines = append(lines, "/")
 
 	return strings.Join(lines, "\n")
 }
 
 // compareGeneric provides a generic comparison for MDL content
-func (e *Executor) compareGeneric(current, proposed string) []StructuralChange {
+func compareGeneric(_ *ExecContext, current, proposed string) []StructuralChange {
 	var changes []StructuralChange
 
 	currentLines := strings.Split(current, "\n")

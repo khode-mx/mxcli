@@ -3,8 +3,11 @@
 package executor
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
 )
 
 // moduleOverviewData is the JSON output schema for the module overview ELK diagram.
@@ -44,20 +47,20 @@ var systemModuleNames = map[string]bool{
 
 // ModuleOverview generates a JSON graph of all project modules and their
 // cross-module dependencies, suitable for rendering with ELK.js.
-func (e *Executor) ModuleOverview() error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+func ModuleOverview(ctx *ExecContext) error {
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
 	// Ensure catalog is built with full mode for refs
-	if err := e.ensureCatalog(true); err != nil {
-		return fmt.Errorf("failed to build catalog: %w", err)
+	if err := ensureCatalog(ctx, true); err != nil {
+		return mdlerrors.NewBackend("build catalog", err)
 	}
 
 	// Get all module names
-	moduleResult, err := e.catalog.Query("SELECT Name FROM modules")
+	moduleResult, err := ctx.Catalog.Query("select Name from modules")
 	if err != nil {
-		return fmt.Errorf("failed to query modules: %w", err)
+		return mdlerrors.NewBackend("query modules", err)
 	}
 
 	moduleNames := make(map[string]bool)
@@ -69,7 +72,7 @@ func (e *Executor) ModuleOverview() error {
 
 	// Get entity counts per module
 	entityCounts := make(map[string]int)
-	result, err := e.catalog.Query("SELECT ModuleName, COUNT(*) FROM entities GROUP BY ModuleName")
+	result, err := ctx.Catalog.Query("select ModuleName, count(*) from entities GROUP by ModuleName")
 	if err == nil {
 		for _, row := range result.Rows {
 			if name, ok := row[0].(string); ok {
@@ -80,7 +83,7 @@ func (e *Executor) ModuleOverview() error {
 
 	// Get microflow counts per module
 	mfCounts := make(map[string]int)
-	result, err = e.catalog.Query("SELECT ModuleName, COUNT(*) FROM microflows GROUP BY ModuleName")
+	result, err = ctx.Catalog.Query("select ModuleName, count(*) from microflows GROUP by ModuleName")
 	if err == nil {
 		for _, row := range result.Rows {
 			if name, ok := row[0].(string); ok {
@@ -91,7 +94,7 @@ func (e *Executor) ModuleOverview() error {
 
 	// Get page counts per module
 	pageCounts := make(map[string]int)
-	result, err = e.catalog.Query("SELECT ModuleName, COUNT(*) FROM pages GROUP BY ModuleName")
+	result, err = ctx.Catalog.Query("select ModuleName, count(*) from pages GROUP by ModuleName")
 	if err == nil {
 		for _, row := range result.Rows {
 			if name, ok := row[0].(string); ok {
@@ -117,19 +120,19 @@ func (e *Executor) ModuleOverview() error {
 	sortModuleNodes(modules)
 
 	// Query cross-module dependency edges from REFS
-	edgeResult, err := e.catalog.Query(`
-		SELECT
+	edgeResult, err := ctx.Catalog.Query(`
+		select
 			SUBSTR(SourceName, 1, INSTR(SourceName, '.') - 1) as SourceModule,
 			SUBSTR(TargetName, 1, INSTR(TargetName, '.') - 1) as TargetModule,
 			RefKind,
-			COUNT(*) as RefCount
-		FROM refs
-		WHERE INSTR(SourceName, '.') > 0 AND INSTR(TargetName, '.') > 0
-		GROUP BY SourceModule, TargetModule, RefKind
-		HAVING SourceModule != TargetModule
+			count(*) as RefCount
+		from refs
+		where INSTR(SourceName, '.') > 0 and INSTR(TargetName, '.') > 0
+		GROUP by SourceModule, TargetModule, RefKind
+		having SourceModule != TargetModule
 	`)
 	if err != nil {
-		return fmt.Errorf("failed to query refs: %w", err)
+		return mdlerrors.NewBackend("query refs", err)
 	}
 
 	// Aggregate edges by source/target pair
@@ -181,10 +184,10 @@ func (e *Executor) ModuleOverview() error {
 
 	out, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal JSON: %w", err)
+		return mdlerrors.NewBackend("marshal json", err)
 	}
 
-	fmt.Fprint(e.output, string(out))
+	fmt.Fprint(ctx.Output, string(out))
 	return nil
 }
 
@@ -223,4 +226,10 @@ func sortModuleEdges(edges []moduleOverviewEdge) {
 			}
 		}
 	}
+}
+
+// --- Executor method wrapper for backward compatibility ---
+
+func (e *Executor) ModuleOverview() error {
+	return ModuleOverview(e.newExecContext(context.Background()))
 }

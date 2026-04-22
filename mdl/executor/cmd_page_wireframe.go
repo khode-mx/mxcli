@@ -3,11 +3,13 @@
 package executor
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
 	"github.com/mendixlabs/mxcli/model"
 	"github.com/mendixlabs/mxcli/sdk/pages"
 )
@@ -87,27 +89,27 @@ func (c *wireframeCounter) next() string {
 }
 
 // PageWireframeJSON generates wireframe JSON for a page.
-func (e *Executor) PageWireframeJSON(name string) error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+func PageWireframeJSON(ctx *ExecContext, name string) error {
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
 	parts := strings.SplitN(name, ".", 2)
 	if len(parts) != 2 {
-		return fmt.Errorf("expected qualified name Module.Page, got: %s", name)
+		return mdlerrors.NewValidationf("expected qualified name Module.Page, got: %s", name)
 	}
 
 	qn := ast.QualifiedName{Module: parts[0], Name: parts[1]}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to build hierarchy: %w", err)
+		return mdlerrors.NewBackend("build hierarchy", err)
 	}
 
 	// Find the page
-	allPages, err := e.reader.ListPages()
+	allPages, err := ctx.Backend.ListPages()
 	if err != nil {
-		return fmt.Errorf("failed to list pages: %w", err)
+		return mdlerrors.NewBackend("list pages", err)
 	}
 
 	var foundPage *pages.Page
@@ -121,7 +123,7 @@ func (e *Executor) PageWireframeJSON(name string) error {
 	}
 
 	if foundPage == nil {
-		return fmt.Errorf("page %s not found", name)
+		return mdlerrors.NewNotFound("page", name)
 	}
 
 	modID := h.FindModuleID(foundPage.ContainerID)
@@ -141,11 +143,11 @@ func (e *Executor) PageWireframeJSON(name string) error {
 	}
 
 	layoutName := ""
-	rawData, _ := e.reader.GetRawUnit(foundPage.ID)
+	rawData, _ := ctx.Backend.GetRawUnit(foundPage.ID)
 	if rawData != nil {
 		if formCall, ok := rawData["FormCall"].(map[string]any); ok {
 			if layoutID := extractBinaryID(formCall["Layout"]); layoutID != "" {
-				layoutName = e.resolveLayoutName(model.ID(layoutID))
+				layoutName = resolveLayoutName(ctx, model.ID(layoutID))
 			} else if formName, ok := formCall["Form"].(string); ok && formName != "" {
 				layoutName = formName
 			}
@@ -166,7 +168,7 @@ func (e *Executor) PageWireframeJSON(name string) error {
 	}
 
 	// Get widget tree
-	rawWidgets := e.getPageWidgetsFromRaw(foundPage.ID)
+	rawWidgets := getPageWidgetsFromRaw(ctx, foundPage.ID)
 
 	// Convert to wireframe nodes
 	counter := &wireframeCounter{}
@@ -176,7 +178,7 @@ func (e *Executor) PageWireframeJSON(name string) error {
 	}
 
 	// Generate MDL source
-	mdlSource, sourceMap := e.pageToMdlString(qn, root)
+	mdlSource, sourceMap := pageToMdlString(ctx, qn, root)
 
 	data := pageWireframeData{
 		Format:     "wireframe",
@@ -192,33 +194,33 @@ func (e *Executor) PageWireframeJSON(name string) error {
 
 	jsonBytes, err := json.Marshal(data)
 	if err != nil {
-		return fmt.Errorf("failed to marshal wireframe JSON: %w", err)
+		return mdlerrors.NewBackend("marshal wireframe json", err)
 	}
 
-	fmt.Fprint(e.output, string(jsonBytes))
+	fmt.Fprint(ctx.Output, string(jsonBytes))
 	return nil
 }
 
 // SnippetWireframeJSON generates wireframe JSON for a snippet.
-func (e *Executor) SnippetWireframeJSON(name string) error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+func SnippetWireframeJSON(ctx *ExecContext, name string) error {
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to build hierarchy: %w", err)
+		return mdlerrors.NewBackend("build hierarchy", err)
 	}
 
 	parts := strings.SplitN(name, ".", 2)
 	if len(parts) != 2 {
-		return fmt.Errorf("expected qualified name Module.Snippet, got: %s", name)
+		return mdlerrors.NewValidationf("expected qualified name Module.Snippet, got: %s", name)
 	}
 	qn := ast.QualifiedName{Module: parts[0], Name: parts[1]}
 
-	allSnippets, err := e.reader.ListSnippets()
+	allSnippets, err := ctx.Backend.ListSnippets()
 	if err != nil {
-		return fmt.Errorf("failed to list snippets: %w", err)
+		return mdlerrors.NewBackend("list snippets", err)
 	}
 
 	var foundSnippet *pages.Snippet
@@ -232,14 +234,14 @@ func (e *Executor) SnippetWireframeJSON(name string) error {
 	}
 
 	if foundSnippet == nil {
-		return fmt.Errorf("snippet %s not found", name)
+		return mdlerrors.NewNotFound("snippet", name)
 	}
 
 	modID := h.FindModuleID(foundSnippet.ContainerID)
 	modName := h.GetModuleName(modID)
 	qualifiedName := modName + "." + foundSnippet.Name
 
-	rawWidgets := e.getSnippetWidgetsFromRaw(foundSnippet.ID)
+	rawWidgets := getSnippetWidgetsFromRaw(ctx, foundSnippet.ID)
 
 	counter := &wireframeCounter{}
 	var root []wireframeNode
@@ -256,10 +258,10 @@ func (e *Executor) SnippetWireframeJSON(name string) error {
 
 	jsonBytes, err := json.Marshal(data)
 	if err != nil {
-		return fmt.Errorf("failed to marshal wireframe JSON: %w", err)
+		return mdlerrors.NewBackend("marshal wireframe json", err)
 	}
 
-	fmt.Fprint(e.output, string(jsonBytes))
+	fmt.Fprint(ctx.Output, string(jsonBytes))
 	return nil
 }
 
@@ -274,7 +276,7 @@ func rawWidgetToWireframe(w rawWidget, counter *wireframeCounter) wireframeNode 
 	for _, dp := range w.DesignProperties {
 		val := dp.Option
 		if dp.ValueType == "toggle" {
-			val = "ON"
+			val = "on"
 		}
 		node.DesignProperties = append(node.DesignProperties, wireframeDesignProp{
 			Key:   dp.Key,
@@ -434,14 +436,14 @@ func formatDataSourceRef(ds *rawDataSource) string {
 	case "parameter":
 		return "$" + ds.Reference
 	case "microflow":
-		return "MICROFLOW " + ds.Reference
+		return "microflow " + ds.Reference
 	case "nanoflow":
-		return "NANOFLOW " + ds.Reference
+		return "nanoflow " + ds.Reference
 	case "database":
 		if ds.Reference != "" {
-			return "DATABASE " + ds.Reference
+			return "database " + ds.Reference
 		}
-		return "DATABASE"
+		return "database"
 	default:
 		return ds.Reference
 	}
@@ -450,19 +452,19 @@ func formatDataSourceRef(ds *rawDataSource) string {
 // mapCustomWidgetType maps RenderMode to wireframe widget type.
 func mapCustomWidgetType(renderMode string) string {
 	switch renderMode {
-	case "DATAGRID2":
+	case "datagrid2":
 		return "datagrid"
-	case "GALLERY":
+	case "gallery":
 		return "gallery"
-	case "COMBOBOX":
+	case "combobox":
 		return "combobox"
-	case "TEXTFILTER":
+	case "textfilter":
 		return "textfilter"
-	case "NUMBERFILTER":
+	case "numberfilter":
 		return "numberfilter"
-	case "DROPDOWNFILTER":
+	case "dropdownfilter":
 		return "dropdownfilter"
-	case "DATEFILTER":
+	case "datefilter":
 		return "datefilter"
 	default:
 		return strings.ToLower(renderMode)
@@ -479,12 +481,12 @@ func normalizeWidgetType(typeName string) string {
 }
 
 // pageToMdlString generates MDL source for the page using the output-swap technique.
-func (e *Executor) pageToMdlString(name ast.QualifiedName, root []wireframeNode) (string, map[string]elkSourceRange) {
+func pageToMdlString(ctx *ExecContext, name ast.QualifiedName, root []wireframeNode) (string, map[string]elkSourceRange) {
 	var buf strings.Builder
-	origOutput := e.output
-	e.output = &buf
-	_ = e.describePage(name)
-	e.output = origOutput
+	origOutput := ctx.Output
+	ctx.Output = &buf
+	_ = describePage(ctx, name)
+	ctx.Output = origOutput
 
 	mdlSource := buf.String()
 	if mdlSource == "" {
@@ -532,4 +534,12 @@ func mapWidgetToLines(nodes []wireframeNode, lines []string, sourceMap map[strin
 			mapWidgetToLines(tab.Children, lines, sourceMap)
 		}
 	}
+}
+
+func (e *Executor) PageWireframeJSON(name string) error {
+	return PageWireframeJSON(e.newExecContext(context.Background()), name)
+}
+
+func (e *Executor) SnippetWireframeJSON(name string) error {
+	return SnippetWireframeJSON(e.newExecContext(context.Background()), name)
 }

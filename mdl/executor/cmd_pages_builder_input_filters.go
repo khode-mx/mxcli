@@ -6,10 +6,7 @@ import (
 	"strings"
 
 	"github.com/mendixlabs/mxcli/sdk/domainmodel"
-	"github.com/mendixlabs/mxcli/sdk/mpr"
 	"github.com/mendixlabs/mxcli/sdk/pages"
-	"github.com/mendixlabs/mxcli/sdk/widgets"
-	"go.mongodb.org/mongo-driver/bson"
 )
 
 func (pb *pageBuilder) getFilterWidgetIDForAttribute(attrPath string) string {
@@ -102,91 +99,4 @@ func (pb *pageBuilder) findAttributeType(attrPath string) domainmodel.AttributeT
 	}
 
 	return nil
-}
-
-func (pb *pageBuilder) buildFilterWidgetBSON(widgetID, filterName string) bson.D {
-	// Load the filter widget template
-	rawType, rawObject, propertyTypeIDs, objectTypeID, err := widgets.GetTemplateFullBSON(widgetID, mpr.GenerateID, pb.reader.Path())
-	if err != nil || rawType == nil {
-		// Fallback: create minimal filter widget structure
-		return pb.buildMinimalFilterWidgetBSON(widgetID, filterName)
-	}
-
-	// The widget structure is: CustomWidgets$CustomWidget with Type and Object
-	widgetBSON := bson.D{
-		{Key: "$ID", Value: mpr.IDToBsonBinary(mpr.GenerateID())},
-		{Key: "$Type", Value: "CustomWidgets$CustomWidget"},
-		{Key: "Editable", Value: "Inherited"},
-		{Key: "Name", Value: filterName},
-		{Key: "Object", Value: rawObject},
-		{Key: "TabIndex", Value: int32(0)},
-		{Key: "Type", Value: rawType},
-	}
-
-	// Set the "linkedDs" property to "auto" mode (which links to parent datasource)
-	if propertyTypeIDs != nil && rawObject != nil {
-		widgetBSON = pb.setFilterWidgetLinkedDsAuto(widgetBSON, propertyTypeIDs, objectTypeID)
-	}
-
-	return widgetBSON
-}
-
-func (pb *pageBuilder) setFilterWidgetLinkedDsAuto(widget bson.D, propertyTypeIDs map[string]widgets.PropertyTypeIDEntry, objectTypeID string) bson.D {
-	// The filter widgets have an "attrChoice" property that should be set to "auto"
-	// which makes them automatically link to the parent datasource
-	return widget
-}
-
-func (pb *pageBuilder) buildMinimalFilterWidgetBSON(widgetID, filterName string) bson.D {
-	typeID := mpr.GenerateID()
-	objectTypeID := mpr.GenerateID()
-	objectID := mpr.GenerateID()
-
-	// Get widget type name based on ID
-	var widgetTypeName string
-	switch widgetID {
-	case pages.WidgetIDDataGridTextFilter:
-		widgetTypeName = "Text filter"
-	case pages.WidgetIDDataGridNumberFilter:
-		widgetTypeName = "Number filter"
-	case pages.WidgetIDDataGridDateFilter:
-		widgetTypeName = "Date filter"
-	case pages.WidgetIDDataGridDropdownFilter:
-		widgetTypeName = "Drop-down filter"
-	default:
-		widgetTypeName = "Text filter"
-	}
-
-	return bson.D{
-		{Key: "$ID", Value: mpr.IDToBsonBinary(mpr.GenerateID())},
-		{Key: "$Type", Value: "CustomWidgets$CustomWidget"},
-		{Key: "Editable", Value: "Inherited"},
-		{Key: "Name", Value: filterName},
-		{Key: "Object", Value: bson.D{
-			{Key: "$ID", Value: mpr.IDToBsonBinary(objectID)},
-			{Key: "$Type", Value: "CustomWidgets$WidgetObject"},
-			{Key: "Properties", Value: bson.A{int32(2)}},
-			{Key: "TypePointer", Value: mpr.IDToBsonBinary(objectTypeID)},
-		}},
-		{Key: "TabIndex", Value: int32(0)},
-		{Key: "Type", Value: bson.D{
-			{Key: "$ID", Value: mpr.IDToBsonBinary(typeID)},
-			{Key: "$Type", Value: "CustomWidgets$CustomWidgetType"},
-			{Key: "HelpUrl", Value: ""},
-			{Key: "ObjectType", Value: bson.D{
-				{Key: "$ID", Value: mpr.IDToBsonBinary(objectTypeID)},
-				{Key: "$Type", Value: "CustomWidgets$WidgetObjectType"},
-				{Key: "PropertyTypes", Value: bson.A{int32(2)}},
-			}},
-			{Key: "OfflineCapable", Value: true},
-			{Key: "StudioCategory", Value: "Data Controls"},
-			{Key: "StudioProCategory", Value: "Data controls"},
-			{Key: "SupportedPlatform", Value: "Web"},
-			{Key: "WidgetDescription", Value: ""},
-			{Key: "WidgetId", Value: widgetID},
-			{Key: "WidgetName", Value: widgetTypeName},
-			{Key: "WidgetNeedsEntityContext", Value: false},
-			{Key: "WidgetPluginWidget", Value: true},
-		}},
-	}
 }

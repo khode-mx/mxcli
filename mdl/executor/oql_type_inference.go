@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
 	"github.com/mendixlabs/mxcli/mdl/linter"
 	"github.com/mendixlabs/mxcli/sdk/domainmodel"
 )
@@ -23,15 +24,15 @@ type OQLColumnInfo struct {
 	AggregateFunc string       // The aggregate function name (COUNT, SUM, AVG, etc.)
 }
 
-// InferOQLTypes analyzes an OQL query and returns the expected types for each column.
-func (e *Executor) InferOQLTypes(oqlQuery string, declaredAttrs []ast.ViewAttribute) ([]OQLColumnInfo, []string) {
+// inferOQLTypes analyzes an OQL query and returns the expected types for each column.
+func inferOQLTypes(ctx *ExecContext, oqlQuery string, declaredAttrs []ast.ViewAttribute) ([]OQLColumnInfo, []string) {
 	var warnings []string
 	var columns []OQLColumnInfo
 
 	// Extract SELECT clause
 	selectClause := extractSelectClause(oqlQuery)
 	if selectClause == "" {
-		warnings = append(warnings, "could not parse SELECT clause from OQL query")
+		warnings = append(warnings, "could not parse select clause from OQL query")
 		return columns, warnings
 	}
 
@@ -42,7 +43,7 @@ func (e *Executor) InferOQLTypes(oqlQuery string, declaredAttrs []ast.ViewAttrib
 	columnExprs := parseSelectColumns(selectClause)
 	if len(columnExprs) != len(declaredAttrs) {
 		warnings = append(warnings, fmt.Sprintf(
-			"OQL SELECT has %d columns but %d attributes declared",
+			"OQL select has %d columns but %d attributes declared",
 			len(columnExprs), len(declaredAttrs)))
 	}
 
@@ -56,14 +57,14 @@ func (e *Executor) InferOQLTypes(oqlQuery string, declaredAttrs []ast.ViewAttrib
 		}
 
 		// Check for explicit alias
-		if aliasMatch := regexp.MustCompile(`(?i)\s+AS\s+(\w+)\s*$`).FindStringSubmatch(expr); aliasMatch != nil {
+		if aliasMatch := regexp.MustCompile(`(?i)\s+as\s+(\w+)\s*$`).FindStringSubmatch(expr); aliasMatch != nil {
 			col.Alias = aliasMatch[1]
 			expr = strings.TrimSuffix(expr, aliasMatch[0])
 			col.Expression = strings.TrimSpace(expr)
 		}
 
 		// Infer type from expression
-		col.InferredType = e.inferTypeFromExpression(expr, &col, aliasMap)
+		col.InferredType = inferTypeFromExpression(ctx, expr, &col, aliasMap)
 
 		columns = append(columns, col)
 	}
@@ -77,7 +78,7 @@ func extractAliasMap(oql string) map[string]string {
 
 	// Match FROM Entity AS alias or FROM Entity alias patterns
 	// Also handles JOIN clauses
-	fromPattern := regexp.MustCompile(`(?i)\b(?:FROM|JOIN)\s+([A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*)\s+(?:AS\s+)?([A-Za-z_][A-Za-z0-9_]*)`)
+	fromPattern := regexp.MustCompile(`(?i)\b(?:from|join)\s+([A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*)\s+(?:as\s+)?([A-Za-z_][A-Za-z0-9_]*)`)
 	matches := fromPattern.FindAllStringSubmatch(oql, -1)
 	for _, match := range matches {
 		if len(match) >= 3 {
@@ -110,7 +111,7 @@ func ValidateOQLTypes(oql string, attrs []ast.ViewAttribute) []linter.Violation 
 		}
 
 		// Strip AS alias
-		if aliasMatch := regexp.MustCompile(`(?i)\s+AS\s+\w+\s*$`).FindStringSubmatch(expr); aliasMatch != nil {
+		if aliasMatch := regexp.MustCompile(`(?i)\s+as\s+\w+\s*$`).FindStringSubmatch(expr); aliasMatch != nil {
 			expr = strings.TrimSuffix(expr, aliasMatch[0])
 		}
 		expr = strings.TrimSpace(expr)
@@ -151,14 +152,14 @@ func inferTypeStatic(expr string) ast.DataType {
 	if strings.HasPrefix(expr, "(") && strings.HasSuffix(expr, ")") {
 		inner := strings.TrimSpace(expr[1 : len(expr)-1])
 		innerUpper := strings.ToUpper(inner)
-		if strings.HasPrefix(innerUpper, "SELECT") {
+		if strings.HasPrefix(innerUpper, "select") {
 			// Extract the inner SELECT clause and infer the single column
 			innerSelect := extractSelectClause(inner)
 			if innerSelect != "" {
 				cols := parseSelectColumns(innerSelect)
 				if len(cols) == 1 {
 					col := cols[0]
-					if aliasMatch := regexp.MustCompile(`(?i)\s+AS\s+\w+\s*$`).FindStringSubmatch(col); aliasMatch != nil {
+					if aliasMatch := regexp.MustCompile(`(?i)\s+as\s+\w+\s*$`).FindStringSubmatch(col); aliasMatch != nil {
 						col = strings.TrimSuffix(col, aliasMatch[0])
 					}
 					return inferTypeStatic(strings.TrimSpace(col))
@@ -168,12 +169,12 @@ func inferTypeStatic(expr string) ast.DataType {
 	}
 
 	// count(...) → Integer (Mendix OQL COUNT returns Integer)
-	if strings.HasPrefix(upper, "COUNT(") {
+	if strings.HasPrefix(upper, "count(") {
 		return ast.DataType{Kind: ast.TypeInteger}
 	}
 
 	// sum(...) → preserves input type (Integer→Integer, else Decimal)
-	if strings.HasPrefix(upper, "SUM(") {
+	if strings.HasPrefix(upper, "sum(") {
 		innerArg := extractFunctionArg(expr)
 		if innerArg != "" {
 			innerType := inferTypeStatic(innerArg)
@@ -185,12 +186,12 @@ func inferTypeStatic(expr string) ast.DataType {
 	}
 
 	// avg(...) → always Decimal
-	if strings.HasPrefix(upper, "AVG(") {
+	if strings.HasPrefix(upper, "avg(") {
 		return ast.DataType{Kind: ast.TypeDecimal}
 	}
 
 	// min(...) / max(...) → propagates input type
-	if strings.HasPrefix(upper, "MIN(") || strings.HasPrefix(upper, "MAX(") {
+	if strings.HasPrefix(upper, "min(") || strings.HasPrefix(upper, "max(") {
 		innerArg := extractFunctionArg(expr)
 		if innerArg != "" {
 			innerType := inferTypeStatic(innerArg)
@@ -207,12 +208,12 @@ func inferTypeStatic(expr string) ast.DataType {
 	}
 
 	// length(...) → Integer
-	if strings.HasPrefix(upper, "LENGTH(") {
+	if strings.HasPrefix(upper, "length(") {
 		return ast.DataType{Kind: ast.TypeInteger}
 	}
 
 	// CASE expression: infer from THEN clauses
-	if strings.HasPrefix(upper, "CASE") {
+	if strings.HasPrefix(upper, "case") {
 		return inferCaseType(expr)
 	}
 
@@ -230,7 +231,7 @@ func inferTypeStatic(expr string) ast.DataType {
 	}
 
 	// Boolean literals
-	if upper == "TRUE" || upper == "FALSE" {
+	if upper == "true" || upper == "false" {
 		return ast.DataType{Kind: ast.TypeBoolean}
 	}
 
@@ -245,12 +246,12 @@ func inferCaseType(expr string) ast.DataType {
 	// Nested CASE expressions are too complex for static regex-based inference.
 	// The regex would match inner THEN clauses, producing wrong types.
 	upperExpr := strings.ToUpper(expr)
-	if strings.Count(upperExpr, "CASE") > 1 {
+	if strings.Count(upperExpr, "case") > 1 {
 		return ast.DataType{Kind: ast.TypeUnknown}
 	}
 
 	// Find THEN ... WHEN/ELSE/END patterns to extract result expressions
-	thenPattern := regexp.MustCompile(`(?i)\bTHEN\s+(.+?)(?:\s+WHEN\b|\s+ELSE\b|\s+END\b)`)
+	thenPattern := regexp.MustCompile(`(?i)\bTHEN\s+(.+?)(?:\s+when\b|\s+else\b|\s+end\b)`)
 	matches := thenPattern.FindAllStringSubmatch(expr, -1)
 	for _, match := range matches {
 		if len(match) >= 2 {
@@ -264,7 +265,7 @@ func inferCaseType(expr string) ast.DataType {
 	// Bare "0" or "1" in ELSE are type-ambiguous fallback values that should
 	// not override the actual branch type (which may involve division or
 	// expressions the static inferrer can't parse).
-	elsePattern := regexp.MustCompile(`(?i)\bELSE\s+(.+?)\s+END\b`)
+	elsePattern := regexp.MustCompile(`(?i)\bELSE\s+(.+?)\s+end\b`)
 	if match := elsePattern.FindStringSubmatch(expr); len(match) >= 2 {
 		elseExpr := strings.TrimSpace(match[1])
 		// Skip bare integer literals — they're ambiguous in CASE context
@@ -278,8 +279,8 @@ func inferCaseType(expr string) ast.DataType {
 	return ast.DataType{Kind: ast.TypeUnknown}
 }
 
-// ValidateViewEntityTypes validates that declared attribute types match inferred OQL types.
-func (e *Executor) ValidateViewEntityTypes(stmt *ast.CreateViewEntityStmt) []string {
+// validateViewEntityTypes validates that declared attribute types match inferred OQL types.
+func validateViewEntityTypes(ctx *ExecContext, stmt *ast.CreateViewEntityStmt) []string {
 	var errors []string
 
 	// First validate OQL syntax for common mistakes
@@ -294,7 +295,7 @@ func (e *Executor) ValidateViewEntityTypes(stmt *ast.CreateViewEntityStmt) []str
 		errors = append(errors, v.Message)
 	}
 
-	columns, warnings := e.InferOQLTypes(stmt.Query.RawQuery, stmt.Attributes)
+	columns, warnings := inferOQLTypes(ctx, stmt.Query.RawQuery, stmt.Attributes)
 	errors = append(errors, warnings...)
 
 	// Match columns to declared attributes by position (OQL columns map 1:1 to attributes)
@@ -333,7 +334,7 @@ func extractSelectClause(oql string) string {
 	upperOql := strings.ToUpper(oql)
 
 	// Find SELECT keyword
-	selectIdx := strings.Index(upperOql, "SELECT")
+	selectIdx := strings.Index(upperOql, "select")
 	if selectIdx == -1 {
 		return ""
 	}
@@ -355,7 +356,7 @@ func extractSelectClause(oql string) string {
 				// Check for FROM keyword at depth 0
 				if i+4 <= len(oql) {
 					word := strings.ToUpper(oql[i : i+4])
-					if word == "FROM" {
+					if word == "from" {
 						// Make sure it's a word boundary (not part of another identifier)
 						prevOk := i == startIdx || !isIdentChar(oql[i-1])
 						nextOk := i+4 >= len(oql) || !isIdentChar(oql[i+4])
@@ -367,7 +368,7 @@ func extractSelectClause(oql string) string {
 				// Check for UNION keyword at depth 0 (ends current query term)
 				if i+5 <= len(oql) {
 					word := strings.ToUpper(oql[i : i+5])
-					if word == "UNION" {
+					if word == "union" {
 						prevOk := i == startIdx || !isIdentChar(oql[i-1])
 						nextOk := i+5 >= len(oql) || !isIdentChar(oql[i+5])
 						if prevOk && nextOk {
@@ -480,18 +481,18 @@ func parseSelectColumns(selectClause string) []string {
 }
 
 // inferTypeFromExpression infers the data type from an OQL expression.
-func (e *Executor) inferTypeFromExpression(expr string, col *OQLColumnInfo, aliasMap map[string]string) ast.DataType {
+func inferTypeFromExpression(ctx *ExecContext, expr string, col *OQLColumnInfo, aliasMap map[string]string) ast.DataType {
 	expr = strings.TrimSpace(expr)
 
 	// Check for aggregate functions
-	if aggType := e.inferAggregateType(expr, col, aliasMap); aggType.Kind != ast.TypeUnknown {
+	if aggType := inferAggregateType(ctx, expr, col, aliasMap); aggType.Kind != ast.TypeUnknown {
 		return aggType
 	}
 
 	// Check for attribute reference: [Entity/Attribute] or [Module.Entity/Attribute]
 	attrPattern := regexp.MustCompile(`^\[([^\]]+)\]$`)
 	if match := attrPattern.FindStringSubmatch(expr); match != nil {
-		return e.inferAttributeType(match[1], col)
+		return inferAttributeType(ctx, match[1], col)
 	}
 
 	// Check for MDL-style alias.attribute reference (e.g., p.Name, o.OrderDate)
@@ -503,7 +504,7 @@ func (e *Executor) inferTypeFromExpression(expr string, col *OQLColumnInfo, alia
 			// Resolve alias to entity and look up attribute
 			col.SourceEntity = entityName
 			col.SourceAttr = attrName
-			return e.inferAttributeTypeFromEntity(entityName, attrName)
+			return inferAttributeTypeFromEntity(ctx, entityName, attrName)
 		}
 	}
 
@@ -530,7 +531,7 @@ func (e *Executor) inferTypeFromExpression(expr string, col *OQLColumnInfo, alia
 }
 
 // inferAttributeTypeFromEntity looks up an attribute's type from a qualified entity name.
-func (e *Executor) inferAttributeTypeFromEntity(entityQualifiedName, attrName string) ast.DataType {
+func inferAttributeTypeFromEntity(ctx *ExecContext, entityQualifiedName, attrName string) ast.DataType {
 	parts := strings.Split(entityQualifiedName, ".")
 	if len(parts) != 2 {
 		return ast.DataType{Kind: ast.TypeUnknown}
@@ -539,7 +540,7 @@ func (e *Executor) inferAttributeTypeFromEntity(entityQualifiedName, attrName st
 	moduleName := parts[0]
 	entityName := parts[1]
 
-	entity, err := e.findEntity(moduleName, entityName)
+	entity, err := findEntity(ctx, moduleName, entityName)
 	if err != nil {
 		return ast.DataType{Kind: ast.TypeUnknown}
 	}
@@ -554,23 +555,23 @@ func (e *Executor) inferAttributeTypeFromEntity(entityQualifiedName, attrName st
 }
 
 // inferAggregateType infers the return type of aggregate functions.
-func (e *Executor) inferAggregateType(expr string, col *OQLColumnInfo, aliasMap map[string]string) ast.DataType {
+func inferAggregateType(ctx *ExecContext, expr string, col *OQLColumnInfo, aliasMap map[string]string) ast.DataType {
 	upperExpr := strings.ToUpper(strings.TrimSpace(expr))
 
 	// COUNT(*) or COUNT(expression) → Integer (Mendix OQL COUNT returns Integer)
-	if strings.HasPrefix(upperExpr, "COUNT(") {
+	if strings.HasPrefix(upperExpr, "count(") {
 		col.IsAggregate = true
-		col.AggregateFunc = "COUNT"
+		col.AggregateFunc = "count"
 		return ast.DataType{Kind: ast.TypeInteger}
 	}
 
 	// SUM(expression) → preserves input type (Integer→Integer, else Decimal)
-	if strings.HasPrefix(upperExpr, "SUM(") {
+	if strings.HasPrefix(upperExpr, "sum(") {
 		col.IsAggregate = true
-		col.AggregateFunc = "SUM"
+		col.AggregateFunc = "sum"
 		innerArg := extractFunctionArg(expr)
 		if innerArg != "" {
-			innerType := e.inferTypeFromExpression(innerArg, &OQLColumnInfo{}, aliasMap)
+			innerType := inferTypeFromExpression(ctx, innerArg, &OQLColumnInfo{}, aliasMap)
 			if innerType.Kind == ast.TypeInteger || innerType.Kind == ast.TypeLong {
 				return innerType
 			}
@@ -579,19 +580,19 @@ func (e *Executor) inferAggregateType(expr string, col *OQLColumnInfo, aliasMap 
 	}
 
 	// AVG(expression) → always Decimal
-	if strings.HasPrefix(upperExpr, "AVG(") {
+	if strings.HasPrefix(upperExpr, "avg(") {
 		col.IsAggregate = true
-		col.AggregateFunc = "AVG"
+		col.AggregateFunc = "avg"
 		return ast.DataType{Kind: ast.TypeDecimal}
 	}
 
 	// MIN/MAX preserve the input type — try to resolve inner expression
-	if strings.HasPrefix(upperExpr, "MIN(") || strings.HasPrefix(upperExpr, "MAX(") {
+	if strings.HasPrefix(upperExpr, "min(") || strings.HasPrefix(upperExpr, "max(") {
 		col.IsAggregate = true
 		col.AggregateFunc = strings.Split(upperExpr, "(")[0]
 		innerArg := extractFunctionArg(expr)
 		if innerArg != "" {
-			innerType := e.inferTypeFromExpression(innerArg, &OQLColumnInfo{}, aliasMap)
+			innerType := inferTypeFromExpression(ctx, innerArg, &OQLColumnInfo{}, aliasMap)
 			if innerType.Kind != ast.TypeUnknown {
 				return innerType
 			}
@@ -600,12 +601,12 @@ func (e *Executor) inferAggregateType(expr string, col *OQLColumnInfo, aliasMap 
 	}
 
 	// LENGTH returns Integer
-	if strings.HasPrefix(upperExpr, "LENGTH(") {
+	if strings.HasPrefix(upperExpr, "length(") {
 		return ast.DataType{Kind: ast.TypeInteger}
 	}
 
 	// COALESCE - we'd need to analyze the arguments
-	if strings.HasPrefix(upperExpr, "COALESCE(") {
+	if strings.HasPrefix(upperExpr, "coalesce(") {
 		return ast.DataType{Kind: ast.TypeUnknown}
 	}
 
@@ -613,7 +614,7 @@ func (e *Executor) inferAggregateType(expr string, col *OQLColumnInfo, aliasMap 
 }
 
 // inferAttributeType looks up an attribute's type from the referenced entity.
-func (e *Executor) inferAttributeType(attrPath string, col *OQLColumnInfo) ast.DataType {
+func inferAttributeType(ctx *ExecContext, attrPath string, col *OQLColumnInfo) ast.DataType {
 	// Parse [Module.Entity/Attribute] or [Entity/Attribute]
 	parts := strings.Split(attrPath, "/")
 	if len(parts) != 2 {
@@ -640,7 +641,7 @@ func (e *Executor) inferAttributeType(attrPath string, col *OQLColumnInfo) ast.D
 	}
 
 	// Look up the entity in the project
-	entity, err := e.findEntity(moduleName, entityName)
+	entity, err := findEntity(ctx, moduleName, entityName)
 	if err != nil {
 		return ast.DataType{Kind: ast.TypeUnknown}
 	}
@@ -656,14 +657,14 @@ func (e *Executor) inferAttributeType(attrPath string, col *OQLColumnInfo) ast.D
 }
 
 // findEntity looks up an entity by module and name.
-func (e *Executor) findEntity(moduleName, entityName string) (*domainmodel.Entity, error) {
+func findEntity(ctx *ExecContext, moduleName, entityName string) (*domainmodel.Entity, error) {
 	// Get all entities
-	dms, err := e.reader.ListDomainModels()
+	dms, err := ctx.Backend.ListDomainModels()
 	if err != nil {
 		return nil, err
 	}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -682,7 +683,7 @@ func (e *Executor) findEntity(moduleName, entityName string) (*domainmodel.Entit
 		}
 	}
 
-	return nil, fmt.Errorf("entity not found: %s.%s", moduleName, entityName)
+	return nil, mdlerrors.NewNotFound("entity", moduleName+"."+entityName)
 }
 
 // convertDomainModelTypeToAST converts a domainmodel.AttributeType to ast.DataType.
@@ -876,7 +877,7 @@ func ValidateOQLSyntax(oql string) []linter.Violation {
 	selectClause := extractSelectClause(oql)
 	if selectClause != "" {
 		columns := parseSelectColumns(selectClause)
-		aliasPattern := regexp.MustCompile(`(?i)\s+AS\s+\w+\s*$`)
+		aliasPattern := regexp.MustCompile(`(?i)\s+as\s+\w+\s*$`)
 		for i, col := range columns {
 			col = strings.TrimSpace(col)
 			if col == "" {
@@ -891,23 +892,23 @@ func ValidateOQLSyntax(oql string) []linter.Violation {
 					RuleID:   "MDL030",
 					Severity: linter.SeverityError,
 					Message: fmt.Sprintf(
-						"SELECT column %d has no AS alias: '%s'",
+						"select column %d has no as alias: '%s'",
 						i+1, display),
 					Location:   linter.Location{DocumentType: "viewentity"},
-					Suggestion: "All SELECT columns in a view entity must have an explicit alias (e.g., '... AS MyAlias')",
+					Suggestion: "All select columns in a view entity must have an explicit alias (e.g., '... as MyAlias')",
 				})
 			}
 		}
 	}
 
 	// Check that top-level ORDER BY is accompanied by LIMIT
-	if hasTopLevelPhrase(oql, "ORDER BY") && !hasTopLevelKeyword(oql, "LIMIT") {
+	if hasTopLevelPhrase(oql, "ORDER by") && !hasTopLevelKeyword(oql, "limit") {
 		violations = append(violations, linter.Violation{
 			RuleID:     "MDL030",
 			Severity:   linter.SeverityError,
-			Message:    "ORDER BY without LIMIT: view entity OQL queries that use ORDER BY must also specify a LIMIT clause",
+			Message:    "ORDER by without limit: view entity OQL queries that use ORDER by must also specify a limit clause",
 			Location:   linter.Location{DocumentType: "viewentity"},
-			Suggestion: "Add a LIMIT clause after ORDER BY",
+			Suggestion: "Add a limit clause after ORDER by",
 		})
 	}
 
@@ -927,7 +928,7 @@ func ValidateOQLSyntax(oql string) []linter.Violation {
 	}
 
 	// Check for correlated subquery pattern
-	correlatedPattern := regexp.MustCompile(`([a-zA-Z_][a-zA-Z0-9_]*)/([A-Z][a-zA-Z0-9_]*\.[A-Z][a-zA-Z0-9_]*_[A-Z][a-zA-Z0-9_]*)\s*=\s*([a-zA-Z_][a-zA-Z0-9_]*)(?:\s|$|AND|OR|\))`)
+	correlatedPattern := regexp.MustCompile(`([a-zA-Z_][a-zA-Z0-9_]*)/([A-Z][a-zA-Z0-9_]*\.[A-Z][a-zA-Z0-9_]*_[A-Z][a-zA-Z0-9_]*)\s*=\s*([a-zA-Z_][a-zA-Z0-9_]*)(?:\s|$|and|or|\))`)
 	correlatedMatches := correlatedPattern.FindAllStringSubmatch(oql, -1)
 	for _, match := range correlatedMatches {
 		if len(match) >= 4 {

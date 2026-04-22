@@ -12,6 +12,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Path normalization** — Relative paths in `MetadataUrl` are automatically converted to absolute `file://` URLs for Studio Pro compatibility
 - **ServiceUrl validation** — `ServiceUrl` parameter must now be a constant reference (e.g., `@Module.ConstantName`) to enforce Mendix best practice
 - **Shared URL utilities** — `internal/pathutil` package with `NormalizeURL()`, `URIToPath()`, and `PathFromURL()` for reuse across components
+## [0.7.0] - 2026-04-21
+
+### Added
+
+- **Agent Editor** — CREATE/DROP Agent, Knowledge Base, Consumed MCP Service, and Model documents; read support for all four types; DESCRIBE MODULE WITH ALL includes agent-editor documents
+- **Consumed REST Client v2** — Redesigned syntax with full mapping support, parameter support for SEND REST REQUEST, BODY JSON FROM clause roundtrip, and TRANSFORM microflow action (JSLT/XSLT, Mendix 11.9+)
+- **Platform Authentication** — `mxcli auth login/logout/status/list` with PAT scheme for mendix.com; credentials stored at `~/.mxcli/auth.json` (mode 0600), MENDIX_PAT env override
+- **Marketplace Browsing** — `mxcli marketplace search/info/versions` with `--min-mendix` compatibility filtering
+- **Entity Event Handlers** — Full MDL support for before/after create/change/delete event handlers with entity parameter validation
+- **System Attributes** — AutoOwner, AutoChangedBy, and other audit pseudo-types; ALTER ENTITY ADD/DROP ATTRIBUTE for system attributes
+- **ALTER PUBLISHED REST SERVICE** — Full in-place modification of published REST services (#161)
+- **GRANT/REVOKE ACCESS on PUBLISHED REST SERVICE** (#162)
+- **GitHub Copilot support** — First-class Copilot integration in `mxcli init`
+- **Unified --json output** — All commands support structured JSON output (#134); `mxcli check --format json/sarif` outputs structured results
+- **OData TripPin bulk-import** — Executable bulk-import example with @Constant syntax for ServiceUrl
+- **Backend Abstraction** — `ExecContext` with typed backend interfaces, dispatch registry replacing type-switch, mutation backends (`page_mutator`, `widget_builder`, `datagrid_builder`, `workflow_mutator`) decoupled from `sdk/mpr`
+- **mdl/types package** — Shared types and utilities extracted from `sdk/mpr` (EDMX, AsyncAPI, ID, navigation, infrastructure, JSON utils)
+- **bsonutil package** — BSON utility functions (IDToBsonBinary, BsonBinaryToID, NewIDBsonBinary)
+- **Mock-based handler tests** — 189 tests across 33 files covering all executor command handlers
+- **OperationRegistry extensibility** — Pluggable operation registry with ContainerSnippet constant
+
+### Fixed
+
+- REST client BASIC auth uses correct `Rest$ConstantValue` BSON key (#200)
+- ConnectionIndex lost on roundtrip (int64 vs int32 type mismatch) (#204)
+- OData: ByAssociation DataSource serialization for DataGrid 2, capability annotations for entity/association CRUD (#201), bulk-create NPEs for primitive collections, derived/abstract/contained entities, and navigation associations (#143)
+- UUID v4 version/variant bits in `GenerateDeterministicID`; panic on invalid UUID in `IDToBsonBinary`
+- Cascade-delete associations on DROP ENTITY and DROP ODATA CLIENT
+- Reserved keywords now allowed as module names in CREATE MODULE
+- Quoted identifiers accepted in CREATE MODULE
+- Find, Filter, ListRange list operations parsed and rendered (#212)
+- DESCRIBE REST CLIENT resolves constant credentials to literal values (#192)
+- DESCRIBE microflow roundtrip issues; eliminate redundant Merge nodes when IF branch returns
+- COLUMN name falls back to attribute + scope association lookup by module (#202)
+- Schema-level external `<Annotations>` blocks parsed in OData $metadata
+- OData ServiceUrl validated as constant reference
+- Agent-editor commands conformed to backend abstraction
+
+### Changed
+
+- Executor fully decoupled from storage layer — all BSON writes go through mutation backends (PRs #225, #237, #238, #239)
+- All executor handlers migrated to free functions using `ExecContext` (removed 233 unused wrapper methods)
+- `show*` executor functions renamed to `list*` for consistency
+- Type aliases added in `sdk/mpr` for backward compatibility after shared-type extraction
 
 ## [0.6.0] - 2026-04-09
 
@@ -145,7 +189,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - Bumped dependencies: pgx v5.9.1, zap v1.27.1, go-runewidth v0.0.21, cobra v1.10.2, mongo-driver v1.17.9, sqlite v1.48.0
-- Refactored Visible/Editable syntax to `Visible: [xpath]` and `Editable: [xpath]`
+- Refactored Visible/Editable syntax to `visible: [xpath]` and `editable: [xpath]`
 - Used dedicated CWTest module in custom widget examples
 - Always-quoted identifiers in MDL to prevent reserved keyword conflicts
 - Added scope & atomicity and documentation sections to PR review checklist
@@ -238,7 +282,7 @@ First public release.
 - **Domain Model** — CREATE/ALTER/DROP ENTITY, CREATE ASSOCIATION, attribute types, indexes, validation rules
 - **Microflows & Nanoflows** — 60+ activity types, loops, error handling, expressions, parameters
 - **Pages** — 50+ widget types, CREATE/ALTER PAGE/SNIPPET, DataGrid, DataView, ListView, pluggable widgets
-- **Page Variables** — `Variables: { $name: Type = 'expression' }` in page/snippet headers for column visibility and conditional logic
+- **Page Variables** — `variables: { $name: type = 'expression' }` in page/snippet headers for column visibility and conditional logic
 - **Security** — Module roles, entity access rules, GRANT/REVOKE, UPDATE SECURITY reconciliation
 - **Navigation** — Navigation profiles, menu items, home pages, login pages
 - **Enumerations** — CREATE/ALTER/DROP ENUMERATION with localized values

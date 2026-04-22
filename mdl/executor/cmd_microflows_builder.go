@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	"github.com/mendixlabs/mxcli/mdl/backend"
 	"github.com/mendixlabs/mxcli/model"
 	"github.com/mendixlabs/mxcli/sdk/microflows"
-	"github.com/mendixlabs/mxcli/sdk/mpr"
 )
 
 // flowBuilder helps construct the flow graph from AST statements.
@@ -22,16 +22,18 @@ type flowBuilder struct {
 	posY                int
 	baseY               int // Base Y position (for returning after ELSE branches)
 	spacing             int
-	returnValue         string                   // Return value expression for RETURN statement (used by buildFlowGraph final EndEvent)
-	endsWithReturn      bool                     // True if the flow already ends with EndEvent(s) from RETURN statements
-	varTypes            map[string]string        // Variable name -> entity qualified name (for CHANGE statements)
-	declaredVars        map[string]string        // Declared primitive variables: name -> type (e.g., "$IsValid" -> "Boolean")
-	errors              []string                 // Validation errors collected during build
-	measurer            *layoutMeasurer          // For measuring statement dimensions
-	nextConnectionPoint model.ID                 // For compound statements: the exit point differs from entry point
-	reader              *mpr.Reader              // For looking up page/microflow references
-	hierarchy           *ContainerHierarchy      // For resolving container IDs to module names
-	pendingAnnotations  *ast.ActivityAnnotations // Pending annotations to attach to next activity
+	returnValue         string                       // Return value expression for RETURN statement (used by buildFlowGraph final EndEvent)
+	endsWithReturn      bool                         // True if the flow already ends with EndEvent(s) from RETURN statements
+	varTypes            map[string]string            // Variable name -> entity qualified name (for CHANGE statements)
+	declaredVars        map[string]string            // Declared primitive variables: name -> type (e.g., "$IsValid" -> "Boolean")
+	errors              []string                     // Validation errors collected during build
+	measurer            *layoutMeasurer              // For measuring statement dimensions
+	nextConnectionPoint model.ID                     // For compound statements: the exit point differs from entry point
+	nextFlowCase        string                       // If set, next connecting flow uses this case value (for merge-less splits)
+	backend             backend.FullBackend          // For looking up page/microflow references
+	hierarchy           *ContainerHierarchy          // For resolving container IDs to module names
+	pendingAnnotations  *ast.ActivityAnnotations     // Pending annotations to attach to next activity
+	restServices        []*model.ConsumedRestService // Cached REST services for parameter classification
 }
 
 // addError records a validation error during flow building.
@@ -56,9 +58,9 @@ func errorExampleDeclareVariable(varName string) string {
 	if len(varName) > 0 && varName[0] == '$' {
 		cleanName = varName[1:]
 	}
-	return fmt.Sprintf(`    DECLARE $%s Boolean = true;  -- or String, Integer, Decimal, DateTime
+	return fmt.Sprintf(`    declare $%s Boolean = true;  -- or String, Integer, Decimal, DateTime
     ...
-    SET $%s = false;`, cleanName, cleanName)
+    set $%s = false;`, cleanName, cleanName)
 }
 
 // isVariableDeclared checks if a variable has been declared (either as primitive or entity).
@@ -135,7 +137,7 @@ func (fb *flowBuilder) resolveAssociationPaths(expr ast.Expression) ast.Expressi
 // For each segment that is a qualified association name (Module.AssocName), it looks up
 // the association's target entity and inserts it after the association.
 func (fb *flowBuilder) resolvePathSegments(path []string) []string {
-	if fb.reader == nil || len(path) == 0 {
+	if fb.backend == nil || len(path) == 0 {
 		return path
 	}
 

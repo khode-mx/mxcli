@@ -9,16 +9,17 @@ import (
 	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
 	"github.com/mendixlabs/mxcli/model"
 	"github.com/mendixlabs/mxcli/sdk/domainmodel"
 )
 
-// showEntities handles SHOW ENTITIES command.
-func (e *Executor) showEntities(moduleName string) error {
+// listEntities handles SHOW ENTITIES command.
+func listEntities(ctx *ExecContext, moduleName string) error {
 	// Build module ID -> name map (single query)
-	modules, err := e.reader.ListModules()
+	modules, err := ctx.Backend.ListModules()
 	if err != nil {
-		return fmt.Errorf("failed to list modules: %w", err)
+		return mdlerrors.NewBackend("list modules", err)
 	}
 	moduleNames := make(map[model.ID]string)
 	for _, m := range modules {
@@ -26,9 +27,9 @@ func (e *Executor) showEntities(moduleName string) error {
 	}
 
 	// Get all domain models in a single query (avoids O(n²) behavior)
-	domainModels, err := e.reader.ListDomainModels()
+	domainModels, err := ctx.Backend.ListDomainModels()
 	if err != nil {
-		return fmt.Errorf("failed to list domain models: %w", err)
+		return mdlerrors.NewBackend("list domain models", err)
 	}
 
 	// Build entity ID -> association count map
@@ -152,33 +153,33 @@ func (e *Executor) showEntities(moduleName string) error {
 		}
 		result.Rows = append(result.Rows, rowData)
 	}
-	return e.writeResult(result)
+	return writeResult(ctx, result)
 }
 
-// showEntity handles SHOW ENTITY command.
-func (e *Executor) showEntity(name *ast.QualifiedName) error {
+// listEntity handles SHOW ENTITY command.
+func listEntity(ctx *ExecContext, name *ast.QualifiedName) error {
 	if name == nil {
-		return fmt.Errorf("entity name required")
+		return mdlerrors.NewValidation("entity name required")
 	}
 
-	module, err := e.findModule(name.Module)
+	module, err := findModule(ctx, name.Module)
 	if err != nil {
 		return err
 	}
 
-	dm, err := e.reader.GetDomainModel(module.ID)
+	dm, err := ctx.Backend.GetDomainModel(module.ID)
 	if err != nil {
-		return fmt.Errorf("failed to get domain model: %w", err)
+		return mdlerrors.NewBackend("get domain model", err)
 	}
 
 	for _, entity := range dm.Entities {
 		if entity.Name == name.Name {
-			fmt.Fprintf(e.output, "**Entity: %s.%s**\n\n", module.Name, entity.Name)
-			fmt.Fprintf(e.output, "- Persistable: %v\n", entity.Persistable)
+			fmt.Fprintf(ctx.Output, "**Entity: %s.%s**\n\n", module.Name, entity.Name)
+			fmt.Fprintf(ctx.Output, "- Persistable: %v\n", entity.Persistable)
 			if entity.GeneralizationRef != "" {
-				fmt.Fprintf(e.output, "- Extends: %s\n", entity.GeneralizationRef)
+				fmt.Fprintf(ctx.Output, "- Extends: %s\n", entity.GeneralizationRef)
 			}
-			fmt.Fprintf(e.output, "- Location: (%d, %d)\n\n", entity.Location.X, entity.Location.Y)
+			fmt.Fprintf(ctx.Output, "- Location: (%d, %d)\n\n", entity.Location.X, entity.Location.Y)
 
 			if len(entity.Attributes) > 0 {
 				// Calculate column widths
@@ -198,56 +199,56 @@ func (e *Executor) showEntity(name *ast.QualifiedName) error {
 					}
 				}
 
-				fmt.Fprintf(e.output, "| %-*s | %-*s |\n", nameWidth, "Attribute", typeWidth, "Type")
-				fmt.Fprintf(e.output, "|-%s-|-%s-|\n", strings.Repeat("-", nameWidth), strings.Repeat("-", typeWidth))
+				fmt.Fprintf(ctx.Output, "| %-*s | %-*s |\n", nameWidth, "Attribute", typeWidth, "Type")
+				fmt.Fprintf(ctx.Output, "|-%s-|-%s-|\n", strings.Repeat("-", nameWidth), strings.Repeat("-", typeWidth))
 				for _, r := range rows {
-					fmt.Fprintf(e.output, "| %-*s | %-*s |\n", nameWidth, r.name, typeWidth, r.typeName)
+					fmt.Fprintf(ctx.Output, "| %-*s | %-*s |\n", nameWidth, r.name, typeWidth, r.typeName)
 				}
-				fmt.Fprintf(e.output, "\n(%d attributes)\n", len(entity.Attributes))
+				fmt.Fprintf(ctx.Output, "\n(%d attributes)\n", len(entity.Attributes))
 			}
 			return nil
 		}
 	}
 
-	return fmt.Errorf("entity not found: %s", name)
+	return mdlerrors.NewNotFound("entity", name.String())
 }
 
 // describeEntity handles DESCRIBE ENTITY command.
-func (e *Executor) describeEntity(name ast.QualifiedName) error {
-	module, err := e.findModule(name.Module)
+func describeEntity(ctx *ExecContext, name ast.QualifiedName) error {
+	module, err := findModule(ctx, name.Module)
 	if err != nil {
 		return err
 	}
 
-	dm, err := e.reader.GetDomainModel(module.ID)
+	dm, err := ctx.Backend.GetDomainModel(module.ID)
 	if err != nil {
-		return fmt.Errorf("failed to get domain model: %w", err)
+		return mdlerrors.NewBackend("get domain model", err)
 	}
 
 	for _, entity := range dm.Entities {
 		if entity.Name == name.Name {
 			// Output JavaDoc documentation if present
 			if entity.Documentation != "" {
-				fmt.Fprintf(e.output, "/**\n * %s\n */\n", entity.Documentation)
+				fmt.Fprintf(ctx.Output, "/**\n * %s\n */\n", entity.Documentation)
 			}
 
 			// Output position annotation
-			fmt.Fprintf(e.output, "@Position(%d, %d)\n", entity.Location.X, entity.Location.Y)
+			fmt.Fprintf(ctx.Output, "@Position(%d, %d)\n", entity.Location.X, entity.Location.Y)
 
 			// Determine entity type based on Source field and Persistable flag
-			entityType := "PERSISTENT"
+			entityType := "persistent"
 			if strings.Contains(entity.Source, "OqlView") {
-				entityType = "VIEW"
+				entityType = "view"
 			} else if strings.Contains(entity.Source, "OData") || entity.RemoteSource != "" || entity.RemoteSourceDocument != "" {
-				entityType = "EXTERNAL"
+				entityType = "external"
 			} else if !entity.Persistable {
-				entityType = "NON-PERSISTENT"
+				entityType = "non-persistent"
 			}
 
 			if entity.GeneralizationRef != "" {
-				fmt.Fprintf(e.output, "CREATE OR MODIFY %s ENTITY %s.%s EXTENDS %s (\n", entityType, module.Name, entity.Name, entity.GeneralizationRef)
+				fmt.Fprintf(ctx.Output, "create or modify %s entity %s.%s extends %s (\n", entityType, module.Name, entity.Name, entity.GeneralizationRef)
 			} else {
-				fmt.Fprintf(e.output, "CREATE OR MODIFY %s ENTITY %s.%s (\n", entityType, module.Name, entity.Name)
+				fmt.Fprintf(ctx.Output, "create or modify %s entity %s.%s (\n", entityType, module.Name, entity.Name)
 			}
 
 			// Build validation rules map by attribute ID and name
@@ -288,20 +289,20 @@ func (e *Executor) describeEntity(name ast.QualifiedName) error {
 				}
 				for _, vr := range attrValidations {
 					if vr.Type == "Required" {
-						constraints.WriteString(" NOT NULL")
+						constraints.WriteString(" not null")
 						if vr.ErrorMessage != nil {
 							errMsg := vr.ErrorMessage.GetTranslation("en_US")
 							if errMsg != "" {
-								constraints.WriteString(fmt.Sprintf(" ERROR '%s'", errMsg))
+								constraints.WriteString(fmt.Sprintf(" error '%s'", errMsg))
 							}
 						}
 					}
 					if vr.Type == "Unique" {
-						constraints.WriteString(" UNIQUE")
+						constraints.WriteString(" unique")
 						if vr.ErrorMessage != nil {
 							errMsg := vr.ErrorMessage.GetTranslation("en_US")
 							if errMsg != "" {
-								constraints.WriteString(fmt.Sprintf(" ERROR '%s'", errMsg))
+								constraints.WriteString(fmt.Sprintf(" error '%s'", errMsg))
 							}
 						}
 					}
@@ -309,12 +310,12 @@ func (e *Executor) describeEntity(name ast.QualifiedName) error {
 
 				// Value type: CALCULATED or DEFAULT
 				if attr.Value != nil && attr.Value.Type == "CalculatedValue" {
-					constraints.WriteString(" CALCULATED")
+					constraints.WriteString(" calculated")
 					if attr.Value.MicroflowName != "" {
-						constraints.WriteString(" BY " + attr.Value.MicroflowName)
+						constraints.WriteString(" by " + attr.Value.MicroflowName)
 					} else if attr.Value.MicroflowID != "" {
-						if mfName := e.lookupMicroflowName(attr.Value.MicroflowID); mfName != "" {
-							constraints.WriteString(" BY " + mfName)
+						if mfName := lookupMicroflowName(ctx, attr.Value.MicroflowID); mfName != "" {
+							constraints.WriteString(" by " + mfName)
 						}
 					}
 				} else if attr.Value != nil && attr.Value.DefaultValue != "" {
@@ -329,7 +330,7 @@ func (e *Executor) describeEntity(name ast.QualifiedName) error {
 							defaultVal = enumType.EnumerationRef + "." + defaultVal
 						}
 					}
-					constraints.WriteString(fmt.Sprintf(" DEFAULT %s", defaultVal))
+					constraints.WriteString(fmt.Sprintf(" default %s", defaultVal))
 				}
 
 				line.WriteString(fmt.Sprintf("  %s: %s%s", attr.Name, typeStr, constraints.String()))
@@ -356,19 +357,19 @@ func (e *Executor) describeEntity(name ast.QualifiedName) error {
 				if i == len(attrLines)-1 {
 					comma = ""
 				}
-				fmt.Fprintf(e.output, "%s%s\n", al.text, comma)
+				fmt.Fprintf(ctx.Output, "%s%s\n", al.text, comma)
 			}
-			fmt.Fprint(e.output, ")")
+			fmt.Fprint(ctx.Output, ")")
 
 			// For VIEW entities, output the OQL query
-			if entityType == "VIEW" && entity.OqlQuery != "" {
-				fmt.Fprint(e.output, " AS (\n")
+			if entityType == "view" && entity.OqlQuery != "" {
+				fmt.Fprint(ctx.Output, " as (\n")
 				// Indent OQL query lines
 				oqlLines := strings.SplitSeq(entity.OqlQuery, "\n")
 				for line := range oqlLines {
-					fmt.Fprintf(e.output, "  %s\n", line)
+					fmt.Fprintf(ctx.Output, "  %s\n", line)
 				}
-				fmt.Fprint(e.output, ")")
+				fmt.Fprint(ctx.Output, ")")
 			}
 
 			// Build attribute name map
@@ -383,12 +384,12 @@ func (e *Executor) describeEntity(name ast.QualifiedName) error {
 				for _, ia := range idx.Attributes {
 					colName := attrNames[ia.AttributeID]
 					if !ia.Ascending {
-						colName += " DESC"
+						colName += " desc"
 					}
 					cols = append(cols, colName)
 				}
 				if len(cols) > 0 {
-					fmt.Fprintf(e.output, "\nINDEX (%s)", strings.Join(cols, ", "))
+					fmt.Fprintf(ctx.Output, "\nindex (%s)", strings.Join(cols, ", "))
 				}
 			}
 
@@ -396,17 +397,12 @@ func (e *Executor) describeEntity(name ast.QualifiedName) error {
 			for _, eh := range entity.EventHandlers {
 				mfName := eh.MicroflowName
 				if mfName == "" && eh.MicroflowID != "" {
-					mfName = e.lookupMicroflowName(eh.MicroflowID)
+					mfName = lookupMicroflowName(ctx, eh.MicroflowID)
 				}
 				if mfName == "" {
 					continue
 				}
-				eventName := string(eh.Event)
-				if eventName == "RollBack" {
-					eventName = "ROLLBACK"
-				} else {
-					eventName = strings.ToUpper(eventName)
-				}
+				eventName := strings.ToLower(string(eh.Event))
 				// Show parameter: ($currentObject) or ()
 				paramStr := "()"
 				if eh.PassEventObject {
@@ -415,32 +411,32 @@ func (e *Executor) describeEntity(name ast.QualifiedName) error {
 				var options string
 				// RAISE ERROR only applies to Before handlers (they return Boolean)
 				if eh.RaiseErrorOnFalse && strings.EqualFold(string(eh.Moment), "Before") {
-					options = " RAISE ERROR"
+					options = " raise error"
 				}
-				fmt.Fprintf(e.output, "\nON %s %s CALL %s%s%s",
-					strings.ToUpper(string(eh.Moment)), eventName, mfName, paramStr, options)
+				fmt.Fprintf(ctx.Output, "\non %s %s call %s%s%s",
+					strings.ToLower(string(eh.Moment)), eventName, mfName, paramStr, options)
 			}
 
-			fmt.Fprintln(e.output, ";")
+			fmt.Fprintln(ctx.Output, ";")
 
 			// Output access rule GRANT statements
-			e.outputEntityAccessGrants(entity, name.Module, name.Name)
+			outputEntityAccessGrants(ctx, entity, name.Module, name.Name)
 
-			fmt.Fprintln(e.output, "/")
+			fmt.Fprintln(ctx.Output, "/")
 			return nil
 		}
 	}
 
-	return fmt.Errorf("entity not found: %s", name)
+	return mdlerrors.NewNotFound("entity", name.String())
 }
 
 // describeEntityToString generates MDL source for an entity and returns it as a string.
-func (e *Executor) describeEntityToString(name ast.QualifiedName) (string, error) {
+func describeEntityToString(ctx *ExecContext, name ast.QualifiedName) (string, error) {
 	var buf strings.Builder
-	origOutput := e.output
-	e.output = &buf
-	err := e.describeEntity(name)
-	e.output = origOutput
+	origOutput := ctx.Output
+	ctx.Output = &buf
+	err := describeEntity(ctx, name)
+	ctx.Output = origOutput
 	if err != nil {
 		return "", err
 	}
@@ -460,30 +456,30 @@ func extractAttrNameFromQualified(qualifiedName string) string {
 
 // resolveMicroflowByName resolves a qualified microflow name to its ID.
 // It checks both microflows created during this session and existing microflows in the project.
-func (e *Executor) resolveMicroflowByName(qualifiedName string) (model.ID, error) {
+func resolveMicroflowByName(ctx *ExecContext, qualifiedName string) (model.ID, error) {
 	parts := strings.Split(qualifiedName, ".")
 	if len(parts) < 2 {
-		return "", fmt.Errorf("invalid microflow name: %s (expected Module.Name)", qualifiedName)
+		return "", mdlerrors.NewValidationf("invalid microflow name: %s (expected Module.Name)", qualifiedName)
 	}
 	moduleName := parts[0]
 	mfName := strings.Join(parts[1:], ".")
 
 	// Check microflows created during this session
-	if e.cache != nil && e.cache.createdMicroflows != nil {
-		if info, ok := e.cache.createdMicroflows[qualifiedName]; ok {
+	if ctx.Cache != nil && ctx.Cache.createdMicroflows != nil {
+		if info, ok := ctx.Cache.createdMicroflows[qualifiedName]; ok {
 			return info.ID, nil
 		}
 	}
 
 	// Search existing microflows
-	allMicroflows, err := e.reader.ListMicroflows()
+	allMicroflows, err := ctx.Backend.ListMicroflows()
 	if err != nil {
-		return "", fmt.Errorf("failed to list microflows: %w", err)
+		return "", mdlerrors.NewBackend("list microflows", err)
 	}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return "", fmt.Errorf("failed to build hierarchy: %w", err)
+		return "", mdlerrors.NewBackend("build hierarchy", err)
 	}
 
 	for _, mf := range allMicroflows {
@@ -494,17 +490,17 @@ func (e *Executor) resolveMicroflowByName(qualifiedName string) (model.ID, error
 		}
 	}
 
-	return "", fmt.Errorf("microflow not found: %s", qualifiedName)
+	return "", mdlerrors.NewNotFound("microflow", qualifiedName)
 }
 
 // lookupMicroflowName reverse-looks up a microflow ID to its qualified name.
-func (e *Executor) lookupMicroflowName(mfID model.ID) string {
-	allMicroflows, err := e.reader.ListMicroflows()
+func lookupMicroflowName(ctx *ExecContext, mfID model.ID) string {
+	allMicroflows, err := ctx.Backend.ListMicroflows()
 	if err != nil {
 		return ""
 	}
 
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
 		return ""
 	}
@@ -521,3 +517,5 @@ func (e *Executor) lookupMicroflowName(mfID model.ID) string {
 	}
 	return ""
 }
+
+// --- Executor method wrappers for callers not yet migrated ---

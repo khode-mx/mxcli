@@ -3,21 +3,23 @@
 package executor
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/mendixlabs/mxcli/mdl/ast"
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
 	"github.com/mendixlabs/mxcli/model"
 	"github.com/mendixlabs/mxcli/sdk/domainmodel"
 	"github.com/mendixlabs/mxcli/sdk/microflows"
 	"github.com/mendixlabs/mxcli/sdk/pages"
 )
 
-// DescribeMermaid generates a Mermaid diagram for the given object type and name.
+// describeMermaid generates a Mermaid diagram for the given object type and name.
 // Supported types: entity (renders full domain model), microflow, page.
-func (e *Executor) DescribeMermaid(objectType, name string) error {
-	if e.reader == nil {
-		return fmt.Errorf("not connected to a project")
+func describeMermaid(ctx *ExecContext, objectType, name string) error {
+	if !ctx.Connected() {
+		return mdlerrors.NewNotConnected()
 	}
 
 	parts := strings.SplitN(name, ".", 2)
@@ -28,28 +30,33 @@ func (e *Executor) DescribeMermaid(objectType, name string) error {
 		qn = ast.QualifiedName{Module: name}
 	}
 
-	switch strings.ToUpper(objectType) {
-	case "ENTITY", "DOMAINMODEL":
-		return e.domainModelToMermaid(qn.Module)
-	case "MICROFLOW":
-		return e.microflowToMermaid(qn)
-	case "PAGE":
-		return e.pageToMermaid(qn)
+	switch strings.ToLower(objectType) {
+	case "entity", "domainmodel":
+		return domainModelToMermaid(ctx, qn.Module)
+	case "microflow":
+		return microflowToMermaid(ctx, qn)
+	case "page":
+		return pageToMermaid(ctx, qn)
 	default:
-		return fmt.Errorf("mermaid format not supported for type: %s", objectType)
+		return mdlerrors.NewUnsupported(fmt.Sprintf("mermaid format not supported for type: %s", objectType))
 	}
 }
 
+// DescribeMermaid is a method wrapper for external callers.
+func (e *Executor) DescribeMermaid(objectType, name string) error {
+	return describeMermaid(e.newExecContext(context.Background()), objectType, name)
+}
+
 // domainModelToMermaid generates a Mermaid erDiagram for a module's domain model.
-func (e *Executor) domainModelToMermaid(moduleName string) error {
-	module, err := e.findModule(moduleName)
+func domainModelToMermaid(ctx *ExecContext, moduleName string) error {
+	module, err := findModule(ctx, moduleName)
 	if err != nil {
 		return err
 	}
 
-	dm, err := e.reader.GetDomainModel(module.ID)
+	dm, err := ctx.Backend.GetDomainModel(module.ID)
 	if err != nil {
-		return fmt.Errorf("failed to get domain model: %w", err)
+		return mdlerrors.NewBackend("get domain model", err)
 	}
 
 	// Build entity ID-to-name map for this module
@@ -60,9 +67,9 @@ func (e *Executor) domainModelToMermaid(moduleName string) error {
 
 	// Also load entities from all modules for cross-module associations
 	allEntityNames := make(map[model.ID]string)
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err == nil {
-		domainModels, _ := e.reader.ListDomainModels()
+		domainModels, _ := ctx.Backend.ListDomainModels()
 		for _, otherDM := range domainModels {
 			modName := h.GetModuleName(otherDM.ContainerID)
 			for _, entity := range otherDM.Entities {
@@ -175,20 +182,20 @@ func (e *Executor) domainModelToMermaid(moduleName string) error {
 	}
 	sb.WriteString("}\n")
 
-	fmt.Fprint(e.output, sb.String())
+	fmt.Fprint(ctx.Output, sb.String())
 	return nil
 }
 
 // microflowToMermaid generates a Mermaid flowchart for a microflow.
-func (e *Executor) microflowToMermaid(name ast.QualifiedName) error {
-	h, err := e.getHierarchy()
+func microflowToMermaid(ctx *ExecContext, name ast.QualifiedName) error {
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to build hierarchy: %w", err)
+		return mdlerrors.NewBackend("build hierarchy", err)
 	}
 
 	// Build entity name lookup
 	entityNames := make(map[model.ID]string)
-	domainModels, _ := e.reader.ListDomainModels()
+	domainModels, _ := ctx.Backend.ListDomainModels()
 	for _, dm := range domainModels {
 		modName := h.GetModuleName(dm.ContainerID)
 		for _, entity := range dm.Entities {
@@ -197,9 +204,9 @@ func (e *Executor) microflowToMermaid(name ast.QualifiedName) error {
 	}
 
 	// Find the microflow
-	allMicroflows, err := e.reader.ListMicroflows()
+	allMicroflows, err := ctx.Backend.ListMicroflows()
 	if err != nil {
-		return fmt.Errorf("failed to list microflows: %w", err)
+		return mdlerrors.NewBackend("list microflows", err)
 	}
 
 	var targetMf *microflows.Microflow
@@ -213,20 +220,20 @@ func (e *Executor) microflowToMermaid(name ast.QualifiedName) error {
 	}
 
 	if targetMf == nil {
-		return fmt.Errorf("microflow not found: %s", name)
+		return mdlerrors.NewNotFound("microflow", name.String())
 	}
 
-	return e.renderMicroflowMermaid(targetMf, entityNames)
+	return renderMicroflowMermaid(ctx, targetMf, entityNames)
 }
 
 // renderMicroflowMermaid renders a microflow as a Mermaid flowchart.
-func (e *Executor) renderMicroflowMermaid(mf *microflows.Microflow, entityNames map[model.ID]string) error {
+func renderMicroflowMermaid(ctx *ExecContext, mf *microflows.Microflow, entityNames map[model.ID]string) error {
 	var sb strings.Builder
 	sb.WriteString("flowchart LR\n")
 
 	if mf.ObjectCollection == nil || len(mf.ObjectCollection.Objects) == 0 {
 		sb.WriteString("    start([Start]) --> stop([End])\n")
-		fmt.Fprint(e.output, sb.String())
+		fmt.Fprint(ctx.Output, sb.String())
 		return nil
 	}
 
@@ -353,20 +360,20 @@ func (e *Executor) renderMicroflowMermaid(mf *microflows.Microflow, entityNames 
 		sb.WriteString("}\n")
 	}
 
-	fmt.Fprint(e.output, sb.String())
+	fmt.Fprint(ctx.Output, sb.String())
 	return nil
 }
 
 // pageToMermaid generates a Mermaid block diagram for a page's widget structure.
-func (e *Executor) pageToMermaid(name ast.QualifiedName) error {
-	h, err := e.getHierarchy()
+func pageToMermaid(ctx *ExecContext, name ast.QualifiedName) error {
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to build hierarchy: %w", err)
+		return mdlerrors.NewBackend("build hierarchy", err)
 	}
 
-	allPages, err := e.reader.ListPages()
+	allPages, err := ctx.Backend.ListPages()
 	if err != nil {
-		return fmt.Errorf("failed to list pages: %w", err)
+		return mdlerrors.NewBackend("list pages", err)
 	}
 
 	var foundPage *pages.Page
@@ -380,11 +387,11 @@ func (e *Executor) pageToMermaid(name ast.QualifiedName) error {
 	}
 
 	if foundPage == nil {
-		return fmt.Errorf("page not found: %s", name)
+		return mdlerrors.NewNotFound("page", name.String())
 	}
 
 	// Use raw widget data (same approach as describePage)
-	rawWidgets := e.getPageWidgetsFromRaw(foundPage.ID)
+	rawWidgets := getPageWidgetsFromRaw(ctx, foundPage.ID)
 
 	var sb strings.Builder
 	sb.WriteString("block-beta\n")
@@ -395,17 +402,17 @@ func (e *Executor) pageToMermaid(name ast.QualifiedName) error {
 	sb.WriteString(fmt.Sprintf("    page_title[\"%s\"]\n", sanitizeMermaidLabel(title)))
 
 	// Render widget tree
-	e.renderRawWidgetMermaid(&sb, rawWidgets, 1, 0)
+	renderRawWidgetMermaid(ctx, &sb, rawWidgets, 1, 0)
 
 	// Emit metadata for the webview
 	sb.WriteString("\n%% @type block\n")
 
-	fmt.Fprint(e.output, sb.String())
+	fmt.Fprint(ctx.Output, sb.String())
 	return nil
 }
 
 // renderRawWidgetMermaid recursively renders raw widgets in Mermaid block-beta syntax.
-func (e *Executor) renderRawWidgetMermaid(sb *strings.Builder, widgets []rawWidget, depth int, counter int) int {
+func renderRawWidgetMermaid(ctx *ExecContext, sb *strings.Builder, widgets []rawWidget, depth int, counter int) int {
 	for _, w := range widgets {
 		counter++
 		id := fmt.Sprintf("w%d", counter)
@@ -417,7 +424,7 @@ func (e *Executor) renderRawWidgetMermaid(sb *strings.Builder, widgets []rawWidg
 
 		if len(w.Children) > 0 {
 			fmt.Fprintf(sb, "%s%s[\"%s\"]:\n", indent, id, sanitizeMermaidLabel(label))
-			counter = e.renderRawWidgetMermaid(sb, w.Children, depth+1, counter)
+			counter = renderRawWidgetMermaid(ctx, sb, w.Children, depth+1, counter)
 		} else {
 			fmt.Fprintf(sb, "%s%s[\"%s\"]\n", indent, id, sanitizeMermaidLabel(label))
 		}
@@ -469,32 +476,32 @@ func mermaidActionLabel(a *microflows.ActionActivity, entityNames map[model.ID]s
 		return "Create " + sanitizeMermaidLabel(entityName)
 	case *microflows.ChangeObjectAction:
 		if act.ChangeVariable != "" {
-			return "CHANGE $" + sanitizeMermaidLabel(act.ChangeVariable)
+			return "change $" + sanitizeMermaidLabel(act.ChangeVariable)
 		}
 		return "Change Object"
 	case *microflows.CommitObjectsAction:
 		if act.CommitVariable != "" {
-			return "COMMIT $" + sanitizeMermaidLabel(act.CommitVariable)
+			return "commit $" + sanitizeMermaidLabel(act.CommitVariable)
 		}
 		return "Commit"
 	case *microflows.DeleteObjectAction:
 		if act.DeleteVariable != "" {
-			return "DELETE $" + sanitizeMermaidLabel(act.DeleteVariable)
+			return "delete $" + sanitizeMermaidLabel(act.DeleteVariable)
 		}
 		return "Delete"
 	case *microflows.RollbackObjectAction:
 		if act.RollbackVariable != "" {
-			return "ROLLBACK $" + sanitizeMermaidLabel(act.RollbackVariable)
+			return "rollback $" + sanitizeMermaidLabel(act.RollbackVariable)
 		}
 		return "Rollback"
 	case *microflows.CreateVariableAction:
 		if act.VariableName != "" {
-			return "DECLARE $" + sanitizeMermaidLabel(act.VariableName)
+			return "declare $" + sanitizeMermaidLabel(act.VariableName)
 		}
 		return "Declare Variable"
 	case *microflows.ChangeVariableAction:
 		if act.VariableName != "" {
-			return "SET $" + sanitizeMermaidLabel(act.VariableName)
+			return "set $" + sanitizeMermaidLabel(act.VariableName)
 		}
 		return "Set Variable"
 	case *microflows.RetrieveAction:
@@ -519,7 +526,7 @@ func mermaidActionLabel(a *microflows.ActionActivity, entityNames map[model.ID]s
 		}
 		return "Call Java Action"
 	case *microflows.RestCallAction:
-		return "REST Call"
+		return "rest Call"
 	case *microflows.ExecuteDatabaseQueryAction:
 		if act.Query != "" {
 			return "DB Query " + sanitizeMermaidLabel(mermaidTruncate(act.Query, 30))

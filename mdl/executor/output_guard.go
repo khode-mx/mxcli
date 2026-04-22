@@ -4,9 +4,10 @@ package executor
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"sync"
+
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
 )
 
 // outputGuard wraps an io.Writer with a per-statement line limit.
@@ -47,7 +48,7 @@ func (g *outputGuard) Write(p []byte) (int, error) {
 		g.exceeded = true
 		// Write the current chunk first so output isn't abruptly cut mid-line.
 		_, _ = g.w.Write(p)
-		return len(p), fmt.Errorf("output line limit exceeded (%d lines); statement aborted", g.maxLines)
+		return len(p), mdlerrors.NewValidationf("output line limit exceeded (%d lines); statement aborted", g.maxLines)
 	}
 
 	return g.w.Write(p)

@@ -295,8 +295,61 @@ func SerializeCustomWidgetDataSource(ds pages.DataSource) bson.D {
 				{Key: "ParameterMappings", Value: bson.A{int32(3)}},
 			}},
 		}
+	case *pages.AssociationSource:
+		return serializeAssociationSource(d)
 	default:
 		return nil
+	}
+}
+
+// serializeAssociationSource builds a Forms$AssociationSource BSON document.
+// EntityPath is "Module.Assoc" or "Module.Assoc/Module.DestEntity".
+// When DestinationEntity is omitted, it's left empty — Studio Pro will resolve it.
+func serializeAssociationSource(d *pages.AssociationSource) bson.D {
+	parts := strings.Split(d.EntityPath, "/")
+	association := parts[0]
+	destEntity := ""
+	if len(parts) >= 2 {
+		destEntity = parts[1]
+	}
+
+	step := bson.D{
+		{Key: "$ID", Value: idToBsonBinary(generateUUID())},
+		{Key: "$Type", Value: "DomainModels$EntityRefStep"},
+		{Key: "Association", Value: association},
+		{Key: "DestinationEntity", Value: destEntity},
+	}
+
+	entityRef := bson.D{
+		{Key: "$ID", Value: idToBsonBinary(generateUUID())},
+		{Key: "$Type", Value: "DomainModels$IndirectEntityRef"},
+		{Key: "Steps", Value: bson.A{int32(2), step}},
+	}
+
+	var sourceVar any
+	if d.ContextVariable != "" {
+		sourceVar = bson.D{
+			{Key: "$ID", Value: idToBsonBinary(generateUUID())},
+			{Key: "$Type", Value: "Forms$PageVariable"},
+			{Key: "LocalVariable", Value: ""},
+			{Key: "PageParameter", Value: d.ContextVariable},
+			{Key: "SnippetParameter", Value: ""},
+			{Key: "SubKey", Value: ""},
+			{Key: "UseAllPages", Value: false},
+			{Key: "Widget", Value: ""},
+		}
+	}
+
+	id := string(d.ID)
+	if id == "" {
+		id = generateUUID()
+	}
+	return bson.D{
+		{Key: "$ID", Value: idToBsonBinary(id)},
+		{Key: "$Type", Value: "Forms$AssociationSource"},
+		{Key: "EntityRef", Value: entityRef},
+		{Key: "ForceFullObjects", Value: false},
+		{Key: "SourceVariable", Value: sourceVar},
 	}
 }
 

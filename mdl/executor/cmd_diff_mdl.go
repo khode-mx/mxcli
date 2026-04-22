@@ -17,7 +17,7 @@ import (
 // ============================================================================
 
 // entityStmtToMDL converts a CreateEntityStmt to MDL text
-func (e *Executor) entityStmtToMDL(s *ast.CreateEntityStmt) string {
+func entityStmtToMDL(ctx *ExecContext, s *ast.CreateEntityStmt) string {
 	var lines []string
 
 	// Documentation
@@ -34,7 +34,7 @@ func (e *Executor) entityStmtToMDL(s *ast.CreateEntityStmt) string {
 
 	// Entity type
 	entityType := s.Kind.String()
-	lines = append(lines, fmt.Sprintf("CREATE %s ENTITY %s (", entityType, s.Name))
+	lines = append(lines, fmt.Sprintf("create %s entity %s (", entityType, s.Name))
 
 	// Attributes
 	for i, attr := range s.Attributes {
@@ -43,19 +43,19 @@ func (e *Executor) entityStmtToMDL(s *ast.CreateEntityStmt) string {
 			lines = append(lines, fmt.Sprintf("  /** %s */", attr.Documentation))
 		}
 
-		typeStr := e.dataTypeToString(attr.Type)
+		typeStr := dataTypeToString(ctx, attr.Type)
 		constraints := ""
 
 		if attr.NotNull {
-			constraints += " NOT NULL"
+			constraints += " not null"
 			if attr.NotNullError != "" {
-				constraints += fmt.Sprintf(" ERROR '%s'", attr.NotNullError)
+				constraints += fmt.Sprintf(" error '%s'", attr.NotNullError)
 			}
 		}
 		if attr.Unique {
-			constraints += " UNIQUE"
+			constraints += " unique"
 			if attr.UniqueError != "" {
-				constraints += fmt.Sprintf(" ERROR '%s'", attr.UniqueError)
+				constraints += fmt.Sprintf(" error '%s'", attr.UniqueError)
 			}
 		}
 		if attr.HasDefault {
@@ -63,7 +63,7 @@ func (e *Executor) entityStmtToMDL(s *ast.CreateEntityStmt) string {
 			if attr.Type.Kind == ast.TypeString {
 				defaultVal = fmt.Sprintf("'%s'", attr.DefaultValue)
 			}
-			constraints += fmt.Sprintf(" DEFAULT %s", defaultVal)
+			constraints += fmt.Sprintf(" default %s", defaultVal)
 		}
 
 		comma := ","
@@ -81,11 +81,11 @@ func (e *Executor) entityStmtToMDL(s *ast.CreateEntityStmt) string {
 		for _, col := range idx.Columns {
 			colStr := col.Name
 			if col.Descending {
-				colStr += " DESC"
+				colStr += " desc"
 			}
 			cols = append(cols, colStr)
 		}
-		lines = append(lines, fmt.Sprintf("INDEX (%s)", strings.Join(cols, ", ")))
+		lines = append(lines, fmt.Sprintf("index (%s)", strings.Join(cols, ", ")))
 	}
 
 	lines = append(lines, ";")
@@ -95,7 +95,7 @@ func (e *Executor) entityStmtToMDL(s *ast.CreateEntityStmt) string {
 }
 
 // viewEntityStmtToMDL converts a CreateViewEntityStmt to MDL text
-func (e *Executor) viewEntityStmtToMDL(s *ast.CreateViewEntityStmt) string {
+func viewEntityStmtToMDL(ctx *ExecContext, s *ast.CreateViewEntityStmt) string {
 	var lines []string
 
 	if s.Documentation != "" {
@@ -108,10 +108,10 @@ func (e *Executor) viewEntityStmtToMDL(s *ast.CreateViewEntityStmt) string {
 		lines = append(lines, fmt.Sprintf("@Position(%d, %d)", s.Position.X, s.Position.Y))
 	}
 
-	lines = append(lines, fmt.Sprintf("CREATE VIEW ENTITY %s (", s.Name))
+	lines = append(lines, fmt.Sprintf("create view entity %s (", s.Name))
 
 	for i, attr := range s.Attributes {
-		typeStr := e.dataTypeToString(attr.Type)
+		typeStr := dataTypeToString(ctx, attr.Type)
 		comma := ","
 		if i == len(s.Attributes)-1 {
 			comma = ""
@@ -119,7 +119,7 @@ func (e *Executor) viewEntityStmtToMDL(s *ast.CreateViewEntityStmt) string {
 		lines = append(lines, fmt.Sprintf("  %s: %s%s", attr.Name, typeStr, comma))
 	}
 
-	lines = append(lines, ") AS (")
+	lines = append(lines, ") as (")
 	// Indent OQL query
 	for line := range strings.SplitSeq(s.Query.RawQuery, "\n") {
 		lines = append(lines, "  "+line)
@@ -131,7 +131,7 @@ func (e *Executor) viewEntityStmtToMDL(s *ast.CreateViewEntityStmt) string {
 }
 
 // enumerationStmtToMDL converts a CreateEnumerationStmt to MDL text
-func (e *Executor) enumerationStmtToMDL(s *ast.CreateEnumerationStmt) string {
+func enumerationStmtToMDL(ctx *ExecContext, s *ast.CreateEnumerationStmt) string {
 	var lines []string
 
 	if s.Documentation != "" {
@@ -140,7 +140,7 @@ func (e *Executor) enumerationStmtToMDL(s *ast.CreateEnumerationStmt) string {
 		lines = append(lines, " */")
 	}
 
-	lines = append(lines, fmt.Sprintf("CREATE ENUMERATION %s (", s.Name))
+	lines = append(lines, fmt.Sprintf("create enumeration %s (", s.Name))
 
 	for i, v := range s.Values {
 		comma := ","
@@ -157,7 +157,7 @@ func (e *Executor) enumerationStmtToMDL(s *ast.CreateEnumerationStmt) string {
 }
 
 // associationStmtToMDL converts a CreateAssociationStmt to MDL text
-func (e *Executor) associationStmtToMDL(s *ast.CreateAssociationStmt) string {
+func associationStmtToMDL(ctx *ExecContext, s *ast.CreateAssociationStmt) string {
 	var lines []string
 
 	if s.Documentation != "" {
@@ -166,20 +166,20 @@ func (e *Executor) associationStmtToMDL(s *ast.CreateAssociationStmt) string {
 		lines = append(lines, " */")
 	}
 
-	lines = append(lines, fmt.Sprintf("CREATE ASSOCIATION %s", s.Name))
-	lines = append(lines, fmt.Sprintf("FROM %s TO %s", s.Parent, s.Child))
+	lines = append(lines, fmt.Sprintf("create association %s", s.Name))
+	lines = append(lines, fmt.Sprintf("from %s to %s", s.Parent, s.Child))
 
 	assocType := "Reference"
 	if s.Type == ast.AssocReferenceSet {
 		assocType = "ReferenceSet"
 	}
-	lines = append(lines, fmt.Sprintf("TYPE %s", assocType))
+	lines = append(lines, fmt.Sprintf("type %s", assocType))
 
 	owner := "Default"
 	if s.Owner == ast.OwnerBoth {
 		owner = "Both"
 	}
-	lines = append(lines, fmt.Sprintf("OWNER %s", owner))
+	lines = append(lines, fmt.Sprintf("owner %s", owner))
 
 	deleteBehavior := "DELETE_BUT_KEEP_REFERENCES"
 	switch s.DeleteBehavior {
@@ -188,14 +188,14 @@ func (e *Executor) associationStmtToMDL(s *ast.CreateAssociationStmt) string {
 	case ast.DeleteIfNoReferences:
 		deleteBehavior = "DELETE_IF_NO_REFERENCES"
 	}
-	lines = append(lines, fmt.Sprintf("DELETE_BEHAVIOR %s;", deleteBehavior))
+	lines = append(lines, fmt.Sprintf("delete_behavior %s;", deleteBehavior))
 	lines = append(lines, "/")
 
 	return strings.Join(lines, "\n")
 }
 
 // microflowStmtToMDL converts a CreateMicroflowStmt to MDL text
-func (e *Executor) microflowStmtToMDL(s *ast.CreateMicroflowStmt) string {
+func microflowStmtToMDL(ctx *ExecContext, s *ast.CreateMicroflowStmt) string {
 	var lines []string
 
 	// Documentation
@@ -209,9 +209,9 @@ func (e *Executor) microflowStmtToMDL(s *ast.CreateMicroflowStmt) string {
 
 	// CREATE MICROFLOW header with parameters
 	if len(s.Parameters) > 0 {
-		lines = append(lines, fmt.Sprintf("CREATE MICROFLOW %s (", s.Name))
+		lines = append(lines, fmt.Sprintf("create microflow %s (", s.Name))
 		for i, param := range s.Parameters {
-			paramType := e.dataTypeToString(param.Type)
+			paramType := dataTypeToString(ctx, param.Type)
 			comma := ","
 			if i == len(s.Parameters)-1 {
 				comma = ""
@@ -220,163 +220,163 @@ func (e *Executor) microflowStmtToMDL(s *ast.CreateMicroflowStmt) string {
 		}
 		lines = append(lines, ")")
 	} else {
-		lines = append(lines, fmt.Sprintf("CREATE MICROFLOW %s ()", s.Name))
+		lines = append(lines, fmt.Sprintf("create microflow %s ()", s.Name))
 	}
 
 	// Return type
 	if s.ReturnType != nil {
-		returnType := e.dataTypeToString(s.ReturnType.Type)
+		returnType := dataTypeToString(ctx, s.ReturnType.Type)
 		if returnType != "Void" && returnType != "" {
-			returnLine := fmt.Sprintf("RETURNS %s", returnType)
+			returnLine := fmt.Sprintf("returns %s", returnType)
 			if s.ReturnType.Variable != "" {
-				returnLine += fmt.Sprintf(" AS $%s", s.ReturnType.Variable)
+				returnLine += fmt.Sprintf(" as $%s", s.ReturnType.Variable)
 			}
 			lines = append(lines, returnLine)
 		}
 	}
 
 	// BEGIN block
-	lines = append(lines, "BEGIN")
+	lines = append(lines, "begin")
 
 	// Body statements
 	for _, stmt := range s.Body {
-		stmtLines := e.microflowStatementToMDL(stmt, 1)
+		stmtLines := microflowStatementToMDL(ctx, stmt, 1)
 		lines = append(lines, stmtLines...)
 	}
 
-	lines = append(lines, "END;")
+	lines = append(lines, "end;")
 	lines = append(lines, "/")
 
 	return strings.Join(lines, "\n")
 }
 
 // microflowStatementToMDL converts a microflow statement to MDL lines
-func (e *Executor) microflowStatementToMDL(stmt ast.MicroflowStatement, indent int) []string {
+func microflowStatementToMDL(ctx *ExecContext, stmt ast.MicroflowStatement, indent int) []string {
 	indentStr := strings.Repeat("  ", indent)
 	var lines []string
 
 	switch s := stmt.(type) {
 	case *ast.DeclareStmt:
-		typeStr := e.dataTypeToString(s.Type)
+		typeStr := dataTypeToString(ctx, s.Type)
 		initVal := "empty"
 		if s.InitialValue != nil {
-			initVal = e.expressionToString(s.InitialValue)
+			initVal = diffExpressionToString(ctx, s.InitialValue)
 		}
-		lines = append(lines, fmt.Sprintf("%sDECLARE $%s %s = %s;", indentStr, s.Variable, typeStr, initVal))
+		lines = append(lines, fmt.Sprintf("%sdeclare $%s %s = %s;", indentStr, s.Variable, typeStr, initVal))
 
 	case *ast.MfSetStmt:
-		lines = append(lines, fmt.Sprintf("%sSET $%s = %s;", indentStr, s.Target, e.expressionToString(s.Value)))
+		lines = append(lines, fmt.Sprintf("%sset $%s = %s;", indentStr, s.Target, diffExpressionToString(ctx, s.Value)))
 
 	case *ast.ReturnStmt:
 		if s.Value != nil {
-			lines = append(lines, fmt.Sprintf("%sRETURN %s;", indentStr, e.expressionToString(s.Value)))
+			lines = append(lines, fmt.Sprintf("%sreturn %s;", indentStr, diffExpressionToString(ctx, s.Value)))
 		} else {
-			lines = append(lines, fmt.Sprintf("%sRETURN;", indentStr))
+			lines = append(lines, fmt.Sprintf("%sreturn;", indentStr))
 		}
 
 	case *ast.CreateObjectStmt:
 		if len(s.Changes) > 0 {
 			var members []string
 			for _, c := range s.Changes {
-				members = append(members, fmt.Sprintf("%s = %s", c.Attribute, e.expressionToString(c.Value)))
+				members = append(members, fmt.Sprintf("%s = %s", c.Attribute, diffExpressionToString(ctx, c.Value)))
 			}
-			lines = append(lines, fmt.Sprintf("%s$%s = CREATE %s (%s);", indentStr, s.Variable, s.EntityType, strings.Join(members, ", ")))
+			lines = append(lines, fmt.Sprintf("%s$%s = create %s (%s);", indentStr, s.Variable, s.EntityType, strings.Join(members, ", ")))
 		} else {
-			lines = append(lines, fmt.Sprintf("%s$%s = CREATE %s;", indentStr, s.Variable, s.EntityType))
+			lines = append(lines, fmt.Sprintf("%s$%s = create %s;", indentStr, s.Variable, s.EntityType))
 		}
 
 	case *ast.ChangeObjectStmt:
 		if len(s.Changes) > 0 {
 			var members []string
 			for _, c := range s.Changes {
-				members = append(members, fmt.Sprintf("%s = %s", c.Attribute, e.expressionToString(c.Value)))
+				members = append(members, fmt.Sprintf("%s = %s", c.Attribute, diffExpressionToString(ctx, c.Value)))
 			}
-			lines = append(lines, fmt.Sprintf("%sCHANGE $%s (%s);", indentStr, s.Variable, strings.Join(members, ", ")))
+			lines = append(lines, fmt.Sprintf("%schange $%s (%s);", indentStr, s.Variable, strings.Join(members, ", ")))
 		} else {
-			lines = append(lines, fmt.Sprintf("%sCHANGE $%s;", indentStr, s.Variable))
+			lines = append(lines, fmt.Sprintf("%schange $%s;", indentStr, s.Variable))
 		}
 
 	case *ast.MfCommitStmt:
 		suffix := ""
 		if s.WithEvents {
-			suffix += " WITH EVENTS"
+			suffix += " with events"
 		}
 		if s.RefreshInClient {
-			suffix += " REFRESH"
+			suffix += " refresh"
 		}
-		lines = append(lines, fmt.Sprintf("%sCOMMIT $%s%s;", indentStr, s.Variable, suffix))
+		lines = append(lines, fmt.Sprintf("%scommit $%s%s;", indentStr, s.Variable, suffix))
 
 	case *ast.DeleteObjectStmt:
-		lines = append(lines, fmt.Sprintf("%sDELETE $%s;", indentStr, s.Variable))
+		lines = append(lines, fmt.Sprintf("%sdelete $%s;", indentStr, s.Variable))
 
 	case *ast.RetrieveStmt:
 		var stmt string
 		if s.StartVariable != "" {
-			stmt = fmt.Sprintf("%sRETRIEVE $%s FROM $%s/%s", indentStr, s.Variable, s.StartVariable, s.Source)
+			stmt = fmt.Sprintf("%sretrieve $%s from $%s/%s", indentStr, s.Variable, s.StartVariable, s.Source)
 		} else {
-			stmt = fmt.Sprintf("%sRETRIEVE $%s FROM %s", indentStr, s.Variable, s.Source)
+			stmt = fmt.Sprintf("%sretrieve $%s from %s", indentStr, s.Variable, s.Source)
 		}
 		if s.Where != nil {
-			stmt += fmt.Sprintf("\n%s    WHERE %s", indentStr, e.expressionToString(s.Where))
+			stmt += fmt.Sprintf("\n%s    where %s", indentStr, diffExpressionToString(ctx, s.Where))
 		}
 		if s.Limit != "" {
-			stmt += fmt.Sprintf("\n%s    LIMIT %s", indentStr, s.Limit)
+			stmt += fmt.Sprintf("\n%s    limit %s", indentStr, s.Limit)
 		}
 		lines = append(lines, stmt+";")
 
 	case *ast.IfStmt:
-		lines = append(lines, fmt.Sprintf("%sIF %s THEN", indentStr, e.expressionToString(s.Condition)))
+		lines = append(lines, fmt.Sprintf("%sif %s then", indentStr, diffExpressionToString(ctx, s.Condition)))
 		for _, thenStmt := range s.ThenBody {
-			lines = append(lines, e.microflowStatementToMDL(thenStmt, indent+1)...)
+			lines = append(lines, microflowStatementToMDL(ctx, thenStmt, indent+1)...)
 		}
 		if len(s.ElseBody) > 0 {
-			lines = append(lines, indentStr+"ELSE")
+			lines = append(lines, indentStr+"else")
 			for _, elseStmt := range s.ElseBody {
-				lines = append(lines, e.microflowStatementToMDL(elseStmt, indent+1)...)
+				lines = append(lines, microflowStatementToMDL(ctx, elseStmt, indent+1)...)
 			}
 		}
-		lines = append(lines, indentStr+"END IF;")
+		lines = append(lines, indentStr+"end if;")
 
 	case *ast.LoopStmt:
-		lines = append(lines, fmt.Sprintf("%sLOOP $%s IN $%s", indentStr, s.LoopVariable, s.ListVariable))
+		lines = append(lines, fmt.Sprintf("%sloop $%s in $%s", indentStr, s.LoopVariable, s.ListVariable))
 		for _, bodyStmt := range s.Body {
-			lines = append(lines, e.microflowStatementToMDL(bodyStmt, indent+1)...)
+			lines = append(lines, microflowStatementToMDL(ctx, bodyStmt, indent+1)...)
 		}
-		lines = append(lines, indentStr+"END LOOP;")
+		lines = append(lines, indentStr+"end loop;")
 
 	case *ast.LogStmt:
 		nodeStr := s.Node
 		if !strings.HasPrefix(nodeStr, "'") {
 			nodeStr = "'" + nodeStr + "'"
 		}
-		msgStr := e.expressionToString(s.Message)
-		stmt := fmt.Sprintf("%sLOG %s NODE %s %s", indentStr, strings.ToUpper(s.Level.String()), nodeStr, msgStr)
+		msgStr := diffExpressionToString(ctx, s.Message)
+		stmt := fmt.Sprintf("%slog %s node %s %s", indentStr, strings.ToLower(s.Level.String()), nodeStr, msgStr)
 		if len(s.Template) > 0 {
 			var params []string
 			for _, p := range s.Template {
-				params = append(params, fmt.Sprintf("{%d} = %s", p.Index, e.expressionToString(p.Value)))
+				params = append(params, fmt.Sprintf("{%d} = %s", p.Index, diffExpressionToString(ctx, p.Value)))
 			}
-			stmt += fmt.Sprintf(" WITH (%s)", strings.Join(params, ", "))
+			stmt += fmt.Sprintf(" with (%s)", strings.Join(params, ", "))
 		}
 		lines = append(lines, stmt+";")
 
 	case *ast.CallMicroflowStmt:
 		var params []string
 		for _, arg := range s.Arguments {
-			params = append(params, fmt.Sprintf("%s = %s", arg.Name, e.expressionToString(arg.Value)))
+			params = append(params, fmt.Sprintf("%s = %s", arg.Name, diffExpressionToString(ctx, arg.Value)))
 		}
 		paramStr := strings.Join(params, ", ")
 		if s.OutputVariable != "" {
-			lines = append(lines, fmt.Sprintf("%s$%s = CALL MICROFLOW %s(%s);", indentStr, s.OutputVariable, s.MicroflowName, paramStr))
+			lines = append(lines, fmt.Sprintf("%s$%s = call microflow %s(%s);", indentStr, s.OutputVariable, s.MicroflowName, paramStr))
 		} else {
-			lines = append(lines, fmt.Sprintf("%sCALL MICROFLOW %s(%s);", indentStr, s.MicroflowName, paramStr))
+			lines = append(lines, fmt.Sprintf("%scall microflow %s(%s);", indentStr, s.MicroflowName, paramStr))
 		}
 
 	case *ast.BreakStmt:
-		lines = append(lines, indentStr+"BREAK;")
+		lines = append(lines, indentStr+"break;")
 
 	case *ast.ContinueStmt:
-		lines = append(lines, indentStr+"CONTINUE;")
+		lines = append(lines, indentStr+"continue;")
 	}
 
 	return lines
@@ -387,7 +387,7 @@ func (e *Executor) microflowStatementToMDL(stmt ast.MicroflowStatement, indent i
 // ============================================================================
 
 // entityToMDL converts a project entity to MDL text
-func (e *Executor) entityToMDL(moduleName string, entity *domainmodel.Entity, dm *domainmodel.DomainModel) string {
+func entityToMDL(ctx *ExecContext, moduleName string, entity *domainmodel.Entity, dm *domainmodel.DomainModel) string {
 	var lines []string
 
 	// Documentation
@@ -401,14 +401,14 @@ func (e *Executor) entityToMDL(moduleName string, entity *domainmodel.Entity, dm
 	lines = append(lines, fmt.Sprintf("@Position(%d, %d)", entity.Location.X, entity.Location.Y))
 
 	// Entity type
-	entityType := "PERSISTENT"
+	entityType := "persistent"
 	if strings.Contains(entity.Source, "OqlView") {
-		entityType = "VIEW"
+		entityType = "view"
 	} else if !entity.Persistable {
-		entityType = "NON-PERSISTENT"
+		entityType = "non-persistent"
 	}
 
-	lines = append(lines, fmt.Sprintf("CREATE %s ENTITY %s.%s (", entityType, moduleName, entity.Name))
+	lines = append(lines, fmt.Sprintf("create %s entity %s.%s (", entityType, moduleName, entity.Name))
 
 	// Build validation rules map
 	validationsByAttr := make(map[model.ID][]*domainmodel.ValidationRule)
@@ -438,20 +438,20 @@ func (e *Executor) entityToMDL(moduleName string, entity *domainmodel.Entity, dm
 		}
 		for _, vr := range attrValidations {
 			if vr.Type == "Required" {
-				constraints.WriteString(" NOT NULL")
+				constraints.WriteString(" not null")
 				if vr.ErrorMessage != nil {
 					errMsg := vr.ErrorMessage.GetTranslation("en_US")
 					if errMsg != "" {
-						constraints.WriteString(fmt.Sprintf(" ERROR '%s'", errMsg))
+						constraints.WriteString(fmt.Sprintf(" error '%s'", errMsg))
 					}
 				}
 			}
 			if vr.Type == "Unique" {
-				constraints.WriteString(" UNIQUE")
+				constraints.WriteString(" unique")
 				if vr.ErrorMessage != nil {
 					errMsg := vr.ErrorMessage.GetTranslation("en_US")
 					if errMsg != "" {
-						constraints.WriteString(fmt.Sprintf(" ERROR '%s'", errMsg))
+						constraints.WriteString(fmt.Sprintf(" error '%s'", errMsg))
 					}
 				}
 			}
@@ -463,7 +463,7 @@ func (e *Executor) entityToMDL(moduleName string, entity *domainmodel.Entity, dm
 			if _, ok := attr.Type.(*domainmodel.StringAttributeType); ok {
 				defaultVal = fmt.Sprintf("'%s'", defaultVal)
 			}
-			constraints.WriteString(fmt.Sprintf(" DEFAULT %s", defaultVal))
+			constraints.WriteString(fmt.Sprintf(" default %s", defaultVal))
 		}
 
 		comma := ","
@@ -487,12 +487,12 @@ func (e *Executor) entityToMDL(moduleName string, entity *domainmodel.Entity, dm
 		for _, ia := range idx.Attributes {
 			colName := attrNames[ia.AttributeID]
 			if !ia.Ascending {
-				colName += " DESC"
+				colName += " desc"
 			}
 			cols = append(cols, colName)
 		}
 		if len(cols) > 0 {
-			lines = append(lines, fmt.Sprintf("INDEX (%s)", strings.Join(cols, ", ")))
+			lines = append(lines, fmt.Sprintf("index (%s)", strings.Join(cols, ", ")))
 		}
 	}
 
@@ -503,7 +503,7 @@ func (e *Executor) entityToMDL(moduleName string, entity *domainmodel.Entity, dm
 }
 
 // viewEntityFromProjectToMDL converts a view entity from project to MDL
-func (e *Executor) viewEntityFromProjectToMDL(moduleName string, entity *domainmodel.Entity, dm *domainmodel.DomainModel) string {
+func viewEntityFromProjectToMDL(ctx *ExecContext, moduleName string, entity *domainmodel.Entity, dm *domainmodel.DomainModel) string {
 	var lines []string
 
 	if entity.Documentation != "" {
@@ -513,7 +513,7 @@ func (e *Executor) viewEntityFromProjectToMDL(moduleName string, entity *domainm
 	}
 
 	lines = append(lines, fmt.Sprintf("@Position(%d, %d)", entity.Location.X, entity.Location.Y))
-	lines = append(lines, fmt.Sprintf("CREATE VIEW ENTITY %s.%s (", moduleName, entity.Name))
+	lines = append(lines, fmt.Sprintf("create view entity %s.%s (", moduleName, entity.Name))
 
 	for i, attr := range entity.Attributes {
 		typeStr := formatAttributeType(attr.Type)
@@ -524,7 +524,7 @@ func (e *Executor) viewEntityFromProjectToMDL(moduleName string, entity *domainm
 		lines = append(lines, fmt.Sprintf("  %s: %s%s", attr.Name, typeStr, comma))
 	}
 
-	lines = append(lines, ") AS (")
+	lines = append(lines, ") as (")
 	if entity.OqlQuery != "" {
 		for line := range strings.SplitSeq(entity.OqlQuery, "\n") {
 			lines = append(lines, "  "+line)
@@ -537,7 +537,7 @@ func (e *Executor) viewEntityFromProjectToMDL(moduleName string, entity *domainm
 }
 
 // enumerationToMDL converts a project enumeration to MDL text
-func (e *Executor) enumerationToMDL(moduleName string, enum *model.Enumeration) string {
+func enumerationToMDL(ctx *ExecContext, moduleName string, enum *model.Enumeration) string {
 	var lines []string
 
 	if enum.Documentation != "" {
@@ -546,7 +546,7 @@ func (e *Executor) enumerationToMDL(moduleName string, enum *model.Enumeration) 
 		lines = append(lines, " */")
 	}
 
-	lines = append(lines, fmt.Sprintf("CREATE ENUMERATION %s.%s (", moduleName, enum.Name))
+	lines = append(lines, fmt.Sprintf("create enumeration %s.%s (", moduleName, enum.Name))
 
 	for i, v := range enum.Values {
 		comma := ","
@@ -567,7 +567,7 @@ func (e *Executor) enumerationToMDL(moduleName string, enum *model.Enumeration) 
 }
 
 // associationToMDL converts a project association to MDL text
-func (e *Executor) associationToMDL(moduleName string, assoc *domainmodel.Association, dm *domainmodel.DomainModel) string {
+func associationToMDL(ctx *ExecContext, moduleName string, assoc *domainmodel.Association, dm *domainmodel.DomainModel) string {
 	var lines []string
 
 	// Build entity name map
@@ -585,20 +585,20 @@ func (e *Executor) associationToMDL(moduleName string, assoc *domainmodel.Associ
 	fromEntity := entityNames[assoc.ParentID]
 	toEntity := entityNames[assoc.ChildID]
 
-	lines = append(lines, fmt.Sprintf("CREATE ASSOCIATION %s.%s", moduleName, assoc.Name))
-	lines = append(lines, fmt.Sprintf("FROM %s.%s TO %s.%s", moduleName, fromEntity, moduleName, toEntity))
+	lines = append(lines, fmt.Sprintf("create association %s.%s", moduleName, assoc.Name))
+	lines = append(lines, fmt.Sprintf("from %s.%s to %s.%s", moduleName, fromEntity, moduleName, toEntity))
 
 	assocType := "Reference"
 	if assoc.Type == domainmodel.AssociationTypeReferenceSet {
 		assocType = "ReferenceSet"
 	}
-	lines = append(lines, fmt.Sprintf("TYPE %s", assocType))
+	lines = append(lines, fmt.Sprintf("type %s", assocType))
 
 	owner := "Default"
 	if assoc.Owner == domainmodel.AssociationOwnerBoth {
 		owner = "Both"
 	}
-	lines = append(lines, fmt.Sprintf("OWNER %s", owner))
+	lines = append(lines, fmt.Sprintf("owner %s", owner))
 
 	deleteBehavior := "DELETE_BUT_KEEP_REFERENCES"
 	if assoc.ChildDeleteBehavior != nil {
@@ -609,7 +609,7 @@ func (e *Executor) associationToMDL(moduleName string, assoc *domainmodel.Associ
 			deleteBehavior = "DELETE_IF_NO_REFERENCES"
 		}
 	}
-	lines = append(lines, fmt.Sprintf("DELETE_BEHAVIOR %s;", deleteBehavior))
+	lines = append(lines, fmt.Sprintf("delete_behavior %s;", deleteBehavior))
 	lines = append(lines, "/")
 
 	return strings.Join(lines, "\n")
@@ -620,7 +620,7 @@ func (e *Executor) associationToMDL(moduleName string, assoc *domainmodel.Associ
 // ============================================================================
 
 // dataTypeToString converts a DataType to its string representation
-func (e *Executor) dataTypeToString(dt ast.DataType) string {
+func dataTypeToString(_ *ExecContext, dt ast.DataType) string {
 	switch dt.Kind {
 	case ast.TypeString:
 		if dt.Length > 0 {
@@ -665,8 +665,8 @@ func (e *Executor) dataTypeToString(dt ast.DataType) string {
 	}
 }
 
-// expressionToString converts an expression to its string representation
-func (e *Executor) expressionToString(expr ast.Expression) string {
+// diffExpressionToString converts an expression to its string representation for diff output
+func diffExpressionToString(ctx *ExecContext, expr ast.Expression) string {
 	if expr == nil {
 		return "empty"
 	}
@@ -688,19 +688,19 @@ func (e *Executor) expressionToString(expr ast.Expression) string {
 	case *ast.AttributePathExpr:
 		return "$" + ex.Variable + "/" + strings.Join(ex.Path, "/")
 	case *ast.BinaryExpr:
-		return fmt.Sprintf("%s %s %s", e.expressionToString(ex.Left), ex.Operator, e.expressionToString(ex.Right))
+		return fmt.Sprintf("%s %s %s", diffExpressionToString(ctx, ex.Left), ex.Operator, diffExpressionToString(ctx, ex.Right))
 	case *ast.UnaryExpr:
-		return fmt.Sprintf("%s%s", ex.Operator, e.expressionToString(ex.Operand))
+		return fmt.Sprintf("%s%s", ex.Operator, diffExpressionToString(ctx, ex.Operand))
 	case *ast.FunctionCallExpr:
 		var args []string
 		for _, arg := range ex.Arguments {
-			args = append(args, e.expressionToString(arg))
+			args = append(args, diffExpressionToString(ctx, arg))
 		}
 		return fmt.Sprintf("%s(%s)", ex.Name, strings.Join(args, ", "))
 	case *ast.TokenExpr:
 		return fmt.Sprintf("[%%%s%%]", ex.Token)
 	case *ast.ParenExpr:
-		return fmt.Sprintf("(%s)", e.expressionToString(ex.Inner))
+		return fmt.Sprintf("(%s)", diffExpressionToString(ctx, ex.Inner))
 	case *ast.QualifiedNameExpr:
 		return ex.QualifiedName.String()
 	case *ast.ConstantRefExpr:

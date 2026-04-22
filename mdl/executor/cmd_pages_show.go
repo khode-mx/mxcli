@@ -6,20 +6,22 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	mdlerrors "github.com/mendixlabs/mxcli/mdl/errors"
 )
 
-// showPages handles SHOW PAGES command.
-func (e *Executor) showPages(moduleName string) error {
+// listPages handles SHOW PAGES command.
+func listPages(ctx *ExecContext, moduleName string) error {
 	// Get hierarchy for module/folder resolution
-	h, err := e.getHierarchy()
+	h, err := getHierarchy(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to build hierarchy: %w", err)
+		return mdlerrors.NewBackend("build hierarchy", err)
 	}
 
 	// Get all pages
-	pages, err := e.reader.ListPages()
+	pages, err := ctx.Backend.ListPages()
 	if err != nil {
-		return fmt.Errorf("failed to list pages: %w", err)
+		return mdlerrors.NewBackend("list pages", err)
 	}
 
 	// Collect rows
@@ -64,11 +66,11 @@ func (e *Executor) showPages(moduleName string) error {
 	})
 
 	result := &TableResult{
-		Columns: []string{"Qualified Name", "Module", "Name", "Excluded", "Folder", "Title", "URL", "Params"},
+		Columns: []string{"Qualified Name", "Module", "Name", "Excluded", "Folder", "Title", "url", "Params"},
 		Summary: fmt.Sprintf("(%d pages)", len(rows)),
 	}
 	for _, r := range rows {
 		result.Rows = append(result.Rows, []any{r.qualifiedName, r.module, r.name, r.excluded, r.folderPath, r.title, r.url, r.params})
 	}
-	return e.writeResult(result)
+	return writeResult(ctx, result)
 }
