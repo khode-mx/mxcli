@@ -56,16 +56,15 @@ func (w *Writer) serializeConsumedRestService(svc *model.ConsumedRestService) ([
 		"BaseUrlParameter": nil,
 	}
 
-	// OpenApiFile: present when the service was created from an OpenAPI spec.
+	// OpenApiFile: only present when the service was created from an OpenAPI spec.
 	// Field name and subfield are PascalCase to match Studio Pro serialization.
+	// Do NOT write a null entry for manually-created services — Studio Pro omits this field entirely.
 	if svc.OpenApiContent != "" {
 		doc["OpenApiFile"] = bson.M{
 			"$ID":     idToBsonBinary(generateUUID()),
 			"$Type":   "Rest$OpenApiFile",
 			"Content": svc.OpenApiContent,
 		}
-	} else {
-		doc["OpenApiFile"] = nil
 	}
 
 	// BaseUrl as Rest$ValueTemplate

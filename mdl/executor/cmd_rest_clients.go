@@ -316,12 +316,14 @@ func createRestClient(ctx *ExecContext, stmt *ast.CreateRestClientStmt) error {
 		return mdlerrors.NewBackend("build hierarchy", err)
 	}
 
+	var preservedID model.ID
 	for _, existing := range existingServices {
 		existModID := h.FindModuleID(existing.ContainerID)
 		existModName := h.GetModuleName(existModID)
 		if strings.EqualFold(existModName, moduleName) && strings.EqualFold(existing.Name, stmt.Name.Name) {
 			if stmt.CreateOrModify {
-				// Delete existing and recreate
+				// Preserve the existing ID so SEND REST REQUEST references stay valid after replace.
+				preservedID = existing.ID
 				if err := ctx.Backend.DeleteConsumedRestService(existing.ID); err != nil {
 					return mdlerrors.NewBackend("delete existing rest client", err)
 				}
@@ -347,6 +349,10 @@ func createRestClient(ctx *ExecContext, stmt *ast.CreateRestClientStmt) error {
 		Name:          stmt.Name.Name,
 		Documentation: stmt.Documentation,
 		BaseUrl:       stmt.BaseUrl,
+	}
+	// Preserve the existing ID on OR MODIFY so SEND REST REQUEST references stay valid.
+	if preservedID != "" {
+		svc.ID = preservedID
 	}
 
 	// Authentication — Mendix requires Rest$ConstantValue for BASIC auth credentials
@@ -656,7 +662,8 @@ func createRestClientFromSpec(ctx *ExecContext, stmt *ast.CreateRestClientStmt) 
 		svc.Authentication = &model.RestAuthentication{Scheme: stmt.Authentication.Scheme}
 	}
 
-	// Handle OR MODIFY: delete existing if present
+	// Handle OR MODIFY: delete existing if present, preserving UnitID so any
+	// SEND REST REQUEST microflows that reference this service by ID remain valid.
 	existingServices, _ := ctx.Backend.ListConsumedRestServices()
 	h, err := getHierarchy(ctx)
 	if err != nil {
@@ -667,6 +674,8 @@ func createRestClientFromSpec(ctx *ExecContext, stmt *ast.CreateRestClientStmt) 
 		existModName := h.GetModuleName(existModID)
 		if strings.EqualFold(existModName, moduleName) && strings.EqualFold(existing.Name, stmt.Name.Name) {
 			if stmt.CreateOrModify {
+				// Reuse the existing ID so microflow references stay valid.
+				svc.ID = existing.ID
 				if err := ctx.Backend.DeleteConsumedRestService(existing.ID); err != nil {
 					return mdlerrors.NewBackend("delete existing rest client", err)
 				}
