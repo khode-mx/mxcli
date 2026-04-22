@@ -13,6 +13,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Path normalization** — Relative paths in `MetadataUrl` are automatically converted to absolute `file://` URLs for Studio Pro compatibility
 - **ServiceUrl validation** — `ServiceUrl` parameter must now be a constant reference (e.g., `@Module.ConstantName`) to enforce Mendix best practice
 - **Shared URL utilities** — `internal/pathutil` package with `NormalizeURL()`, `URIToPath()`, and `PathFromURL()` for reuse across components
+- **OpenAPI import for REST clients** — `CREATE REST CLIENT` now accepts `OpenAPI: 'path/or/url'` to auto-generate a consumed REST service document from an OpenAPI 3.0 spec (JSON or YAML); operations, path/query parameters, request bodies, response types, resource groups (tags), and Basic auth are derived automatically; spec content is stored in `OpenApiFile` for Studio Pro parity (#207)
+- **DESCRIBE CONTRACT OPERATION FROM OPENAPI** — Preview what would be generated from an OpenAPI spec without writing to the project
+
 ## [0.7.0] - 2026-04-21
 
 ### Added
