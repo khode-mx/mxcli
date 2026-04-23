@@ -611,11 +611,19 @@ create or modify rest client PetStoreModule.PetStoreAPI (
   OpenAPI: 'https://petstore3.swagger.io/api/v3/openapi.json'
 );
 
+-- Override the base URL from the spec (e.g. point at staging instead of prod)
+create or modify rest client PetStoreModule.PetStoreStaging (
+  OpenAPI: 'https://petstore3.swagger.io/api/v3/openapi.json',
+  BaseUrl: 'https://staging.petstore.example.com/api/v3'
+);
+
 -- Preview without writing to the project
 describe contract operation from openapi 'specs/capital.json';
 ```
 
 Operations, path/query parameters, headers, request body, response type, resource groups (from OpenAPI `tags`), and Basic auth are all derived automatically. The spec is stored inside the REST client document for Studio Pro parity.
+
+`BaseUrl` is optional. When omitted, the base URL is taken from `servers[0].url` in the spec. When provided, it overrides that value — useful when the spec points at production but you want to import against a different environment.
 
 ## Published REST Services
 

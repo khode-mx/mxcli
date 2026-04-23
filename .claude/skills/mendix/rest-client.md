@@ -30,6 +30,12 @@ create or modify rest client CapitalModule.CapitalAPI (
 create or modify rest client PetStoreModule.PetStoreAPI (
   OpenAPI: 'https://petstore3.swagger.io/api/v3/openapi.json'
 );
+
+-- Override the base URL (replaces servers[0].url from the spec)
+create or modify rest client PetStoreModule.PetStoreStaging (
+  OpenAPI: 'https://petstore3.swagger.io/api/v3/openapi.json',
+  BaseUrl: 'https://staging.petstore.example.com/api/v3'
+);
 ```
 
 This generates:
@@ -37,6 +43,8 @@ This generates:
 - Resource groups based on OpenAPI `tags`
 - Basic auth if the spec declares it at the top level
 - The spec stored inside the document for Studio Pro parity
+
+`BaseUrl` is optional. When omitted, `servers[0].url` from the spec is used. When provided, it overrides that value — useful when the spec points at production but you need to import against staging or a different version.
 
 **Preview without writing:**
 ```sql
